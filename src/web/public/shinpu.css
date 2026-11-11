@@ -1361,3 +1361,5 @@ body:has(#game:not([hidden])) { padding-bottom: calc(var(--command-dock-height, 
   .battle-result { font-size: 12px; }
 }
 @media (prefers-reduced-motion: reduce) { .result-change { animation: none; } }
+.beta-enter { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 12px 20px; border-radius: 8px; background: #b53325; color: #fff; text-decoration: none; font-weight: 700; }
+.beta-enter:hover { background: #97271b; }

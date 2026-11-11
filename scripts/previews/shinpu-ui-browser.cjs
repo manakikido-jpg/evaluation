@@ -2,8 +2,8 @@
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 let activeBrowser;
 (async()=>{
-const base='http://127.0.0.1:4211',dir=require('node:path').resolve(__dirname,'../../docs/previews')+'/';
-const browser=activeBrowser=await chromium.launch({executablePath:'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
+const base='http://127.0.0.1:4211',dir=require('node:path').resolve(process.env.SHINPU_SNAPSHOT_DIR||require('node:path').resolve(__dirname,'../../docs/previews'))+'/';
+require('node:fs').mkdirSync(dir,{recursive:true});const browser=activeBrowser=await chromium.launch({executablePath:'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
 const context=await browser.newContext({viewport:{width:1440,height:960},deviceScaleFactor:1});
 const {token,now}=await(await fetch(base+'/fixture/session')).json();
 if(Number.isFinite(now))await context.addInitScript(n=>{Date.now=()=>n;},now);await context.addCookies([{name:'sakura_shinpu_test',value:token,url:base}]);

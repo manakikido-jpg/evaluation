@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest';
 import { createWebApp } from '../src/web/app.js';
 import type { DiscordApi } from '../src/web/discordApi.js';
 import type { DiscordActions } from '../src/lib/discordRest.js';
+import {betaTesters,changeBetaTester} from '../src/services/shinpu/beta.js';
 import { createSession } from '../src/web/sessions.js';
 import { createMemberSession } from '../src/web/memberSessions.js';
 import { createLoginLink } from '../src/services/casino/loginLinks.js';
@@ -15,7 +16,7 @@ const BASE = 'https://shamusho.example.com',
   ROOT = '/casino/shinpu',
   A = '760000000000000001',
   B = '760000000000000002';
-let db: Db, close: () => Promise<void>, app: ReturnType<typeof createWebApp>, roles: string[], fail: boolean, cookie: string, csrf: string;
+let db: Db, close: () => Promise<void>, app: ReturnType<typeof createWebApp>, roles: string[], fail: boolean, present: boolean, cookie: string, csrf: string;
 function token(res: Response, key: string) {
   return res.headers
     .getSetCookie()
@@ -27,13 +28,14 @@ beforeEach(async () => {
   ({ db, close } = await makeDb());
   roles = [ROLE.guji];
   fail = false;
+  present = true;
   const api: DiscordApi = {
     authorizeUrl: (s, r) => `https://discord.com/auth?state=${s}&redirect_uri=${encodeURIComponent(r)}`,
     exchangeCode: async () => 'access',
     me: async () => ({ id: A, username: 'ais', displayName: 'ais <b>', avatarUrl: null }),
     memberRoles: async () => {
       if (fail) throw Error('offline');
-      return roles;
+      return present ? roles : null;
     },
   };
   app = createWebApp({ db, cfg: () => cfg, api, discord: {} as DiscordActions, baseUrl: BASE });
@@ -160,7 +162,7 @@ it('社務所の入口からCSRFつきで運営専用の対戦へ入り、操作
   const page = await app.request('/economy/shinpu', { headers: { cookie: officeCookie } });
   expect(page.status).toBe(200);
   const html = await page.text();
-  expect(html).toContain('神符合戦（管理者テスト）');
+  expect(html).toContain('神符合戦（β管理）');
   const officeCsrf = /name="_csrf" value="([^"]+)"/.exec(html)![1]!;
   const enter = await app.request('/economy/shinpu/enter', { method: 'POST', headers: { cookie: officeCookie, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ _csrf: officeCsrf }) });
   expect(enter.status).toBe(302);
@@ -230,4 +232,83 @@ it('運営テストの実APIでHP60/MP20を超えて回復・両替でき、実�
   expect(view.state!.result).toMatchObject({defender:1,damage:5});
   expect(view.state!.players[1]!.hp).toBe(55);
   expect((await walletOf(db,A)).balance).toBe(500);
+});
+
+async function betaPlayer(userId=B){
+ const value=await createMemberSession(db,{id:userId,username:'beta',displayName:'β確認用',avatarUrl:null});
+ const h={cookie:'sakura_shinpu_test='+value};const page=await app.request(ROOT,{headers:h});
+ const html=await page.text();const playerCsrf=/data-csrf="([^"]+)"/.exec(html)?.[1];
+ return {h,html,status:page.status,postHeaders:{...h,origin:BASE,'content-type':'application/json','x-csrf-token':playerCsrf??''}};
+}
+const invite=(userId=B,add=true)=>changeBetaTester(db,{guildId:cfg.guildId,userId,actorId:A,add});
+it('招待した一般メンバーだけが無料βの対戦・図鑑へ入り、運営画面の権限は得ない',async()=>{
+ roles=[ROLE.sanpaisha];expect((await betaPlayer()).status).toBe(403);await invite();const player=await betaPlayer();expect(player.status).toBe(200);
+ expect(player.html).toContain('招待制無料β');expect(player.html).toContain('再起動');expect(player.html).not.toContain('社務所へ');
+ expect((await app.request(ROOT+'/cards',{headers:player.h})).status).toBe(200);
+ expect((await app.request(ROOT+'/cards/SK-038',{headers:player.h})).status).toBe(200);
+ const created=await app.request(ROOT+'/api',{method:'POST',headers:player.postHeaders,body:JSON.stringify({operation:'create',capacity:2})});expect(created.status).toBe(200);
+ expect((await app.request('/economy/shinpu',{headers:player.h})).status).not.toBe(200);
+ expect((await app.request('/economy/shinpu/testers',{method:'POST',headers:player.postHeaders,body:JSON.stringify({operation:'add',userId:A})})).status).not.toBe(303);
+ expect((await betaTesters(db,cfg.guildId)).map(t=>t.userId)).toEqual([B]);
+});
+it('招待解除はログイン済みの次の操作にも適用し、部屋を操作させない',async()=>{
+ roles=[ROLE.sanpaisha];await invite();const player=await betaPlayer();
+ const view=await(await app.request(ROOT+'/api',{method:'POST',headers:player.postHeaders,body:JSON.stringify({operation:'create',capacity:2})})).json() as RoomView;
+ await invite(B,false);
+ expect((await app.request(ROOT+'/api',{method:'POST',headers:player.postHeaders,body:JSON.stringify({operation:'start',roomId:view.roomId,revision:view.revision})})).status).toBe(403);
+ expect((await app.request(ROOT+'/cards',{headers:player.h})).status).toBe(401);
+});
+it('招待されていても退鯖なら拒否し、在籍照会失敗を許可として扱わない',async()=>{
+ roles=[];await invite();let player=await betaPlayer();expect(player.status).toBe(200);
+ fail=true;expect((await app.request(ROOT+'/api',{headers:player.h})).status).toBe(503);
+ fail=false;expect((await app.request(ROOT+'/api',{headers:player.h})).status).toBe(200);
+ present=false;expect((await app.request(ROOT+'/api',{headers:player.h})).status).toBe(403);
+});
+it('招待したメンバーのDiscord認証は神符合戦だけのCookieを作る',async()=>{
+ await invite(A);roles=[ROLE.sanpaisha];
+ const begin=await app.request(ROOT+'/auth'),state=token(begin,'sakura_shinpu_state')!;
+ const res=await app.request('/casino/auth/callback?state='+state+'&code=ok',{headers:{cookie:'sakura_shinpu_state='+state}});
+ expect(res.status).toBe(302);expect(res.headers.get('location')).toBe(ROOT);
+ expect(token(res,'sakura_shinpu_test')).toBeTruthy();expect(token(res,'sakura_casino')).toBeUndefined();expect(token(res,'shamusho_session')).toBeUndefined();
+});
+it('招待管理は経済ページの操作権限とCSRFを要求し、正規操作で登録・解除できる',async()=>{
+ const admin=await officeLogin(),h={cookie:'shamusho_session='+admin,'content-type':'application/x-www-form-urlencoded'};
+ const page=await app.request('/economy/shinpu',{headers:h}),formCsrf=/name="_csrf" value="([^"]+)"/.exec(await page.text())![1]!;
+ const manage=(operation:string,userId=B,csrfValue=formCsrf)=>app.request('/economy/shinpu/testers',{method:'POST',headers:h,body:new URLSearchParams({_csrf:csrfValue,operation,userId})});
+ expect((await manage('add',B,'bad')).status).toBe(403);
+ expect((await manage('add')).headers.get('location')).toBe('/economy/shinpu?msg=added');expect(await betaTesters(db,cfg.guildId)).toHaveLength(1);
+ expect((await manage('add')).headers.get('location')).toBe('/economy/shinpu?msg=already');
+ const readOnly=await createSession(db,{id:'760000000000000003',username:'read',displayName:'閲覧',avatarUrl:null},{level:'shinshoku',pages:['economy'],writePages:[]});
+ const rh={cookie:'shamusho_session='+readOnly,'content-type':'application/x-www-form-urlencoded'},rp=await app.request('/economy/shinpu',{headers:rh});
+ const readCsrf=/name="_csrf" value="([^"]+)"/.exec(await rp.text())![1]!;
+ expect((await app.request('/economy/shinpu/testers',{method:'POST',headers:rh,body:new URLSearchParams({_csrf:readCsrf,operation:'remove',userId:B})})).status).toBe(403);
+ expect(await betaTesters(db,cfg.guildId)).toHaveLength(1);expect((await manage('remove')).headers.get('location')).toBe('/economy/shinpu?msg=removed');expect(await betaTesters(db,cfg.guildId)).toEqual([]);
+});
+it('サーバー外や入力不正の人を招待に登録しない',async()=>{
+ const admin=await officeLogin(),h={cookie:'shamusho_session='+admin,'content-type':'application/x-www-form-urlencoded'};
+ const page=await app.request('/economy/shinpu',{headers:h}),c=/name="_csrf" value="([^"]+)"/.exec(await page.text())![1]!;
+ present=false;const manage=(id:string)=>app.request('/economy/shinpu/testers',{method:'POST',headers:h,body:new URLSearchParams({_csrf:c,operation:'add',userId:id})});
+ expect((await manage(B)).headers.get('location')).toBe('/economy/shinpu?msg=not_member');expect((await manage('wrong')).headers.get('location')).toBe('/economy/shinpu?msg=invalid');expect(await betaTesters(db,cfg.guildId)).toEqual([]);
+});
+it('解除した人の未使用リンクでも、認証Cookieを発行しない',async()=>{
+ roles=[ROLE.sanpaisha];await invite();const link=await createLoginLink(db,{id:B,displayName:'β確認用',avatarUrl:null});await invite(B,false);
+ const response=await app.request(ROOT+'/link/'+link,{method:'POST',headers:{origin:BASE}});
+ expect(response.status).toBe(403);expect(token(response,'sakura_shinpu_test')).toBeUndefined();
+});
+it('招待の参加許可はWebを作り直しても保持し、対戦は新しい部屋一覧になる',async()=>{
+ roles=[ROLE.sanpaisha];await invite();const player=await betaPlayer();
+ await app.request(ROOT+'/api',{method:'POST',headers:player.postHeaders,body:JSON.stringify({operation:'create',capacity:2})});
+ const restarted=createWebApp({db,cfg:()=>cfg,api:{authorizeUrl:()=>BASE,exchangeCode:async()=> 'fixture',me:async()=>({id:B,username:'beta',displayName:'β確認用',avatarUrl:null}),memberRoles:async()=>[ROLE.sanpaisha]},discord:{} as DiscordActions,baseUrl:BASE});
+ expect((await restarted.request(ROOT,{headers:player.h})).status).toBe(200);
+ const result=await restarted.request(ROOT+'/api',{headers:player.h});expect(result.status).toBe(200);expect(await result.json()).toEqual({rooms:[]});
+});
+it('招待解除で拒否された参加者の席はCPUへ渡し、ほかの参加者の対戦を残す',async()=>{
+ roles=[ROLE.sanpaisha];await invite();const player=await betaPlayer();
+ let view=await(await app.request(ROOT+'/api',{method:'POST',headers:player.postHeaders,body:JSON.stringify({operation:'create',capacity:2})})).json() as RoomView;
+ const admin=await officeLogin(),staffHeaders={...headers(),cookie:headers().cookie+'; shamusho_session='+admin};
+ view=await(await post({operation:'join',roomId:view.roomId},staffHeaders)).json() as RoomView;
+ view=await(await app.request(ROOT+'/api',{method:'POST',headers:player.postHeaders,body:JSON.stringify({operation:'start',roomId:view.roomId,revision:view.revision})})).json() as RoomView;
+ await invite(B,false);expect((await app.request(ROOT+'/api',{headers:player.h})).status).toBe(403);
+ const remained=await(await app.request(ROOT+'/api?room='+view.roomId,{headers:staffHeaders})).json() as RoomView;
+ expect(remained.seats).toMatchObject([{cpu:true},{cpu:false}]);expect(remained.state!.players[0]!.name).toContain('CPU引継ぎ');expect(remained.state!.players[0]!.hand).toEqual([]);
 });

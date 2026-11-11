@@ -5,6 +5,7 @@ import { adminLevelOf, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { peekLoginLink, useLoginLink } from '../services/casino/loginLinks.js';
 import { audit } from '../services/audit.js';
+import {isBetaTester} from '../services/shinpu/beta.js';
 import { ShinpuRooms } from '../services/shinpu/rooms.js';
 import { createMemberSession, deleteMemberSession, findMemberSession } from './memberSessions.js';
 import { randomToken, safeEqual } from './sessions.js';
@@ -47,22 +48,23 @@ function Entry({ action, name, room }: { action?: string; name?: string; room?: 
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
-        <title>神符合戦・運営テスト</title>
+        <title>神符合戦・招待制無料β</title>
         <link rel="stylesheet" href={assetUrl('shinpu.css')} />
       </head>
       <body>
         <main class="wrap">
           <section class="arena">
-            <h1>神符合戦・運営テスト</h1>
-            <p>宮司・神職のロールがある人だけ入れます。</p>
-            <p>テスト用の霊銭で遊びます。サーバーの残高は動きません。</p>
+            <h1>神符合戦</h1>
+            <p><strong>招待制・無料β</strong></p>
+            <p>招待されたサーバーのメンバーと、宮司・神職が参加できます。</p>
+            <p>参加は無料です。対戦内の霊銭だけを使い、サーバーの銭は減りません。部屋は2時間で終了し、再起動すると対戦は消えます。</p>
             {action ? (
               <form method="post" action={action}>
                 <p>{name}さんとして入ります。このリンクは人に渡さないでください。</p>
-                <button class="primary">テストプレイに入る</button>
+                <button class="primary">無料βに入る</button>
               </form>
             ) : (
-              <a href={`${ROOT}/auth${room ? `?room=${room}` : ''}`}>Discordで認証して入る</a>
+              <a class="beta-enter" href={`${ROOT}/auth${room ? `?room=${room}` : ''}`}>Discordで認証して入る</a>
             )}
           </section>
         </main>
@@ -76,28 +78,32 @@ export function mountShinpu(app: Hono<any>, d: Deps) {
   const cookieOpts = { httpOnly: true, secure: d.secure, sameSite: 'Lax' as const, path: ROOT, maxAge: 7 * 86400 };
   const allowed = async (id: string) => {
     const roles = await d.api.memberRoles(d.cfg().guildId, id);
-    return !!roles && !!adminLevelOf(d.cfg(), roles);
+    if (!roles) return undefined;
+    if (adminLevelOf(d.cfg(), roles)) return 'staff' as const;
+    return await isBetaTester(d.db,d.cfg().guildId,id) ? 'tester' as const : undefined;
   };
   // 権限の再確認は各リクエスト。Discordへの接続失敗も許可として扱わない。
-  const requireAdmin = async (c: Context) => {
+  const requirePlayerAccess = async (c: Context) => {
     const s = await findMemberSession(d.db, getCookie(c, COOKIE) ?? '', d.now());
     if (!s) return { response: c.json({ error: 'Discordで認証して入り直してください。' }, 401) };
     // 社務所Web に運営として入っていれば、それで確かめる（Discord が混んでいても・ID とパスワードの人も入れる）
-    if (d.staffOf && (await d.staffOf(c, s.userId))) return { session: s };
+    if (d.staffOf && (await d.staffOf(c, s.userId))) return { session: s, staff: true };
     try {
-      if (!(await allowed(s.userId))) {
+      const access = await allowed(s.userId);
+      if (!access) {
+        for (const room of rooms.list(s.userId).filter(r=>r.mine)) rooms.leave(room.id,s.userId);
         await deleteMemberSession(d.db, s.id);
         deleteCookie(c, COOKIE, { path: ROOT });
-        return { response: c.json({ error: '運営ロールが必要です。' }, 403) };
+        return { response: c.json({ error: '招待されたメンバーと運営だけが参加できます。' }, 403) };
       }
+      return { session: s, staff: access === 'staff' };
     } catch {
       return { response: c.json({ error: 'Discordで権限を確認できません。少し待ってください。' }, 503) };
     }
-    return { session: s };
   };
   const login = async (c: Context, user: DiscordUser, room?: string) => {
     try {
-      if (!(await allowed(user.id))) return c.text('運営ロールが必要です。', 403);
+      if (!(await allowed(user.id))) return c.text('招待されたメンバーと運営だけが参加できます。', 403);
     } catch {
       return c.text('Discordで権限を確認できません。少し待ってください。', 503);
     }
@@ -146,26 +152,26 @@ export function mountShinpu(app: Hono<any>, d: Deps) {
       const room = z.string().uuid().safeParse(c.req.query('room'));
       return c.html(<Entry room={room.success ? room.data : undefined} />);
     }
-    const auth = await requireAdmin(c);
+    const auth = await requirePlayerAccess(c);
     if (auth.response) return auth.response;
-    return c.html(<ShinpuTestPage csrf={auth.session.csrfToken} name={auth.session.displayName} />);
+    return c.html(<ShinpuTestPage csrf={auth.session.csrfToken} name={auth.session.displayName} staff={auth.staff} />);
   });
   app.get(`${ROOT}/cards`, async (c) => {
-    const auth = await requireAdmin(c);
+    const auth = await requirePlayerAccess(c);
     if (auth.response) return auth.response;
     const page = z.coerce.number().int().min(1).max(10000).safeParse(c.req.query('page') ?? '1');
     return c.html(<ShinpuCatalogPage query={(c.req.query('q') ?? '').slice(0, 100)} category={c.req.query('category') ?? ''}
       element={c.req.query('element') ?? ''} page={page.success ? page.data : 1} />);
   });
   app.get(`${ROOT}/cards/:id`, async (c) => {
-    const auth = await requireAdmin(c);
+    const auth = await requirePlayerAccess(c);
     if (auth.response) return auth.response;
     const card = catalog.find(card => card.id === c.req.param('id'));
     if (!card) return c.text('この札は見つかりません。', 404);
     return c.html(<ShinpuCatalogPage card={card} />);
   });
   app.get(`${ROOT}/api`, async (c) => {
-    const auth = await requireAdmin(c);
+    const auth = await requirePlayerAccess(c);
     if (auth.response) return auth.response;
     try {
       const id = c.req.query('room');
@@ -175,7 +181,7 @@ export function mountShinpu(app: Hono<any>, d: Deps) {
     }
   });
   app.post(`${ROOT}/api`, async (c) => {
-    const auth = await requireAdmin(c);
+    const auth = await requirePlayerAccess(c);
     if (auth.response) return auth.response;
     if (c.req.header('origin') !== new URL(d.baseUrl).origin || !safeEqual(auth.session.csrfToken, c.req.header('x-csrf-token') ?? ''))
       return c.json({ error: '画面を開き直してください。' }, 403);

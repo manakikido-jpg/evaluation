@@ -60,13 +60,20 @@ async function request(body, path = API) {
   if (!r.ok) {
     if (r.status === 401 || r.status === 403) {
       stopped = true;
-      toast('入場権限を確認できません。Discordで入り直してください。');
+      for (const id of ['game','lobby','waiting','card-play','leave']) $(id).hidden = true;
+      for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
+      clearTimeout(playTimer); view = null; state = null; selected = [];
+      $('hand').replaceChildren();
+      $('access-message').textContent = data.error || '入場権限を確認できません。Discordで認証し直してください。';
+      $('access-error').hidden = false;
+      $('access-error').focus();
     }
     throw Error(data.error || '読み込みに失敗しました。');
   }
   return data;
 }
 function apply(data) {
+  if (stopped) return;
   if (view?.roomId === data.roomId && view.revision > data.revision) return;
   const changed = view?.roomId !== data.roomId || view?.revision !== data.revision;
   const previous = view?.roomId === data.roomId ? state : null;
@@ -414,7 +421,7 @@ $('copy').addEventListener('click', async () => {
     toast('リンクをコピーしました。');
   } catch {
     $('invite').select();
-    toast('リンクを選択しました。コピーして運営に渡してください。');
+    toast('リンクを選択しました。コピーして招待された人に渡してください。');
   }
 });
 async function init() {
@@ -577,7 +584,7 @@ function renderSummon() {
 
 /** サーバーが受理した札だけを場へ出す。演出は操作や計算を止めない。 */
 function showPlayedCards(cards, caption) {
-  if (!cards.length) return;
+  if (stopped || !cards.length) return;
   clearTimeout(playTimer);
   const panel = $('card-play'), art = el('div', 'card-play-art');
   for (const c of cards.slice(0, 3)) {

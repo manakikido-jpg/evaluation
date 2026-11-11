@@ -3,7 +3,8 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const path=require('node:path');
 let browser;
 (async()=>{
-  const base='http://127.0.0.1:4211',out=path.resolve(__dirname,'../../docs/previews');
+  const base='http://127.0.0.1:4211',out=path.resolve(process.env.SHINPU_SNAPSHOT_DIR||path.resolve(__dirname,'../../docs/previews'));
+  require('node:fs').mkdirSync(out,{recursive:true});
   browser=await chromium.launch({executablePath:'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
   const pages=[],errors=[];
   for(const suffix of ['','-other']){

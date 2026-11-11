@@ -32,9 +32,11 @@ describe('コマンド定義', () => {
     expect(visit.default_member_permissions).toBeUndefined();
     expect(visit.name_localizations?.ja).toBe('参拝プロフィール');
     // 神職用は「メンバーをタイムアウト」権限がある人にだけ表示
-    const staff = defs.filter((d) => ['recording', 'shinpu', 'sharedinvite', 'panel', 'yaku', 'ban', 'kick', 'gift', 'roomadmin', 'role', 'temprole', 'tempperm', 'minutes', 'memo', 'member'].includes(d.name));
-    expect(staff.length).toBe(15);
+    const staff = defs.filter((d) => ['recording', 'sharedinvite', 'panel', 'yaku', 'ban', 'kick', 'gift', 'roomadmin', 'role', 'temprole', 'tempperm', 'minutes', 'memo', 'member'].includes(d.name));
+    expect(staff.length).toBe(14);
     expect(staff.every((d) => d.default_member_permissions === '1099511627776')).toBe(true);
+    // 神符合戦は候補を全員に出し、実際の参加はサーバーの招待確認で制限する。
+    expect(defs.find(d=>d.name==='shinpu')!.default_member_permissions).toBeNull();
     const yaku = defs.find((d) => d.name === 'yaku') as { options: { options?: { name: string; choices?: { value: string }[] }[] }[] };
     expect(yaku.options[0]!.options!.find((o) => o.name === 'reason')!.choices!.map((c) => c.value)).toContain('その他');
   });

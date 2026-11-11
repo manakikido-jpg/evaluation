@@ -108,6 +108,7 @@ import { countUnknownInviters, markUnknownInviters, assignUnknownInviter, invite
 import { introInviterSuggestions, refreshIntroInviter } from '../services/introInviterSuggestions.js';
 import { AT_FILE_ART, STATIC } from './assets.js';
 import { allRoleTemplates, deleteRoleTemplate, editRoleTemplate, findRoleTemplate, saveRoleTemplate } from '../services/roleTemplates.js';
+import {betaTesters,betaUserId,changeBetaTester} from '../services/shinpu/beta.js';
 import { mountShinpu } from './shinpu.js';
 import { mountLottery } from './lottery.js';
 import { mountCasino } from './casino.js';
@@ -878,15 +879,52 @@ export function createWebApp(deps: WebDeps) {
 
   app.get('/economy/shinpu', async (c) => {
     const session = c.get('session');
-    return c.html(<Layout title="神符合戦・管理者テスト" session={session} nav="shinpu">
-      <h1>神符合戦・管理者テスト</h1>
-      <p>宮司・神職だけが参加できます。全237種類の札で、運営同士やCPUと対戦できます。</p>
-      <p>対戦の霊銭はテスト用です。サーバーの銭や本番の対戦記録には影響しません。</p>
+    if (session.level !== 'guji' && session.level !== 'shinshoku') return c.text('運営だけが開けます。',403);
+    const testers = await betaTesters(db,cfg.guildId);
+    const canManage = session.level === 'guji' || session.writePages == null || session.writePages.includes('economy');
+    const messages:Record<string,string> = {added:'招待対象に追加しました。本人へ無料βの入口を案内してください。',removed:'招待を解除しました。次のアクセスから入れなくなります。',already:'すでに招待されています。',missing:'招待対象には登録されていません。',full:'招待対象は200人までです。',invalid:'DiscordユーザーIDを確認してください。',not_member:'サーバーに在籍している人を指定してください。'};
+    return c.html(<Layout title="神符合戦・招待制無料β" session={session} nav="shinpu">
+      <h1>神符合戦・招待制無料β</h1>
+      {messages[c.req.query('msg') ?? ''] && <p role="status">{messages[c.req.query('msg') ?? '']}</p>}
+      <p>運営と、ここで指定したサーバーのメンバーだけが参加できます。まずは少人数で試してください。</p>
+      <p>参加は無料。対戦の霊銭はテスト用で、サーバーの銭や本番の対戦記録には影響しません。部屋は2時間で終了し、再起動すると対戦は消えます。</p>
       <form method="post" action="/economy/shinpu/enter">
         <input type="hidden" name="_csrf" value={session.csrfToken} />
-        <button type="submit">テストプレイに入る</button>
+        <button type="submit">無料βに入る</button>
       </form>
+      <section class="card"><h2>招待する人</h2>
+        <p>DiscordのユーザーIDで指定します。招待しても運営権限は付きません。招待で参加していた人は、ログイン済みでも次のアクセスから入れなくなります。運営ロールの人は招待不要です。</p>
+        {canManage ? <form method="post" action="/economy/shinpu/testers">
+          <input type="hidden" name="_csrf" value={session.csrfToken}/><input type="hidden" name="operation" value="add"/>
+          <label>DiscordユーザーID<input name="userId" inputmode="numeric" pattern="[0-9]{17,20}" maxLength={20} required/></label>
+          <button type="submit">招待対象に追加</button>
+        </form> : <p>招待の変更には「経済」の操作権限が必要です。</p>}
+        <p>{testers.length}人を招待中</p>
+        <table><thead><tr><th>DiscordユーザーID</th><th>登録日</th><th>操作</th></tr></thead><tbody>
+          {testers.map(t=><tr><td>{t.userId}</td><td>{new Date(t.addedAt).toLocaleDateString('ja-JP',{timeZone:'Asia/Tokyo'})}</td><td>{canManage && <form method="post" action="/economy/shinpu/testers">
+            <input type="hidden" name="_csrf" value={session.csrfToken}/><input type="hidden" name="operation" value="remove"/><input type="hidden" name="userId" value={t.userId}/><button type="submit">招待を解除</button>
+          </form>}</td></tr>)}
+        </tbody></table>
+      </section>
+      <section class="card"><h2>招待された人の入口</h2>
+        <p><a href="/casino/shinpu">神符合戦の無料βを開く</a></p>
+        <label>案内するURL<input readonly value={new URL('/casino/shinpu',deps.baseUrl).href}/></label>
+        <p>このURLを本人に案内してください。Discordで認証した本人が、在籍中で招待対象に入っているときだけ遊べます。URLが他の人に渡っても、招待されていない人は入れません。</p>
+        <p>Discordの /神符合戦 でも本人だけに入場ボタンを出せます。部屋のリンクも、招待された人と運営だけが使えます。</p>
+      </section>
     </Layout>);
+  });
+  app.post('/economy/shinpu/testers',requireCsrf,async c=>{
+    const session=c.get('session');
+    if(session.level!=='guji'&&session.level!=='shinshoku')return c.text('運営だけが操作できます。',403);
+    const body=await c.req.parseBody(),parsed=betaUserId.safeParse(body.userId),operation=body.operation;
+    if(!parsed.success||!['add','remove'].includes(String(operation)))return c.redirect('/economy/shinpu?msg=invalid',303);
+    if(operation==='add'){
+      try{if(!await api.memberRoles(cfg.guildId,parsed.data))return c.redirect('/economy/shinpu?msg=not_member',303);}
+      catch{return c.text('Discordで在籍を確認できません。時間をおいてお試しください。',503);}
+    }
+    const result=await changeBetaTester(db,{guildId:cfg.guildId,userId:parsed.data,actorId:session.userId,add:operation==='add'},now());
+    return c.redirect('/economy/shinpu?msg='+result,303);
   });
   app.post('/economy/shinpu/enter', requireCsrf, async (c) => {
     const session = c.get('session');

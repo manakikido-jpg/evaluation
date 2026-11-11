@@ -1,0 +1,38 @@
+/** scripts/previews/shinpu-beta.mts を起動してから実行。実会員は使わない。 */
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+const path=require('node:path');
+let browser;
+(async()=>{
+ const base='http://127.0.0.1:4212',out=path.resolve(__dirname,'../../docs/previews'),errors=[];
+ const {office,other,now}=await(await fetch(base+'/fixture/sessions')).json();
+ browser=await chromium.launch({executablePath:'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
+ const admin=await browser.newContext({viewport:{width:1280,height:900}});
+ await admin.addCookies([{name:'shamusho_session',value:office,url:base}]);const a=await admin.newPage();
+ a.on('pageerror',e=>errors.push(String(e)));await a.goto(base+'/economy/shinpu');
+ const add=a.locator('form[action="/economy/shinpu/testers"]').filter({has:a.locator('[name=operation][value=add]')});
+ await add.locator('[name=userId]').fill('760000000000000002');await add.locator('button').click();
+ await a.waitForURL('**/economy/shinpu?msg=added');await a.waitForTimeout(4000);await a.screenshot({path:path.join(out,'shinpu-beta-management.webp'),type:'webp',fullPage:true});
+ const uninvited=await browser.newContext();await uninvited.addCookies([{name:'sakura_shinpu_test',value:other,url:base}]);
+ const denied=await uninvited.request.get(base+'/casino/shinpu/api');if(denied.status()!==403)throw Error('uninvited admitted');
+ const tester=await browser.newContext({viewport:{width:390,height:844}});await tester.addInitScript(n=>{Date.now=()=>n;},now);
+ const b=await tester.newPage();b.on('pageerror',e=>errors.push(String(e)));await b.goto(base+'/casino/shinpu');
+ await b.screenshot({path:path.join(out,'shinpu-beta-entry.webp'),type:'webp',fullPage:true});
+ await b.locator('a[href="/casino/shinpu/auth"]').click();await b.locator('#create').waitFor();
+ if(await b.locator('a[href="/economy/shinpu"]').count())throw Error('operator navigation leaked');
+ if(!(await b.locator('body').innerText()).includes('招待制無料β'))throw Error('beta label missing');
+ if((await tester.cookies()).some(c=>['shamusho_session','sakura_casino'].includes(c.name)))throw Error('extra privileges issued');
+ await b.screenshot({path:path.join(out,'shinpu-beta-lobby.webp'),type:'webp',fullPage:true});
+ await b.locator('#create').click();await b.locator('#start').waitFor({state:'visible'});await b.locator('#start').click();await b.locator('#hand .card').first().waitFor();
+ await b.waitForFunction(()=>[...document.querySelectorAll('#hand img')].every(x=>x.complete&&x.naturalWidth));
+ await b.locator('#hand').scrollIntoViewIfNeeded();await b.screenshot({path:path.join(out,'shinpu-beta-play.webp'),type:'webp'});
+ const remove=a.locator('form[action="/economy/shinpu/testers"]').filter({has:a.locator('[name=operation][value=remove]')});
+ await remove.locator('button').click();await a.waitForURL('**/economy/shinpu?msg=removed');
+ await b.locator('#access-error').waitFor({state:'visible'});
+ if(await b.locator('#game').isVisible()||await b.locator('#hand .card').count())throw Error('revoked view still interactive');
+ await b.screenshot({path:path.join(out,'shinpu-beta-revoked.webp'),type:'webp'});
+ const state=await b.evaluate(()=>{const before=!!document.getElementById('game').hidden;apply({roomId:'late-response',revision:999,state:{players:[]},myIndex:0});return before&&document.getElementById('game').hidden;});
+ if(!state)throw Error('late response reopened revoked game');
+ if(!await b.evaluate(()=>document.documentElement.scrollWidth<=innerWidth))throw Error('mobile overflow');
+ console.log(JSON.stringify({invitedOAuth:true,uninvitedDenied:true,operatorPrivileges:false,revokedClosed:true,lateReplyIgnored:true,errors}));
+ if(errors.length)throw Error(JSON.stringify(errors));await browser.close();
+})().catch(async e=>{await browser?.close();console.error(e);process.exit(1);});

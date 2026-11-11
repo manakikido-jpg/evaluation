@@ -2,7 +2,7 @@ import { html } from 'hono/html';
 import { cards, playableCards } from '../../services/shinpu/engine.js';
 import { assetUrl } from '../assets.js';
 
-export function ShinpuTestPage({ csrf, name }: { csrf: string; name: string }) {
+export function ShinpuTestPage({ csrf, name, staff = true }: { csrf: string; name: string; staff?: boolean }) {
   const art = JSON.stringify(Object.fromEntries([...cards, ...playableCards].map((c) => [c.id,
     assetUrl(c.id.startsWith('SK-') ? `shinpu-catalog-thumbnails-${c.id}.webp` : `shinpu-card-${c.id}.webp`)])));
   const fullArt = JSON.stringify(Object.fromEntries([...cards, ...playableCards].map((c) => [c.id,
@@ -12,18 +12,19 @@ export function ShinpuTestPage({ csrf, name }: { csrf: string; name: string }) {
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
-        <title>神符合戦 | 咲楽ノ宮・遊べる試作版</title>
+        <title>神符合戦 | 咲楽ノ宮・招待制無料β</title>
         <link rel="stylesheet" href="${assetUrl('shinpu.css')}" />
       </head>
       <body data-csrf="${csrf}" data-art="${art}" data-art-full="${fullArt}">
         <header>
           <div class="brand"><span class="crest" aria-hidden="true">✿</span><span>咲楽ノ宮 / 神符合戦</span></div>
-          <nav><a href="/economy/shinpu">社務所へ</a><span class="tag">運営テスト</span><button data-dialog="rules">遊び方</button><button id="leave">部屋を退出</button></nav>
+          <nav>${staff ? html`<a href="/economy/shinpu">社務所へ</a>` : html`<a href="/casino/shinpu/cards">神器図鑑</a>`}<span class="tag">招待制無料β</span><button data-dialog="rules">遊び方</button><button id="leave">部屋を退出</button></nav>
         </header>
         <main class="wrap" id="lobby">
           <section class="arena">
-            <h1>運営テストの部屋</h1>
-            <p>${name}さん、運営同士で対戦できます。足りない席は式神CPUに任せられます。</p>
+            <h1>無料βの部屋</h1>
+            <p>${name}さん、招待された人同士で対戦できます。足りない席は式神CPUに任せられます。</p>
+            <p class="hint">参加は無料。部屋は2時間で終了し、再起動すると対戦は消えます。HP・MP・霊銭は上限なしの試験中です。不具合や勝敗の偏りは、使った札・人数・端末を添えて運営へ教えてください。</p>
             <p><a href="/casino/shinpu/cards">神器図鑑（237枚）を見る</a></p>
             <label for="count">対戦人数</label
             ><select id="count">
@@ -39,9 +40,9 @@ export function ShinpuTestPage({ csrf, name }: { csrf: string; name: string }) {
         </main>
         <main class="wrap" id="waiting" hidden>
           <section class="arena">
-            <h1>運営の参加を待っています</h1>
+            <h1>参加者を待っています</h1>
             <p id="waiting-seats"></p>
-            <label for="invite">部屋へのリンク（入場は運営のみ）</label><input id="invite" readonly />
+            <label for="invite">部屋へのリンク（招待された人と運営のみ）</label><input id="invite" readonly />
             <div class="actions">
               <button id="copy">リンクをコピー</button><button class="primary" id="start">空いている席をCPUにして開始</button>
             </div>
@@ -106,10 +107,17 @@ export function ShinpuTestPage({ csrf, name }: { csrf: string; name: string }) {
             </section>
           </div>
         </main>
+        <main class="wrap" id="access-error" tabindex="-1" hidden>
+          <section class="arena"><h1>入場を確認してください</h1>
+            <p id="access-message" role="alert"></p>
+            <p>招待の確認が必要なときは運営へ相談してください。</p>
+            <a href="/casino/shinpu/auth">Discordで認証し直す</a>
+          </section>
+        </main>
         <div id="card-play" class="card-play" role="status" aria-live="polite" hidden></div>
         <div class="toast" id="toast" role="status" aria-live="polite"></div>
         <footer>
-          神符合戦・運営テスト · 運営同士＋CPU / テスト専用<br />HP・MP・霊銭は上限なしの運営テストです。対戦内の「霊銭」はサーバーの銭と別です。本番の残高には影響しません。
+          神符合戦・招待制無料β · 招待された人同士＋CPU / テスト専用<br />HP・MP・霊銭は上限なしの招待制無料βです。対戦内の「霊銭」はサーバーの銭と別です。本番の残高には影響しません。
         </footer>
         <dialog id="rules">
           <button class="close" data-close>閉じる</button>
