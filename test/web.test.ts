@@ -4366,6 +4366,16 @@ it('宮司はチェックボックスで不明を一括登録でき、CSRFと確
     const left = await db.select().from(guideReceptions);
     expect(left.map(r => [r.visitorId, r.guideId, r.status])).toEqual([[visitor, guide, 'done']]);
     expect((await listAudit(db, { action: 'guide.reception_pay' }))).toHaveLength(2);
+    // 「案内・給与」を 1 つずつ操作できるページに選んだアカウント（神代など）は、宮司でなくても直せる。初期設定は宮司だけ
+    const { eq } = await import('drizzle-orm');
+    await db.update(adminSessions).set({ writePages: ['guide'] }).where(eq(adminSessions.userId, STAFF));
+    const c = (await openGuideReception(db, visitor2, '910000000000000004'))!;
+    expect(await (await get('/guide', s)).text()).toContain(`/guide/receptions/${c.id}/assign`);
+    expect((await postGuide(`/guide/receptions/${c.id}/assign`, s, new URLSearchParams({ _csrf: csrf(STAFF), guideId: guide }))).headers.get('location')).toBe('/guide?msg=saved#guide-history');
+    expect((await postGuide('/guide/settings', s, new URLSearchParams({ _csrf: csrf(STAFF), salary: '999' }))).status).toBe(403);
+    // 「全部」のまま（1 つずつ選んでいない）なら、今までどおりできない
+    await db.update(adminSessions).set({ writePages: null }).where(eq(adminSessions.userId, STAFF));
+    expect((await postGuide(`/guide/receptions/${c.id}/delete`, s, new URLSearchParams({ _csrf: csrf(STAFF) }))).status).toBe(403);
   });
 
  });
