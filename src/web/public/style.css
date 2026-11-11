@@ -1561,3 +1561,27 @@ form.inline { display: inline; margin: 0; }
 .evaluation-targets[open] > summary::before { content: '▾'; }
 .evaluation-targets fieldset { margin-bottom: 12px; }
 .evaluation-targets small { color: var(--muted); }
+
+/* キャスト登録：本人→メニュー→任意の紹介の順に進む。 */
+.cast-register > fieldset { margin: 18px 0; border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
+.cast-register legend { font-weight: 700; padding: 0 6px; }
+.cast-register fieldset fieldset { min-width: 0; margin: 12px 0 0; border: 1px solid var(--line); padding: 12px; border-radius: 8px; }
+.cast-register [hidden] { display: none !important; }
+.cast-register .cast-member-search { display: none; }
+.cast-register:has([data-cast-search]) .cast-member-search:not([hidden]) { display: block; }
+.cast-menu-choice { display: flex; flex-wrap: wrap; gap: 8px 24px; }
+.cast-register .check { min-height: 44px; display: flex; align-items: center; gap: 8px; }
+.cast-register .field { min-width: 0; }
+.cast-register select,.cast-register input:not([type=checkbox],[type=radio]),.cast-register textarea { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; }
+.cast-profile > summary { cursor: pointer; min-height: 44px; padding: 10px; background: var(--sakura); border-radius: 8px; }
+.cast-profile .fields { margin-top: 12px; }
+.cast-register-submit { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 20px; }
+.cast-register-submit .note { flex: 1 1 220px; margin: 0; }
+.cast-register-submit button { min-height: 44px; }
+@media(max-width:520px) { .cast-register > fieldset { padding: 12px; } .cast-register .fields { grid-template-columns: minmax(0,1fr); } .cast-register-submit button { width: 100%; } }
+
+.cast-register .cast-extra { grid-column: 1 / -1; min-width: 0; }
+.cast-register .cast-extra > summary { cursor: pointer; padding: 10px; min-height: 44px; background: var(--sakura); border-radius: 6px; }
+.cast-register .cast-extra > .fields { margin-top: 12px; }
+/* ファイル名が長くても、スマホの画像選択欄を画面内へ収める。 */
+main input[type=file] { min-width: 0; max-width: 100%; width: 100%; }

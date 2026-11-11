@@ -44,7 +44,7 @@ export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Ch
         <link rel="stylesheet" href={assetUrl('casino.css')} />
         <link rel="stylesheet" href={assetUrl('casino-premium.css')} />
         {props.lobby && <link rel="stylesheet" href={assetUrl('casino-lobby.css')} />}
-        {props.htmx && <script src={assetUrl('htmx.min.js')} defer></script>}
+        {props.htmx && <><meta name="htmx-config" content='{"includeIndicatorStyles":false}'/><script src={assetUrl('htmx.min.js')} defer></script></>}
         <script src={assetUrl('casino-request.js')} defer></script>
         <script src={assetUrl('casino.js')} defer></script>
         {immersive&&<><link rel="stylesheet" href={assetUrl('casino-live.css')}/><script src={assetUrl('casino-live.js')} defer/></>}

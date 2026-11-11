@@ -6702,7 +6702,7 @@ export function createWebApp(deps: WebDeps) {
     return c.redirect(`/tickets?msg=${ok ? 'posted' : 'post_failed'}`);
   });
 
-  app.get('/cast', async (c) => {
+  const renderCast = async (c: Context<Env>, registration?: {draft: import('./views/cast.js').CastRegistrationDraft; error: string}) => {
     const [conf, channels, roles, list, stats, sessions, image, femaleImage] = await Promise.all([
       loadCastConfig(db),
       loadChannels().catch(() => [] as GuildChannel[]),
@@ -6725,6 +6725,7 @@ export function createWebApp(deps: WebDeps) {
     return c.html(
       <CastPage
         session={c.get('session')}
+        registration={registration}
         config={conf}
         channels={textChannelsOf(channels).map((ch) => ({ id: ch.id, name: `#${ch.name}`, category: ch.parent_id ? (cats.get(ch.parent_id) ?? null) : null }))}
         categories={channels.filter((ch) => ch.type === 4).map((ch) => ({ id: ch.id, name: ch.name }))}
@@ -6749,7 +6750,8 @@ export function createWebApp(deps: WebDeps) {
         flashCount={/^\d{1,4}-\d{1,6}$/.test(c.req.query('n') ?? '') ? { casts: Number(c.req.query('n')!.split('-')[0]), items: Number(c.req.query('n')!.split('-')[1]) } : undefined}
       />,
     );
-  });
+  };
+  app.get('/cast', c => renderCast(c));
 
   app.get('/cast/image', async (c) => {
     const img = await loadMenuImage(db, c.req.query('g') === 'female' ? 'female' : 'male');
@@ -7044,7 +7046,13 @@ export function createWebApp(deps: WebDeps) {
     const body = await c.req.parseBody({ all: true });
     const by = c.get('session').userId;
     const id = typeof body.member === 'string' ? await findActiveMember(db, body.member) : undefined;
-    if (!id) return c.redirect('/cast?msg=no_member#cast-register');
+    const draft: import('./views/cast.js').CastRegistrationDraft = {};
+    const fields=['member','bio','tags','gender','minorOk','useTemplate','tplPicked','tpl','menuName','menuNote','menuMinutes','menuPrice','menuMinutes2','menuPrice2','menuMinutes3','menuPrice3','menuNight','menuConsult','menuDelivery','menuGacha'];
+    for (const key of fields) { const value=body[key]; if(typeof value==='string')draft[key]=value.slice(0,4000); else if(Array.isArray(value))draft[key]=value.filter((v):v is string=>typeof v==='string').slice(0,100).map(v=>v.slice(0,200)); }
+    // 旧フォームの名前入力も、本人を一意に確認できた場合はIDに直して残す。
+    if(id)draft.member=id;
+    const failed=(error:string)=>{c.status(422); return renderCast(c,{draft,error});};
+    if (!id) return failed('no_member');
     const str = (k: string) => (typeof body[k] === 'string' ? (body[k] as string) : '');
     const conf = await loadCastConfig(db);
     const p = { bio: str('bio').trim(), tags: parseTags(str('tags')), minorOk: body.minorOk === 'yes', gender: (body.gender === 'male' || body.gender === 'female' ? body.gender : '') as 'male' | 'female' | '' };
@@ -7052,12 +7060,12 @@ export function createWebApp(deps: WebDeps) {
     // テンプレで登録するときは、テンプレの中身をそのまま入れる
     const first = body.useTemplate === 'yes' ? pickTemplate(conf, tplIds(body)) : castMenuInput(body);
     const r = await registerCast(db, conf, { id, adult }, p, first, by, now());
-    if (r.status !== 'ok') return c.redirect(`/cast?msg=reg_${r.status}#cast-register`);
-    if (conf.roleId) await deps.discord.addRole(cfg.guildId, id, conf.roleId, 'キャストの登録').catch((err: unknown) => logger.warn({ err }, 'cast role add failed'));
+    if (r.status !== 'ok') return failed(`reg_${r.status}`);
+    const roleOk = !conf.roleId || await deps.discord.addRole(cfg.guildId, id, conf.roleId, 'キャストの登録').then(()=>true).catch((err: unknown) => {logger.warn({ err }, 'cast role add failed');return false;});
     await audit(db, { actorId: by, targetId: id, action: 'cast.register', detail: { menu: r.cast.menu }, via: 'web' });
-    await deps.discord.sendDm(id, '🎀 キャストに登録されました。#キャスト一覧 の「⚙ キャストの方」から待機できます。').catch(() => false);
+    const dmOk = await deps.discord.sendDm(id, '🎀 キャストに登録されました。#キャスト一覧 の「⚙ キャストの方」から待機できます。').catch(() => false);
     await castPanelNow();
-    return c.redirect('/cast?msg=registered');
+    return c.redirect('/cast?msg=' + (roleOk && dmOk ? 'registered' : 'registered_partial'));
   });
 
   app.post('/cast/role', async (c) => {
