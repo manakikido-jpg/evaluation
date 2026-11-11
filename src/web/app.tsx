@@ -2244,8 +2244,17 @@ export function createWebApp(deps: WebDeps) {
     ]);
     const [duty, dutySince] = await Promise.all([guideDuty(db), guideDutySince(db)]);
     const names = await namesOf(db, [...duty, ...employees.map(e => e.memberId), ...receptions.flatMap(r => [r.visitorId, r.guideId ?? '']), ...payroll.flatMap(r => [r.memberId, r.visitorId])].filter(Boolean));
-    return c.html(<GuidePage session={c.get('session')} config={config} employees={employees} receptions={receptions} payroll={payroll} names={names} channels={channels} roles={roles} flash={c.req.query('msg')} duty={duty.map(id => ({ id, since: dutySince.get(id) }))} now={now()} />);
+    return c.html(<GuidePage session={c.get('session')} manage={guideManager(c)} config={config} employees={employees} receptions={receptions} payroll={payroll} names={names} channels={channels} roles={roles} flash={c.req.query('msg')} duty={duty.map(id => ({ id, since: dutySince.get(id) }))} now={now()} />);
   });
+  /**
+   * 🙋 案内の運営操作（担当を直す・完了にして給与・記録を消す・案内人の承認・受付パネル）ができるか。
+   * 宮司のほか、「操作できるページ」で「案内・給与」を 1 つずつ選んでもらったアカウント（神代など）もできる。
+   * 「全部」のままのアカウント（ふつうの神職）は今までどおりできない。初期設定（チャンネル・ロール・給与の額）は宮司だけ
+   */
+  const guideManager = (c: Context) => {
+    const s = c.get('session') as { level: string; writePages?: string[] | null };
+    return s.level === 'guji' || (Array.isArray(s.writePages) && s.writePages.includes('guide'));
+  };
   // 🙋 案内担当を外す（「終了」を押し忘れた人など。宮司・神職）
   app.post('/guide/duty/:id/off', async c => {
     const id = c.req.param('id');
@@ -2275,7 +2284,7 @@ export function createWebApp(deps: WebDeps) {
   });
   // 最近の案内を直す（宮司）: 担当を決める・記録を消す
   app.post('/guide/receptions/:id/assign', async c => {
-    if (c.get('session').level !== 'guji') return c.text('宮司だけが直せます。', 403);
+    if (!guideManager(c)) return c.text('宮司か、「案内・給与」を操作できるアカウントだけができます。', 403);
     const id = Number(c.req.param('id'));
     const b = await c.req.parseBody();
     const guideId = typeof b.guideId === 'string' && validId(b.guideId) ? b.guideId : undefined;
@@ -2288,7 +2297,7 @@ export function createWebApp(deps: WebDeps) {
     return c.redirect(`/guide?msg=${b.pay === 'yes' ? (r.amount > 0 ? 'paid' : 'paid_none') : 'saved'}#guide-history`);
   });
   app.post('/guide/receptions/:id/delete', async c => {
-    if (c.get('session').level !== 'guji') return c.text('宮司だけが直せます。', 403);
+    if (!guideManager(c)) return c.text('宮司か、「案内・給与」を操作できるアカウントだけができます。', 403);
     const id = Number(c.req.param('id'));
     if (!Number.isSafeInteger(id)) return c.redirect('/guide?msg=invalid#guide-history');
     const [row] = await db.delete(guideReceptions).where(eq(guideReceptions.id, id)).returning();
@@ -2296,7 +2305,7 @@ export function createWebApp(deps: WebDeps) {
     return c.redirect('/guide?msg=saved#guide-history');
   });
   app.post('/guide/panel', async c => {
-    if (c.get('session').level !== 'guji') return c.text('宮司だけが操作できます。', 403);
+    if (!guideManager(c)) return c.text('宮司か、「案内・給与」を操作できるアカウントだけができます。', 403);
     const b = await c.req.parseBody();
     const id = typeof b.channelId === 'string' ? b.channelId : '';
     try {
@@ -2310,7 +2319,7 @@ export function createWebApp(deps: WebDeps) {
     } catch { return c.redirect('/guide?msg=failed'); }
   });
   app.post('/guide/employees/:id', async c => {
-    if (c.get('session').level !== 'guji') return c.text('宮司だけが承認できます。', 403);
+    if (!guideManager(c)) return c.text('宮司か、「案内・給与」を操作できるアカウントだけができます。', 403);
     const id = c.req.param('id');
     const b = await c.req.parseBody();
     if (!/^\d{17,20}$/.test(id) || !['active', 'paused'].includes(String(b.status))) return c.redirect('/guide?msg=invalid');
