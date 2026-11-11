@@ -69,6 +69,7 @@ export type State = {
   seq: number;
   summoners: Summoner[];
   summon: SummonEvent | null;
+  result: { id: string; defender: number; damage: number } | null;
   deck: string[];
   discard: Card[];
   choice: Choice | null;
@@ -145,8 +146,8 @@ export const cards: CardDefinition[] = [
     text: '3防御。通ったダメージの半分を相手へ返す。',
     reflect: true,
   },
-  { id: 'water', name: '御神水の大瓶', type: 'heal', element: '水', power: 12, cost: 0, icon: '⚱', text: 'HPを12回復。最大60。' },
-  { id: 'mana', name: '月露の小瓶', type: 'mana', element: '月', power: 7, cost: 0, icon: '💧', text: 'MPを7回復。最大20。' },
+  { id: 'water', name: '御神水の大瓶', type: 'heal', element: '水', power: 12, cost: 0, icon: '⚱', text: 'HPを12回復。' },
+  { id: 'mana', name: '月露の小瓶', type: 'mana', element: '月', power: 7, cost: 0, icon: '💧', text: 'MPを7回復。' },
   {
     id: 'cleanse',
     name: '禊の白鈴',
@@ -199,6 +200,7 @@ export function create(
     seq: 0,
     summoners: summoners.length ? summoners.map((p) => ({ ...p })) : SUMMONER_NAMES.map((name) => ({ name, avatarUrl: null })),
     summon: null,
+    result: null,
     deck: [], discard: [], choice: null, queue: [], afterAttack: null,
   };
   s.deck = shuffle(s, playableCards.flatMap(c => Array(c.weight ?? 1).fill(c.id) as string[]));
@@ -318,10 +320,9 @@ export function act(s: State, action: string, ids: number[] = [], target?: numbe
     if (target === 'coin') {
       if (p.mp < 3) throw Error('MPが3必要です。');
     } else if (p.money < 4) throw Error('霊銭が4必要です。');
-    if ((target === 'hp' && p.hp >= 60) || (target === 'mp' && p.mp >= 20)) throw Error('すでに上限です。');
     p.money -= rate.money;
-    p.hp = Math.min(60, p.hp + rate.hp);
-    p.mp = Math.min(20, p.mp + rate.mp);
+    p.hp += rate.hp;
+    p.mp += rate.mp;
     note(s, `${p.name}が両替：${target === 'coin' ? 'MP3 → 霊銭4' : target === 'hp' ? '霊銭4 → HP8' : '霊銭4 → MP4'}。`);
     advance(s);
     return;
@@ -358,17 +359,17 @@ export function act(s: State, action: string, ids: number[] = [], target?: numbe
   const c = a[0]!;
   p.mp -= cost;
   remove(p, a, s);
-  if (c.type === 'heal') p.hp = Math.min(60, p.hp + c.power);
-  if (c.type === 'mana') p.mp = Math.min(20, p.mp + c.power);
+  if (c.type === 'heal') p.hp += c.power;
+  if (c.type === 'mana') p.mp += c.power;
   if (c.type === 'money') p.money += c.power;
   if (c.type === 'cleanse') {
     p.burn = 0;
-    p.hp = Math.min(60, p.hp + c.power);
+    p.hp += c.power;
   }
   if (c.type === 'draw') draw(s, p, c.power);
   if (c.type === 'summon') {
     const helper = s.summoners[Math.min(s.summoners.length - 1, Math.floor(s.rng() * s.summoners.length))]!;
-    const healed = Math.min(c.power, 60 - p.hp),
+    const healed = c.power,
       cleared = p.burn > 0;
     p.hp += healed;
     p.burn = 0;
@@ -395,13 +396,14 @@ export function defend(s: State, ids: number[] = [], options: ActionOptions = {}
   p.hp = Math.max(0, p.hp - damage);
   const from = s.players[q.from]!;
   if (damage && q.burn) p.burn = Math.max(p.burn, q.burn);
-  if (damage && q.drain) from.hp = Math.min(60, from.hp + Math.floor(damage / 2));
+  if (damage && q.drain) from.hp += Math.floor(damage / 2);
   if (damage && a.some((c) => c.reflect)) {
     const reflected = Math.floor(damage / 2);
     from.hp = Math.max(0, from.hp - reflected);
     note(s, `水鏡が${from.name}に${reflected}を返した。`);
   }
   note(s, `${p.name}：${a.length ? a.map((c) => c.name).join('＋') : '防御なし'}。${damage}ダメージ${p.hp === 0 ? '、退場' : ''}。`);
+  s.result = { id: `${s.turns}:${q.to}`, defender: q.to, damage };
   s.pending = null;
   advance(s);
 }
@@ -443,7 +445,7 @@ export function cpu(s: State) {
     );
     return;
   }
-  const tool = p.hand.find((c) => !['attack', 'guard'].includes(c.type) && c.cost <= p.mp && !(c.type === 'mana' && p.mp >= 20));
+  const tool = p.hand.find((c) => !['attack', 'guard'].includes(c.type) && c.cost <= p.mp);
   if (tool) {
     act(s, 'use', [tool.uid]);
     return;
@@ -455,8 +457,8 @@ export function cpu(s: State) {
   act(s, 'pass');
 }
 
-function heal(p: Player, amount: number) { if (p.hp > 0) p.hp = Math.min(60, p.hp + amount); }
-function mana(p: Player, amount: number) { p.mp = Math.max(0, Math.min(20, p.mp + amount)); }
+function heal(p: Player, amount: number) { if (p.hp > 0) p.hp += amount; }
+function mana(p: Player, amount: number) { p.mp = Math.max(0, p.mp + amount); }
 function clearBad(p: Player) { p.burn = 0; p.attackPenalty = 0; }
 function aliveTarget(s: State, target: unknown): target is number {
   return typeof target === 'number' && Number.isInteger(target) && !!s.players[target] && s.players[target]!.hp > 0;
@@ -492,7 +494,7 @@ function catalogAct(s: State, action: string, a: Card[], target: number | string
       for (const c of a) {
         let value = c.power;
         if (c.effect === 'double_hit') value *= 2;
-        if (c.effect === 'opening_strike' && s.players[to]!.hp === 60) value += 3;
+        if (c.effect === 'opening_strike' && s.players[to]!.hp >= 60) value += 3;
         if (c.effect === 'low_hp_attack' && p.hp <= 20) value += 4;
         if (c.effect === 'underdog_attack' && s.players[to]!.hp > p.hp) value += 3;
         if (c.effect === 'small_hand_attack' && p.hand.length <= 3) value += 3;
@@ -641,6 +643,7 @@ function catalogDefend(s: State, a: Card[], options: ActionOptions) {
     if (c.effect === 'guard_mp') mana(p, 2);
   }
   note(s, `${p.name}：${a.length ? a.map(c => c.name).join('＋') : '防御なし'}。${damage}ダメージ${p.hp === 0 ? '、退場' : ''}。`);
+  s.result = { id: `${s.turns}:${q.to}`, defender: q.to, damage };
   s.pending = null;
   if (from.hp > 0 && s.players.filter(p => p.hp > 0).length > 1) {
     const next = s.queue.shift();
@@ -701,7 +704,7 @@ function catalogCpu(s: State) {
   const tool = p.hand.find(c => c.type !== 'guard' && c.type !== 'attack' && c.cost <= p.mp
     && !(['sell_card', 'discard_draw'].includes(c.effect ?? '') && p.hand.length < 2)
     && !(c.effect === 'recover_basic' && (!p.lastBasic || !s.discard.some(x => x.uid === p.lastBasic!.uid)))
-    && !(c.type === 'mana' && p.mp >= 20));
+   );
   if (tool) { use(tool); return; }
   if (p.money >= 4 && p.hp < 52) { act(s, 'exchange', [], 'hp'); return; }
   act(s, 'pass');

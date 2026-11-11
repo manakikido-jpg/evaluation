@@ -68,10 +68,12 @@ async function request(body, path = API) {
 }
 function apply(data) {
   if (view?.roomId === data.roomId && view.revision > data.revision) return;
-  const changed = view?.revision !== data.revision;
+  const changed = view?.roomId !== data.roomId || view?.revision !== data.revision;
+  const previous = view?.roomId === data.roomId ? state : null;
   view = data;
   state = data.state;
   myIndex = data.myIndex;
+  if (changed) showResourceChanges(previous, state);
   if (changed) { selected = []; choiceSelected = []; optionalPay = false; secondTarget = -1; useTarget = data.myIndex; }
   $('lobby').hidden = true;
   $('waiting').hidden = !!state;
@@ -128,6 +130,9 @@ async function send(body) {
       $('game').hidden = true;
       $('waiting').hidden = true;
       $('lobby').hidden = false;
+      $('battle-result').hidden = true;
+      clearTimeout(playTimer);
+      $('card-play').hidden = true;
     } else {
       apply(data);
       if (played.length && ['use', 'defend'].includes(body.action)) showPlayedCards(played, body.action === 'defend' ? '防御の札' : '札を使用');
@@ -156,9 +161,11 @@ function render() {
     target = state.players.findIndex((p, i) => i !== myIndex && p.hp > 0);
   $('players').className = 'players' + (state.players.length >= 5 ? ' six' : '');
   $('players').replaceChildren();
+  $('players').style.setProperty('--opponent-count', String(Math.min(3, state.players.length - 1)));
+  renderSelfResources(me);
   state.players
     .map((p, i) => ({ p, i }))
-    .sort((a, b) => (a.i === myIndex) - (b.i === myIndex))
+    .filter(({i}) => i !== myIndex)
     .forEach(({ p, i }) => {
       const box = el(
         'button',
@@ -178,18 +185,20 @@ function render() {
       info.append(el('div', 'name', p.name));
       for (const [title, value, max, cls] of [
         ['HP', p.hp, 60, 'hp'],
-        ['MP', p.mp, 20, 'mp'],
+        ['MP', p.mp, 12, 'mp'],
       ]) {
         const line = el('div', 'resource-line ' + cls);
-        line.append(el('span', '', title), el('strong', '', value), el('span', 'resource-max', '/ ' + max));
+        line.append(el('span', '', title), el('strong', '', value.toLocaleString('ja-JP')));
         const bar = el('span', 'resource-bar'),
           fill = el('span');
-        fill.style.width = (value / max) * 100 + '%';
+        fill.style.width = Math.min(100, Math.max(0, value / max * 100)) + '%';
+        bar.setAttribute('aria-hidden', 'true');
+        bar.title = `${title}の初期値${max}を目安にした表示です。上限ではありません。`;
         bar.append(fill);
         line.append(bar);
         info.append(line);
       }
-      info.append(el('div', 'small', `🪙 霊銭 ${p.money}${p.burn ? ' · 火傷 ' + p.burn : ''}`));
+      info.append(el('div', 'small', `🪙 霊銭 ${p.money.toLocaleString('ja-JP')}${p.burn ? ' · 火傷 ' + p.burn : ''}`));
       const status=[p.attackBoost ? `次攻撃＋${p.attackBoost}` : '', p.attackPenalty ? `次攻撃−${p.attackPenalty}` : '',
         p.guardBoost ? `次防御＋${p.guardBoost}` : '', p.statusGuard ? '厄除け' : '', p.weaponElement ? `次武器：${p.weaponElement}` : ''].filter(Boolean);
       if(status.length)info.append(el('div','small',status.join(' / ')));
@@ -313,7 +322,9 @@ function render() {
     const b = el('button', 'card ' + c.type + (selected.includes(c.uid) ? ' selected' : ''));
     b.setAttribute('aria-pressed', String(selected.includes(c.uid)));
     b.setAttribute('aria-label', `${cardName(c)}、${label[c.type]} ${c.power}、MP ${c.cost}。${c.text}`);
-    b.disabled = !(humanAction() || humanDefense()) || (humanDefense() && c.type !== 'guard');
+    const reason = cardBlockReason(c);
+    b.disabled = !(humanAction() || humanDefense()) || !!reason;
+    if (reason) { b.setAttribute('aria-describedby', 'card-reason-' + c.uid); b.title = reason; }
     b.dataset.element = c.element;
     b.dataset.cardUid = c.uid;
     b.append(...cardContent(c));
@@ -338,12 +349,14 @@ function render() {
     });
     const item = el('div', 'hand-card'), detail = el('button', 'card-detail-button', '拡大・効果');
     detail.type = 'button';
-    detail.setAttribute('aria-label', cardName(c) + 'を拡大して効果を見る');
+    detail.setAttribute('aria-label', cardName(c) + 'を拡大して効果を見る' + (reason ? '。' + reason : ''));
     detail.addEventListener('click', () => openCardDetail(c));
     item.append(b, detail);
+    if (reason) { const note = el('span', 'card-reason', reason); note.id = 'card-reason-' + c.uid; item.append(note); }
     $('hand').append(item);
   });
   $('hand').scrollLeft = handScroll;
+  updateActionContext(a, cost);
   renderSummon();
   updateExchange();
   for (const id of ['log', 'history-log']) {
@@ -385,7 +398,7 @@ function updateExchange() {
   document.querySelectorAll('[data-exchange]').forEach((b) => {
     const k = b.dataset.exchange,
       p = state.players[myIndex];
-    b.disabled = !humanAction() || (k === 'coin' ? p.mp < 3 : p.money < 4 || (k === 'hp' ? p.hp >= 60 : p.mp >= 20));
+    b.disabled = !humanAction() || (k === 'coin' ? p.mp < 3 : p.money < 4);
   });
 }
 for (const b of document.querySelectorAll('[data-dialog]')) b.addEventListener('click', () => $(b.dataset.dialog).showModal());
@@ -441,7 +454,7 @@ function openCardDetail(c) {
   $('card-detail-title').textContent = cardName(c);
   $('card-detail-image').src = FULL_ART[c.id] || ART[c.id];
   $('card-detail-image').alt = c.name + 'のカード全体';
-  $('card-detail-text').textContent = `${label[c.type]} ${c.stackable ? '+' : ''}${c.power} ／ MP ${c.cost} ／ ${c.element}属性。${c.text}`;
+  $('card-detail-text').textContent = `${label[c.type]} ${c.stackable ? '+' : ''}${c.power} ／ MP ${c.cost} ／ ${c.element}属性。${c.text}${c.effect === 'opening_strike' ? ' 上限なしテストではHP60以上を満タンとして扱います。' : ''}`;
   if (!$('card-detail').open) $('card-detail').showModal();
 }
 
@@ -495,8 +508,8 @@ function renderChoice() {
     $('choice-cards').append(b);
   }
 }
-$('heal-target').addEventListener('change', e => { useTarget=Number(e.target.value); });
-$('second-target').addEventListener('change', e => { secondTarget=Number(e.target.value); });
+$('heal-target').addEventListener('change', e => { useTarget=Number(e.target.value); render(); });
+$('second-target').addEventListener('change', e => { secondTarget=Number(e.target.value); render(); });
 $('chosen-element').addEventListener('change', e => { chosenElement=e.target.value; });
 $('optional-pay').addEventListener('change', e => { optionalPay=e.target.checked; render(); });
 function card(c, interactive) {
@@ -577,3 +590,74 @@ function showPlayedCards(cards, caption) {
   panel.classList.remove('playing'); void panel.offsetWidth; panel.classList.add('playing');
   playTimer = setTimeout(() => { panel.hidden = true; panel.replaceChildren(); }, 1200);
 }
+
+function renderSelfResources(me) {
+  const values = [['HP', me.hp, 'hp'], ['MP', me.mp, 'mp'], ['霊銭', me.money, 'money']];
+  $('self-resources').replaceChildren(
+    el('strong', 'self-name', me.name + (me.hp <= 0 ? '・退場' : '・あなた')),
+    ...values.map(([name, value, cls]) => {
+      const box = el('div', 'self-resource ' + cls);
+      box.append(el('span', '', name), el('strong', '', value.toLocaleString('ja-JP')));
+      return box;
+    }),
+    el('span', 'resource-policy', 'HP・MP・霊銭は上限なし'),
+  );
+}
+function cardBlockReason(c) {
+  const me = state.players[myIndex];
+  if (me.hp <= 0 || !(humanAction() || humanDefense())) return '';
+  if (humanDefense() && c.type !== 'guard') return '防御札を選んでください';
+  if (humanAction() && c.type === 'guard') return '防御の番で使えます';
+  if (c.cost > me.mp) return `MPがあと${c.cost - me.mp}必要`;
+  if (humanAction() && c.effect === 'hp_cost_attack' && me.hp <= 3) return 'HP4以上が必要';
+  if (['discard_draw','sell_card'].includes(c.effect) && me.hand.length < 2) return '別の手札が1枚必要';
+  if (c.effect === 'recover_basic' && !me.lastBasic) return '回収する使用済みの札がありません';
+  return '';
+}
+function updateActionContext(a, cost) {
+  const me = state.players[myIndex], fullNames = a.map(cardName).join(' ＋ ');
+  const names = a.length > 2 ? a.slice(0,2).map(cardName).join(' ＋ ') + ` ほか${a.length-2}枚` : fullNames;
+  let text;
+  if (state.phase === 'over') text = '対戦終了・部屋を退出して次の対戦へ';
+  else if (me.hp <= 0) text = '退場しました。残りの対戦を観戦できます。';
+  else if (humanChoice()) {
+    const choice = state.choice, picked = choice.cards.filter(c => choiceSelected.includes(c.uid));
+    text = `${choice.label}：${picked.length}枚選択` + (choice.kind === 'buy' ? ` ／ 代金 ${picked.reduce((n,c)=>n+(c.price||0),0)}霊銭・所持 ${me.money}` : '');
+  } else if (humanDefense()) text = `${state.players[state.pending.from].name}からの攻撃 ／ 消費MP ${cost}・所持 ${me.mp} ／ ${names || '防御せず受ける'}`;
+  else if (humanAction() && a.length) {
+    const healing = a.length === 1 && ['heal_small','heal_medium','heal_large','great_heal_cleanse','cleanse'].includes(a[0].effect);
+    const recipient = a.every(c => c.type === 'attack') ? [target, ...(a.some(c=>c.effect==='two_targets') && secondTarget>=0 ? [secondTarget] : [])].map(i=>state.players[i]?.name).join('・') : state.players[healing ? useTarget : myIndex]?.name;
+    text = `${recipient}へ ／ 消費MP ${cost}・所持 ${me.mp} ／ ${names}`;
+  } else text = humanAction() ? 'あなたの番：手札を選び、相手と消費を確認して確定' : '相手の番を待っています。札の拡大・効果は確認できます。';
+  if (cost > me.mp) text += ` ／ MPがあと${cost - me.mp}必要`;
+  if (optionalPay) {
+    const price = a.filter(c=>['optional_money_attack','optional_money_guard'].includes(c.effect)).length * 4;
+    if (price) text += ` ／ 追加${price}霊銭` + (price > me.money ? '（霊銭不足）' : '');
+  }
+  $('action-context').textContent = text;
+  $('action-context').title = fullNames;
+}
+/** 確定した状態の差だけを結果として出す。回復込みの差を推測ダメージと呼ばない。 */
+function showResourceChanges(before, after) {
+  const panel = $('battle-result');
+  if (!before || !after) { panel.hidden = true; panel.replaceChildren(); return; }
+  const entries = [];
+  after.players.forEach((p, i) => {
+    const prev = before.players[i]; if (!prev) return;
+    for (const [key, title] of [['hp','HP'], ...(i === myIndex ? [['mp','MP'],['money','霊銭']] : [])]) {
+      const delta = p[key] - prev[key];
+      if (delta) entries.push(el('span', 'result-change ' + (delta > 0 ? 'positive' : 'negative'), `${p.name} ${title}${delta > 0 ? '＋' : '−'}${Math.abs(delta).toLocaleString('ja-JP')}`));
+    }
+  });
+  if (after.result && after.result.id !== before.result?.id) {
+    const result = after.result, defender = after.players[result.defender];
+    entries.unshift(el('strong', 'combat-result', `${defender.name}：${result.damage === 0 ? '防御成功・0ダメージ' : result.damage.toLocaleString('ja-JP') + 'ダメージ'}`));
+  }
+  if (!entries.length) return;
+  panel.replaceChildren(el('span', 'result-label', '直前の変化'), ...entries); panel.hidden = false;
+}
+for (const button of document.querySelectorAll('#more-actions button')) button.addEventListener('click', () => { $('more-actions').open = false; });
+const dockObserver = new ResizeObserver(([entry]) => {
+  document.body.style.setProperty('--command-dock-height', `${Math.ceil(entry.borderBoxSize?.[0]?.blockSize || entry.contentRect.height)}px`);
+});
+dockObserver.observe($('command-dock'));

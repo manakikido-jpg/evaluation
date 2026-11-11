@@ -185,6 +185,7 @@ export class ShinpuRooms {
             pending: s.pending,
             log: [...s.log],
             summon: s.summon ? { ...s.summon } : null,
+            result: s.result ? { ...s.result } : null,
             choice: s.choice ? { ...s.choice, cards: s.choice.player === index ? s.choice.cards.map(c => ({ ...c })) : [] } : null,
             deckCount: s.deck.length,
             discardCount: s.discard.length,

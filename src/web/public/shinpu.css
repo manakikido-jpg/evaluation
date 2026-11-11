@@ -1320,3 +1320,44 @@ a {
   .card-play.playing { animation: none; }
   .hand-card .card, .hand-card .card:hover:not(:disabled), .hand-card .card.selected { transition: none; transform: none; }
 }
+
+/* 手札のそばに自分の資源、画面下に対象・消費・確定をまとめる。 */
+.players, .players.six { grid-template-columns: repeat(var(--opponent-count, 3), minmax(0, 1fr)); }
+.self-resources { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px 14px; padding: 12px; margin: 0 0 10px; background: #f1f5fc; border: 1px solid #b5c7e0; border-radius: 10px; }
+.self-name { grid-column: 1 / -1; overflow-wrap: anywhere; font-size: 14px; }
+.self-resource { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; padding: 6px 10px; border-radius: 6px; background: #fffdf7; }
+.self-resource span { font-size: 12px; }
+.self-resource strong { font-size: 24px; overflow-wrap: anywhere; min-width: 0; }
+.self-resource.hp strong { color: #566c35; }
+.self-resource.mp strong { color: #286eaa; }
+.self-resource.money strong { color: #835519; }
+.resource-policy { grid-column: 1 / -1; color: #665c50; font-size: 11px; }
+.command-dock { position: fixed; z-index: 12; bottom: 0; left: 0; right: 0; padding: 10px max(12px, calc((100vw - 1200px) / 2)) calc(10px + env(safe-area-inset-bottom)); background: #fffaf1fa; border-top: 2px solid #ba9362; box-shadow: 0 -5px 24px #34271b24; }
+body:has(#game:not([hidden])) { padding-bottom: calc(var(--command-dock-height, 180px) + 16px); }
+.action-context { margin: 0 0 8px; font-size: 14px; font-weight: 700; line-height: 1.5; overflow-wrap: anywhere; }
+.command-dock .actions { display: flex; gap: 8px; margin: 0; align-items: center; }
+.command-dock .actions > button, .more-actions > summary { min-height: 44px; padding: 9px 14px; white-space: nowrap; }
+.command-dock #main-action { flex: 1 1 180px; }
+.command-dock #hint { font-size: 11px; line-height: 1.5; margin: 6px 0 0; }
+.more-actions { position: relative; }
+.more-actions > summary { display: flex; align-items: center; cursor: pointer; border: 1px solid #aa8962; border-radius: 6px; font-weight: 700; background: #f5eada; }
+.more-actions > summary:focus-visible { outline: 3px solid #286eaa; outline-offset: 2px; }
+.more-actions-menu { position: absolute; bottom: calc(100% + 12px); right: 0; display: grid; gap: 8px; width: 220px; padding: 12px; background: #fffaf1; border: 1px solid #b59162; border-radius: 10px; box-shadow: 0 5px 30px #0003; }
+.more-actions-menu button { min-height: 44px; }
+.card-reason { font-size: 12px; line-height: 1.5; color: #873d20; font-family: 'Yu Gothic', sans-serif; overflow-wrap: anywhere; }
+.battle-result { display: flex; gap: 8px 16px; flex-wrap: wrap; align-items: center; padding: 10px 14px; margin: 8px 0 12px; background: #fffdf8; border: 1px solid #b59162; border-radius: 8px; font-size: 14px; }
+.result-change { font-weight: bold; overflow-wrap: anywhere; animation: shinpu-result .35s ease-out; }
+.result-change.positive { color: #306235; }
+.result-change.negative { color: #ad3324; }
+.toast:not(:empty) { position: fixed; z-index: 24; bottom: calc(var(--command-dock-height, 0px) + 12px); left: 12px; right: 12px; margin: auto; max-width: 700px; padding: 12px; background: #fff3e9; border: 2px solid #b33b28; border-radius: 8px; overflow-wrap: anywhere; }
+@keyframes shinpu-result { from { transform: translateY(7px); opacity: .5; } to { transform: translateY(0); opacity: 1; } }
+@media (max-width: 560px) {
+  .self-resources { padding: 9px; gap: 5px 7px; }
+  .self-resource { padding: 6px; gap: 4px; flex-wrap: wrap; }
+  .self-resource strong { font-size: 22px; }
+  .command-dock .actions > button, .more-actions > summary { padding: 8px 10px; font-size: 14px; }
+  .command-dock #main-action { flex-basis: 130px; }
+  .action-context { font-size: 12px; }
+  .battle-result { font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { .result-change { animation: none; } }

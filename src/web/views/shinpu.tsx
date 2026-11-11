@@ -56,7 +56,8 @@ export function ShinpuTestPage({ csrf, name }: { csrf: string; name: string }) {
             </div>
             <span class="statuspill" id="round"></span>
           </div>
-          <section class="players" id="players" aria-label="参加者・攻撃対象"></section>
+          <section class="players" id="players" aria-label="相手・攻撃対象"></section>
+          <section id="battle-result" class="battle-result" role="status" aria-live="polite" hidden></section>
           <div class="board">
             <aside class="logbox">
               <h3>✿ 戦いの記録</h3>
@@ -76,12 +77,6 @@ export function ShinpuTestPage({ csrf, name }: { csrf: string; name: string }) {
                 </div>
                 <div id="target-preview" class="target-preview"></div>
               </div>
-              <div class="actions">
-                <button class="primary" id="main-action"></button><button id="clear-selection">↶ 選択を戻す</button
-                ><button id="exchange-open">両替</button><button id="pass">様子を見る</button
-                ><button class="log-toggle" data-dialog="history">記録</button>
-              </div>
-              <p class="muted" id="hint"></p>
               <fieldset id="card-options" hidden><legend>札の使い方</legend>
                 <label id="heal-target-label" hidden>回復する人<select id="heal-target"></select></label>
                 <label id="second-target-label" hidden>2人目の攻撃対象<select id="second-target"></select></label>
@@ -91,17 +86,30 @@ export function ShinpuTestPage({ csrf, name }: { csrf: string; name: string }) {
               <section id="card-choice" hidden><h2 id="choice-label"></h2><div id="choice-cards" class="choice-cards"></div><p id="choice-count"></p></section>
             </section>
             <section class="handarea">
+              <section id="self-resources" class="self-resources" aria-label="自分のHP・MP・霊銭"></section>
               <div class="handheading">
                 <span id="hand-title">あなたの神器</span><span class="small">札を押して選択・「拡大・効果」で詳しく見る</span>
               </div>
               <div class="hand" id="hand" aria-label="あなたの手札"></div>
+            </section>
+            <section id="command-dock" class="command-dock" aria-label="選択の確認と操作">
+              <p id="action-context" class="action-context" aria-live="polite"></p>
+              <div class="actions">
+                <button class="primary" id="main-action"></button>
+                <button id="clear-selection">選択解除</button>
+                <details id="more-actions" class="more-actions"><summary>その他</summary><div class="more-actions-menu">
+                  <button id="exchange-open">両替</button><button id="pass">様子を見る</button>
+                  <button data-dialog="history">戦いの記録</button>
+                </div></details>
+              </div>
+              <p class="muted" id="hint"></p>
             </section>
           </div>
         </main>
         <div id="card-play" class="card-play" role="status" aria-live="polite" hidden></div>
         <div class="toast" id="toast" role="status" aria-live="polite"></div>
         <footer>
-          神符合戦・運営テスト · 運営同士＋CPU / テスト専用<br />対戦内の「霊銭」はサーバーの銭と別です。本番の残高には影響しません。
+          神符合戦・運営テスト · 運営同士＋CPU / テスト専用<br />HP・MP・霊銭は上限なしの運営テストです。対戦内の「霊銭」はサーバーの銭と別です。本番の残高には影響しません。
         </footer>
         <dialog id="rules">
           <button class="close" data-close>閉じる</button>
@@ -112,7 +120,7 @@ export function ShinpuTestPage({ csrf, name }: { csrf: string; name: string }) {
               <li>自分の手番に通常の攻撃札を1枚まで選び、＋付きの攻撃札を追加できます。＋付きだけでも攻撃できます。上の相手を押して「攻撃する」。攻撃力とMP消費を合算します。</li>
               <li>攻撃されたら防御札を必要な枚数選び「この札で防御」。選ばず受けることもできます。</li>
               <li>回復や道具は1枚で使います。使用・両替・様子見で手番が進みます。</li>
-              <li>自分の次の手番に手札が7枚まで補充されます。HP上限60、MP上限20、手札上限10。</li>
+              <li>自分の次の手番に手札が7枚まで補充されます。初期HP60・MP12・霊銭20。HP・MP・霊銭に上限はなく、手札は10枚まで。「HPが満タン」の札はHP60以上を対象にします。</li>
             </ol>
             <p class="hint">
               両替は霊銭4→MP4、霊銭4→HP8、MP3→霊銭4。火傷は次の自分の番の開始に2ダメージ・1回です。山札は札ごとの出現重みで用意し、なくなったら捨て札を混ぜます。札の選択も2分で時間切れとなり、サーバーが有効な候補を選んで進めます。

@@ -22,7 +22,7 @@ createServer(async(req,res)=>{
     const url=new URL(req.url!,baseUrl);
     if(url.pathname==='/favicon.ico'){res.writeHead(204).end();return;}
     if(['/fixture/session','/fixture/session-other'].includes(url.pathname)){
-      res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify({token:tokens[url.pathname.endsWith('-other')?1:0]}));return;
+      res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify({token:tokens[url.pathname.endsWith('-other')?1:0],now:+now}));return;
     }
     const parts:Buffer[]=[];
     for await(const part of req)parts.push(Buffer.from(part));
