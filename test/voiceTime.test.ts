@@ -27,6 +27,7 @@ it('⏱ /浮上 は省略すると自分だけに、公開: はい でチャン�
   expect(body.embeds[0]!.title).toContain('さくら');
   expect(body.embeds[0]!.description).toContain('**今日**　全体 **1時間15分**　🏮 縁側 **1時間15分**');
   expect(body.embeds[0]!.description).toContain('氏子の条件に数える縁側の時間');
+  expect(body.embeds[0]!.description).toContain('1 人だけの時間・ミュートやスピーカーミュートの時間もふくみます');
   expect(body.allowedMentions).toEqual({ parse: [] });
   const pub = interaction(true);
   await app.onInteraction(pub as never);
