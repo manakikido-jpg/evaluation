@@ -3086,6 +3086,15 @@ describe('CSS・JS の読み込み', () => {
 });
 
 describe('更新履歴（管理画面）', () => {
+  it('❓ 社務所Web のページの上に「このページの使い方」と、出す・隠すボタンが出る', async () => {
+    const s = await login(STAFF);
+    const html = await (await get('/members', s)).text();
+    expect(html).toContain('❓ このページの使い方');
+    expect(html).toContain('data-hints-toggle');
+    expect(html).toMatch(/<script src="\/static\/page-hints\.js[^"]*"><\/script>/);
+    expect(html).not.toMatch(/<script>|onclick=|style="/);
+  });
+
   it('まだ読んでいない数がメニューに出て、開くと消える。ホームにも最近の更新', async () => {
     const { CHANGELOG } = await import('../src/changelog.js');
     const s = await login(STAFF);

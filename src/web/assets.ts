@@ -155,6 +155,7 @@ export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; ty
     'org.js': { body: readText(path.join(here, 'public/org.js')), type: 'text/javascript; charset=utf-8' },
     'theme.js': { body: readText(path.join(here, 'public/theme.js')), type: 'text/javascript; charset=utf-8' },
     'menu.js': { body: readText(path.join(here, 'public/menu.js')), type: 'text/javascript; charset=utf-8' },
+    'page-hints.js': { body: readText(path.join(here, 'public/page-hints.js')), type: 'text/javascript; charset=utf-8' },
     'copy-text.js': { body: readText(path.join(here, 'public/copy-text.js')), type: 'text/javascript; charset=utf-8' },
     'bingo-shrine.jpg': { body: bingoShrine, type: 'image/jpeg' },
     'bingo.css': { body: readText(path.join(here, 'public/bingo.css')).replaceAll('/static/bingo-shrine.jpg', '/static/bingo-shrine.jpg?v=' + bingoShrineVersion), type: 'text/css; charset=utf-8' },

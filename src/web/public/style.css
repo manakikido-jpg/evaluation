@@ -1561,3 +1561,12 @@ form.inline { display: inline; margin: 0; }
 .evaluation-targets[open] > summary::before { content: '▾'; }
 .evaluation-targets fieldset { margin-bottom: 12px; }
 .evaluation-targets small { color: var(--muted); }
+
+/* ❓ このページの使い方（「💡」で全部のページで出す・隠す） */
+.page-hint { margin: 0 0 16px; padding: 10px 14px; border: 1px solid var(--line, #d8dee8); border-left: 4px solid #2563eb; border-radius: 10px; background: var(--card, #f6f9ff); }
+.page-hint > summary { cursor: pointer; font-weight: 600; min-height: 32px; display: flex; align-items: center; }
+.page-hint ol { margin: 8px 0 4px; padding-left: 1.4em; line-height: 1.7; }
+.page-hint .note { margin: 4px 0 0; font-size: 0.85em; opacity: 0.8; }
+html[data-hints="off"] .page-hint { display: none; }
+.page-hint-toggle { min-width: 36px; min-height: 36px; border-radius: 8px; border: 1px solid var(--line, #d8dee8); background: transparent; cursor: pointer; font-size: 18px; line-height: 1; }
+.page-hint-toggle[aria-pressed="false"] { opacity: 0.45; }
