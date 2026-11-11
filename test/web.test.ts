@@ -1710,6 +1710,28 @@ describe('✨ 特別ご縁（管理画面）', () => {
   const goenNonce = async (session: string) =>
     new RegExp(`action="/members/${USER}/special-goen"[^]*?name="nonce" value="([^"]+)"`).exec(await (await get(`/members/${USER}`, session)).text())?.[1];
 
+  it('🔄 出戻りの人の御朱印リセット: 宮司だけ・確かめが要る。#記録 に残し、元に戻せる', async () => {
+    const { giveShuin, goenOf } = await import('../src/services/shuin.js');
+    await giveShuin(db, { giverId: STAFF, receiverId: USER, weight: 3, giverRank: 'shinshoku' });
+    const s = await login(STAFF);
+    expect(await (await get(`/members/${USER}`, s)).text()).not.toContain(`/members/${USER}/shuin-reset`);
+    expect((await post(s, `/members/${USER}/shuin-reset`, { confirm: 'yes' })).headers.get('location')).toBe(`/members/${USER}?msg=shuin_reset_forbidden#sec-shuin-reset`);
+    const g = await login(GUJI);
+    const page = await (await get(`/members/${USER}`, g)).text();
+    expect(page).toContain('🔄 御朱印をリセット（出戻り）');
+    expect(page).toContain('いま 1 人・ご縁 3');
+    expect((await post(g, `/members/${USER}/shuin-reset`, {})).headers.get('location')).toBe(`/members/${USER}?msg=shuin_reset_confirm#sec-shuin-reset`);
+    expect(await goenOf(db, USER)).toBe(3);
+    const before = actions.length;
+    expect((await post(g, `/members/${USER}/shuin-reset`, { confirm: 'yes' })).headers.get('location')).toBe(`/members/${USER}?msg=shuin_reset_done#sec-shuin-reset`);
+    expect(await goenOf(db, USER)).toBe(0);
+    expect(JSON.stringify(actions.slice(before))).toContain('御朱印をリセットしました');
+    expect(await (await get(`/members/${USER}`, g)).text()).toContain(`/members/${USER}/shuin-reset/undo`);
+    expect((await post(g, `/members/${USER}/shuin-reset/undo`, {})).headers.get('location')).toBe(`/members/${USER}?msg=shuin_reset_undone#sec-shuin-reset`);
+    expect(await goenOf(db, USER)).toBe(3);
+    expect((await post(g, `/members/${USER}/shuin-reset/undo`, {})).headers.get('location')).toBe(`/members/${USER}?msg=shuin_reset_none#sec-shuin-reset`);
+  });
+
   it('宮司だけが振れる。DM と #記録 で知らせ、二度押ししても 1 回だけ。取り消すとご縁が減る', async () => {
     const { goenOf } = await import('../src/services/shuin.js');
     const s = await login(STAFF);

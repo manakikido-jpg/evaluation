@@ -57,6 +57,11 @@ export const FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
   goen_dup: { text: 'この操作はもう済んでいます（二度押しなどで 2 回振られないようにしています）。', kind: 'warn' },
   goen_invalid: { text: `特別ご縁の量（1〜${SPECIAL_GOEN_MAX}）と理由を入れてください。`, kind: 'warn' },
   goen_forbidden: { text: '特別ご縁は宮司のみ振れます。', kind: 'warn' },
+  shuin_reset_done: { text: '🔄 受け取った朱印をリセットしました（押した人はまた押せます）。#記録 に残しました。', kind: 'ok' },
+  shuin_reset_undone: { text: '🔄 いちばん新しいリセットを元に戻しました。', kind: 'ok' },
+  shuin_reset_none: { text: '元に戻せるリセットはありません。', kind: 'warn' },
+  shuin_reset_confirm: { text: 'リセットするときは、確かめのチェックを入れてください。', kind: 'warn' },
+  shuin_reset_forbidden: { text: '御朱印のリセットは宮司のみできます。', kind: 'warn' },
 };
 
 export function Flash(props: { code?: string }) {

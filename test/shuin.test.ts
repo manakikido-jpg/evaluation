@@ -182,3 +182,35 @@ describe('御朱印帳', () => {
     });
   });
 });
+
+describe('🔄 出戻りの人の御朱印をリセット', () => {
+  it('受け取った朱印を全部取り消し、押した人はまた押せる。特別ご縁は選んだときだけ。元に戻すと、押し直されていない分が戻る', async () => {
+    const { resetReceivedShuin, lastShuinReset, undoMemberShuinReset } = await import('../src/services/shuin.js');
+    const { grantSpecialGoen } = await import('../src/services/specialGoen.js');
+    await giveShuin(db, { giverId: B, receiverId: A, weight: 2, giverRank: 'ujiko' });
+    await giveShuin(db, { giverId: C, receiverId: A, weight: 3, giverRank: 'sewayaku' });
+    await giveShuin(db, { giverId: A, receiverId: B, weight: 1, giverRank: 'sanpaisha' });
+    await grantSpecialGoen(db, { memberId: A, amount: 10, reason: 'お礼', by: 'g', nonce: 'reset-test-1' });
+    expect(await goenOf(db, A)).toBe(15);
+    const r = await resetReceivedShuin(db, A, 'g', { now: new Date('2026-11-11T05:00:00Z') });
+    expect(r).toMatchObject({ count: 2, goen: 5, special: 0 });
+    expect(await goenOf(db, A)).toBe(10);
+    // 自分が押した朱印は消さない
+    expect(await goenOf(db, B)).toBe(1);
+    expect((await goshuinchoOf(db, A)).receivedCount).toBe(0);
+    // 押した人は、また押せる（今の格で）
+    expect((await giveShuin(db, { giverId: B, receiverId: A, weight: 4, giverRank: 'sodai' })).status).toBe('given');
+    expect(await lastShuinReset(db, A)).toMatchObject({ remaining: 1, specialRemaining: 0 });
+    // 元に戻す: 押し直されていない C の分だけ戻り、B は押し直した 4 のまま
+    expect(await undoMemberShuinReset(db, A, 'g')).toMatchObject({ status: 'ok', count: 1 });
+    expect(await goenOf(db, A)).toBe(10 + 4 + 3);
+    expect(await lastShuinReset(db, A)).toBeUndefined();
+    expect(await undoMemberShuinReset(db, A, 'g')).toEqual({ status: 'none' });
+    // 特別ご縁も取り消す
+    const r2 = await resetReceivedShuin(db, A, 'g', { withSpecial: true, now: new Date('2026-11-11T06:00:00Z') });
+    expect(r2).toMatchObject({ count: 2, goen: 7, special: 10 });
+    expect(await goenOf(db, A)).toBe(0);
+    expect(await undoMemberShuinReset(db, A, 'g')).toMatchObject({ status: 'ok', count: 2, special: 1 });
+    expect(await goenOf(db, A)).toBe(17);
+  });
+});
