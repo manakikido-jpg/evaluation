@@ -77,6 +77,12 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .setDescriptionLocalizations({ ja: '無料のトークテーマガチャ。ジャンルを選んでみんなで話そう' })
       .setContexts(InteractionContextType.Guild).toJSON(),
 
+    new SlashCommandBuilder()
+      .setName('janken').setNameLocalizations({ ja: 'じゃんけん' })
+      .setDescription('Play rock-paper-scissors with everyone in your voice channel')
+      .setDescriptionLocalizations({ ja: '同じ通話にいる人とじゃんけん。手を選んで「せーの！」で一気に出す（銭は賭けない）' })
+      .setContexts(InteractionContextType.Guild).toJSON(),
+
     // ───── 全員用 ─────
     new SlashCommandBuilder()
       .setName('zandaka')
