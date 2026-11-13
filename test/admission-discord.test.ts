@@ -558,3 +558,65 @@ it('修正要望テンプレートは神職・宮司だけ設置でき、窓口�
   expect((await listNotices(db))[0]).toMatchObject({ channelId: '900000000000000099', sticky: true });
   expect(calls.some(c => c.includes('修正・要望内容：'))).toBe(true);
 });
+
+describe('自己紹介をプロフィールに覚える場所', () => {
+  const EMA_M = '900000000000000041';
+  const EMA_F = '900000000000000042';
+  const STAFF_INTRO = '900000000000000043';
+  const cfg3: GuildConfig = { ...cfg, channels: { ...cfg.channels, ema: EMA_M, emaFemale: EMA_F, staffIntro: STAFF_INTRO } };
+
+  it('#運営紹介 と、絵馬の中のスレッドの書き込みも、編集で覚える', async () => {
+    const { introOf } = await import('../src/services/intros.js');
+    const app3 = new AdmissionApp(client as never, db, () => cfg3, discord);
+    const postedAt = new Date('2026-11-01T00:00:00Z');
+    const base = { guildId: cfg.guildId, createdAt: postedAt, author: { id: USER, bot: false }, partial: false, channel: { isThread: () => false } };
+    await app3.onIntroUpdate({ ...base, channelId: STAFF_INTRO, id: '1', content: '運営のしょうかい' } as never);
+    expect((await introOf(db, USER))?.channelId).toBe(STAFF_INTRO);
+    const later = new Date('2026-11-02T00:00:00Z');
+    await app3.onIntroUpdate({ ...base, createdAt: later, channelId: '900000000000000049', id: '2', content: 'スレッドのしょうかい', channel: { isThread: () => true, parentId: EMA_F } } as never);
+    expect((await introOf(db, USER))?.excerpt).toBe('スレッドのしょうかい');
+    // 関係のないスレッドは覚えない
+    await app3.onIntroUpdate({ ...base, createdAt: new Date('2026-11-03T00:00:00Z'), channelId: '900000000000000050', id: '3', content: 'ほかの話', channel: { isThread: () => true, parentId: '900000000000000099' } } as never);
+    expect((await introOf(db, USER))?.excerpt).toBe('スレッドのしょうかい');
+  });
+
+  it('自己紹介のチャンネルを、いちばん古い書き込みまで 1 回だけ読み直す（人ごとに新しいほうを残す）', async () => {
+    const { introOf, introBackfillDone } = await import('../src/services/intros.js');
+    const app3 = new AdmissionApp(client as never, db, () => cfg3, discord);
+    const OTHER = '850000000000000003';
+    const at = (d: number) => new Date(Date.UTC(2026, 0, d));
+    const m = (id: string, author: string, d: number, content: string, bot = false) => ({ id, content, author: { id: author, bot }, createdAt: at(d), createdTimestamp: at(d).getTime() });
+    // #絵馬-男性 には 150 件（2 ページ）。いちばん古い書き込みが USER の自己紹介
+    const male = [m('old', USER, 1, 'むかしの自己紹介'), ...Array.from({ length: 149 }, (_, k) => m(`x${k}`, 'bot', 2 + (k % 20), '案内', true))];
+    const byChannel: Record<string, ReturnType<typeof m>[]> = {
+      [EMA_M]: male,
+      [EMA_F]: [],
+      [STAFF_INTRO]: [m('s1', OTHER, 3, '運営の古い紹介'), m('s2', OTHER, 5, '運営の新しい紹介')],
+    };
+    const fetches: string[] = [];
+    const guild = {
+      channels: {
+        fetch: async (id: string) => ({
+          isTextBased: () => true,
+          messages: {
+            fetch: async ({ limit, before }: { limit: number; before?: string }) => {
+              fetches.push(`${id}:${before ?? ''}`);
+              const all = [...(byChannel[id] ?? [])].sort((a, b) => b.createdTimestamp - a.createdTimestamp);
+              const start = before ? all.findIndex((x) => x.id === before) + 1 : 0;
+              return new Map(all.slice(start, start + limit).map((x) => [x.id, x]));
+            },
+          },
+        }),
+      },
+    };
+    expect(await app3.backfillIntros(guild as never, 0)).toBe(3);
+    expect((await introOf(db, USER))?.excerpt).toBe('むかしの自己紹介');
+    expect((await introOf(db, OTHER))?.excerpt).toBe('運営の新しい紹介');
+    expect(fetches.filter((f) => f.startsWith(EMA_M))).toHaveLength(2);
+    expect((await introBackfillDone(db)).sort()).toEqual([EMA_F, EMA_M, STAFF_INTRO].sort());
+    // 2 回目は読まない
+    fetches.length = 0;
+    expect(await app3.backfillIntros(guild as never, 0)).toBe(0);
+    expect(fetches).toEqual([]);
+  });
+});

@@ -238,6 +238,8 @@ async function main(): Promise<void> {
     await inviteLinks.attach(guild).catch((err) => logger.warn({ err }, 'invite links attach failed'));
     // 絵馬待ちの人: 止まっていた間に書かれた自己紹介を拾う
     await admission.catchUpIntros(guild).catch((err) => logger.warn({ err }, 'intro catch-up failed'));
+    // 🔁 自己紹介のチャンネルを、いちばん古い書き込みまで 1 回だけ読み直す（裏で少しずつ。待たない）
+    void admission.backfillIntros(guild).catch((err) => logger.warn({ err }, 'intro backfill failed'));
     // 自分の通話部屋: 止まっていた間に空になったものを消す
     await tempVoice.attach(guild).catch((err) => logger.warn({ err }, 'temp voice attach failed'));
     await rooms.attach(guild).catch(err => logger.warn({ err }, 'room control panel restore failed'));

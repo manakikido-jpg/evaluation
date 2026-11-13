@@ -21,7 +21,7 @@ import {
   type Guild,
   type GuildMember,
 } from 'discord.js';
-import { adminLevelOf, type GuildConfig } from '../config.js';
+import { adminLevelOf, emaChannelIds, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import type { DiscordActions } from '../lib/discordRest.js';
 import { logger } from '../lib/logger.js';
@@ -67,7 +67,7 @@ import { appendFromSender, createSoudan, setSoudanCard } from '../services/souda
 import { goshuinchoOf } from '../services/shuin.js';
 import { coreName } from '../lib/names.js';
 import { inviteOf } from '../services/invites.js';
-import { recordIntro } from '../services/intros.js';
+import { introBackfillDone, markIntroBackfill, recordIntro } from '../services/intros.js';
 import { panelMessage } from './panels.js';
 import { SHU } from './views.js';
 
@@ -183,8 +183,8 @@ export class AdmissionApp {
   /** #絵馬-男性・#絵馬-女性 への書き込み: 絵馬待ちの人なら、入鯖を仕上げる */
   async onMessage(msg: Message): Promise<void> {
     if (!msg.inGuild() || msg.guildId !== this.cfg.guildId || msg.author.bot || !msg.member) return;
-    // 自己紹介はプロフィールに出すので覚えておく（だれでも）
-    if ([this.cfg.channels.ema, this.cfg.channels.emaFemale].includes(msg.channelId)) {
+    // 自己紹介はプロフィールに出すので覚えておく（だれでも。#運営紹介・その中のスレッドもふくむ）
+    if (this.isIntroPlace(msg)) {
       await recordIntro(this.db, { memberId: msg.author.id, channelId: msg.channelId, messageId: msg.id, content: msg.content, postedAt: msg.createdAt }).catch(
         (err: unknown) => logger.warn({ err }, 'record intro failed'),
       );
@@ -246,9 +246,52 @@ export class AdmissionApp {
     return done;
   }
 
+  /** 自己紹介を書く場所か（#絵馬-男性・#絵馬-女性・#運営紹介と、その中のスレッド） */
+  private isIntroPlace(msg: Pick<Message, 'channelId' | 'channel'>): boolean {
+    const ids = emaChannelIds(this.cfg);
+    if (ids.includes(msg.channelId)) return true;
+    const ch = msg.channel as { isThread?: () => boolean; parentId?: string | null } | null;
+    return Boolean(ch && typeof ch.isThread === 'function' && ch.isThread() && ch.parentId && ids.includes(ch.parentId));
+  }
+
+  /**
+   * 🔁 自己紹介のチャンネルを、いちばん古い書き込みまで 1 回だけ読み直す（起動のときに、裏で少しずつ）。
+   * この機能ができる前の自己紹介や、起動のときの「新しい 100 件」より前の自己紹介もプロフィールに出すため。
+   * 人ごとに、いちばん新しい書き込みが残る（古い書き込みで上書きしない）。読み直したチャンネルは覚えて、次からは読まない
+   */
+  async backfillIntros(guild: Guild, pause = 1_000): Promise<number> {
+    const done = await introBackfillDone(this.db);
+    let n = 0;
+    for (const channelId of emaChannelIds(this.cfg)) {
+      if (done.includes(channelId)) continue;
+      const channel = await guild.channels.fetch(channelId).catch(() => null);
+      if (!channel?.isTextBased() || !('messages' in channel)) continue;
+      let before: string | undefined;
+      let complete = true;
+      for (let page = 0; page < 500; page++) {
+        const batch = await channel.messages.fetch({ limit: 100, ...(before ? { before } : {}) }).catch(() => undefined);
+        if (!batch) { complete = false; break; }
+        if (!batch.size) break;
+        for (const msg of batch.values()) {
+          if (msg.author.bot || msg.webhookId || msg.system) continue;
+          await recordIntro(this.db, { memberId: msg.author.id, channelId, messageId: msg.id, content: msg.content, postedAt: msg.createdAt }).catch(() => undefined);
+          n++;
+        }
+        // 並びは新しい順。いちばん古いものの前を、次に読む
+        before = [...batch.values()].reduce<Message | undefined>((o, m) => (!o || m.createdTimestamp < o.createdTimestamp ? m : o), undefined)?.id;
+        if (batch.size < 100) break;
+        if (pause) await new Promise((r) => setTimeout(r, pause));
+      }
+      if (complete) await markIntroBackfill(this.db, [...done, channelId]).then(() => done.push(channelId));
+    }
+    if (n) logger.info({ count: n }, 'intro backfill');
+    return n;
+  }
+
   /** 編集では絵馬の記録だけを更新する。案内完了や報酬の処理は繰り返さない。 */
   async onIntroUpdate(message: Message | PartialMessage): Promise<void> {
-    if (message.guildId !== this.cfg.guildId || ![this.cfg.channels.ema, this.cfg.channels.emaFemale].includes(message.channelId)) return;
+    // 一部だけのメッセージでも、チャンネル（スレッドの親）は分かるので、読みこむ前に確かめる
+    if (message.guildId !== this.cfg.guildId || !this.isIntroPlace(message)) return;
     const msg = message.partial ? await message.fetch() : message;
     if (msg.author.bot || msg.webhookId || msg.system) return;
     await recordIntro(this.db, { memberId: msg.author.id, channelId: msg.channelId, messageId: msg.id, content: msg.content, postedAt: msg.createdAt });
