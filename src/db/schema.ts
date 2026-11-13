@@ -2746,3 +2746,13 @@ export const kisekiTickets = pgTable('kiseki_tickets', {
 },t=>[uniqueIndex('kiseki_ticket_request').on(t.memberId,t.requestId),index('kiseki_ticket_member').on(t.memberId),
  check('kiseki_ticket_price_time',sql`${t.price}=1500 and ${t.seconds}=3600`),
  check('kiseki_ticket_period',sql`(${t.startedAt} is null and ${t.endsAt} is null) or (${t.startedAt} is not null and ${t.endsAt} is not null and ${t.endsAt}=${t.startedAt}+interval '1 hour')`)]);
+
+/** 神符合戦の対戦保存。手札/山札を含むsnapshotは参加者向けAPIへ直接出さない。 */
+export const shinpuSavedRooms = pgTable('shinpu_saved_rooms', {
+  id:text('id').primaryKey(),guildId:text('guild_id').notNull(),
+  format:integer('format').notNull().default(1),revision:integer('revision').notNull(),
+  seats:jsonb('seats').$type<import('../services/shinpu/rooms.js').Tester[]>().notNull(),
+  summary:jsonb('summary').$type<{name:string;capacity:number;players:number;status:string}>().notNull(),
+  snapshot:jsonb('snapshot').$type<import('../services/shinpu/rooms.js').StoredRoom>().notNull(),
+  expiresAt:timestamp('expires_at',{withTimezone:true}).notNull(),updatedAt:timestamp('updated_at',{withTimezone:true}).notNull().defaultNow(),
+},t=>[index('shinpu_saved_guild_expiry_idx').on(t.guildId,t.expiresAt)]);

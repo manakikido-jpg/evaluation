@@ -1142,6 +1142,13 @@
       "when": 1794199368571,
       "tag": "0162_volatile_purifiers",
       "breakpoints": true
+    },
+    {
+      "idx": 163,
+      "version": "7",
+      "when": 1794539361398,
+      "tag": "0163_shinpu_saved_rooms",
+      "breakpoints": true
     }
   ]
 }

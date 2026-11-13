@@ -108,7 +108,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { key: 'economy', href: '/economy', icon: '🪙', label: '経済' },
       { key: 'casinotest', href: '/economy/casino-test', icon: '🌸', label: 'カジノの没入感テスト', page: 'economy' },
       { key: 'keibatest', href: '/economy/keiba-test', icon: '🏇', label: '競馬（運営テスト）', page: 'economy' },
-      { key: 'shinpu', href: '/economy/shinpu', icon: '⚔', label: '神符合戦（管理者テスト）', page: 'economy' },
+      { key: 'shinpu', href: '/economy/shinpu', icon: '⚔', label: '神符合戦（β管理）', page: 'economy' },
       { key: 'eventlottery', href: '/economy/event-lottery', icon: '🎟', label: 'イベントくじ', page: 'economy' },
       { key: 'fortune', href: '/economy/fortune', icon: '🎟', label: 'スクラッチ・宝くじ', page: 'economy' },
       { key: 'casino', href: '/economy/casino', icon: '🎰', label: 'カジノ', page: 'economy' },

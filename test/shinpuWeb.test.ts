@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest';
 import { createWebApp } from '../src/web/app.js';
 import type { DiscordApi } from '../src/web/discordApi.js';
 import type { DiscordActions } from '../src/lib/discordRest.js';
+import {betaTesters,changeBetaTester} from '../src/services/shinpu/beta.js';
 import { createSession } from '../src/web/sessions.js';
 import { createMemberSession } from '../src/web/memberSessions.js';
 import { createLoginLink } from '../src/services/casino/loginLinks.js';
@@ -15,7 +16,7 @@ const BASE = 'https://shamusho.example.com',
   ROOT = '/casino/shinpu',
   A = '760000000000000001',
   B = '760000000000000002';
-let db: Db, close: () => Promise<void>, app: ReturnType<typeof createWebApp>, roles: string[], fail: boolean, cookie: string, csrf: string;
+let db: Db, close: () => Promise<void>, app: ReturnType<typeof createWebApp>, roles: string[], fail: boolean, present: boolean, cookie: string, csrf: string;
 function token(res: Response, key: string) {
   return res.headers
     .getSetCookie()
@@ -27,13 +28,14 @@ beforeEach(async () => {
   ({ db, close } = await makeDb());
   roles = [ROLE.guji];
   fail = false;
+  present = true;
   const api: DiscordApi = {
     authorizeUrl: (s, r) => `https://discord.com/auth?state=${s}&redirect_uri=${encodeURIComponent(r)}`,
     exchangeCode: async () => 'access',
     me: async () => ({ id: A, username: 'ais', displayName: 'ais <b>', avatarUrl: null }),
     memberRoles: async () => {
       if (fail) throw Error('offline');
-      return roles;
+      return present ? roles : null;
     },
   };
   app = createWebApp({ db, cfg: () => cfg, api, discord: {} as DiscordActions, baseUrl: BASE });
@@ -160,7 +162,7 @@ it('社務所の入口からCSRFつきで運営専用の対戦へ入り、操作
   const page = await app.request('/economy/shinpu', { headers: { cookie: officeCookie } });
   expect(page.status).toBe(200);
   const html = await page.text();
-  expect(html).toContain('神符合戦（管理者テスト）');
+  expect(html).toContain('神符合戦（β管理）');
   const officeCsrf = /name="_csrf" value="([^"]+)"/.exec(html)![1]!;
   const enter = await app.request('/economy/shinpu/enter', { method: 'POST', headers: { cookie: officeCookie, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ _csrf: officeCsrf }) });
   expect(enter.status).toBe(302);
@@ -199,4 +201,122 @@ it('社務所の経済ページ権限がない人は直URLでも入場できな�
   const headers = { cookie: 'shamusho_session=' + admin };
   expect((await app.request('/economy/shinpu', { headers })).status).toBe(403);
   expect((await app.request('/economy/shinpu/enter', { method: 'POST', headers })).status).toBe(403);
+});
+
+it('運営テストの実APIでHP60/MP20を超えて回復・両替でき、実残高は変えない', async () => {
+  await recordJoin(db, {id:A,username:'fixture',displayName:'確認用',avatarUrl:null,roleIds:roles,isBot:false,joinedAt:new Date()});
+  await addCoins(db,A,500,'admin_grant');
+  const other=await createMemberSession(db,{id:B,username:'other',displayName:'確認用の相手',avatarUrl:null});
+  const otherCookie={cookie:'sakura_shinpu_test='+other};
+  const otherPage=await app.request(ROOT,{headers:otherCookie});
+  const otherCsrf=/data-csrf="([^"]+)"/.exec(await otherPage.text())![1]!;
+  const otherHeaders={...otherCookie,origin:BASE,'content-type':'application/json','x-csrf-token':otherCsrf};
+  let view=await(await post({operation:'create',capacity:2})).json() as RoomView;
+  view=await(await post({operation:'join',roomId:view.roomId},otherHeaders)).json() as RoomView;
+  view=await(await post({operation:'start',roomId:view.roomId,revision:view.revision})).json() as RoomView;
+  const heal=view.state!.players[0]!.hand.find(c=>c.id==='SK-217')!;
+  view=await(await post({operation:'move',roomId:view.roomId,revision:view.revision,action:'use',ids:[heal.uid],target:0})).json() as RoomView;
+  expect(view.state!.players[0]!.hp).toBe(72);
+  for(let i=0;i<3;i++){
+    view=await(await post({operation:'move',roomId:view.roomId,revision:view.revision,action:'pass'},otherHeaders)).json() as RoomView;
+    const response=await post({operation:'move',roomId:view.roomId,revision:view.revision,action:'exchange',target:'mp'});
+    expect(response.status).toBe(200);view=await response.json() as RoomView;
+  }
+  expect(view.state!.players[0]).toMatchObject({hp:72,mp:24,money:8});
+  expect(view.state!.players[1]!.hand).toEqual([]);
+  expect((await walletOf(db,A)).balance).toBe(500);
+  const attack=view.state!.players[0]!.hand.find(c=>c.id==='SK-004')!;
+  view=await(await post({operation:'move',roomId:view.roomId,revision:view.revision,action:'pass'},otherHeaders)).json() as RoomView;
+  view=await(await post({operation:'move',roomId:view.roomId,revision:view.revision,action:'attack',ids:[attack.uid],target:1})).json() as RoomView;
+  view=await(await post({operation:'move',roomId:view.roomId,revision:view.revision,action:'defend',ids:[],damage:0},otherHeaders)).json() as RoomView;
+  expect(view.state!.result).toMatchObject({defender:1,damage:5});
+  expect(view.state!.players[1]!.hp).toBe(55);
+  expect((await walletOf(db,A)).balance).toBe(500);
+});
+
+async function betaPlayer(userId=B){
+ const value=await createMemberSession(db,{id:userId,username:'beta',displayName:'β確認用',avatarUrl:null});
+ const h={cookie:'sakura_shinpu_test='+value};const page=await app.request(ROOT,{headers:h});
+ const html=await page.text();const playerCsrf=/data-csrf="([^"]+)"/.exec(html)?.[1];
+ return {h,html,status:page.status,postHeaders:{...h,origin:BASE,'content-type':'application/json','x-csrf-token':playerCsrf??''}};
+}
+const invite=(userId=B,add=true)=>changeBetaTester(db,{guildId:cfg.guildId,userId,actorId:A,add});
+it('招待した一般メンバーだけが無料βの対戦・図鑑へ入り、運営画面の権限は得ない',async()=>{
+ roles=[ROLE.sanpaisha];expect((await betaPlayer()).status).toBe(403);await invite();const player=await betaPlayer();expect(player.status).toBe(200);
+ expect(player.html).toContain('招待制無料β');expect(player.html).toContain('再起動');expect(player.html).not.toContain('社務所へ');
+ expect((await app.request(ROOT+'/cards',{headers:player.h})).status).toBe(200);
+ expect((await app.request(ROOT+'/cards/SK-038',{headers:player.h})).status).toBe(200);
+ const created=await app.request(ROOT+'/api',{method:'POST',headers:player.postHeaders,body:JSON.stringify({operation:'create',capacity:2})});expect(created.status).toBe(200);
+ expect((await app.request('/economy/shinpu',{headers:player.h})).status).not.toBe(200);
+ expect((await app.request('/economy/shinpu/testers',{method:'POST',headers:player.postHeaders,body:JSON.stringify({operation:'add',userId:A})})).status).not.toBe(303);
+ expect((await betaTesters(db,cfg.guildId)).map(t=>t.userId)).toEqual([B]);
+});
+it('招待解除はログイン済みの次の操作にも適用し、部屋を操作させない',async()=>{
+ roles=[ROLE.sanpaisha];await invite();const player=await betaPlayer();
+ const view=await(await app.request(ROOT+'/api',{method:'POST',headers:player.postHeaders,body:JSON.stringify({operation:'create',capacity:2})})).json() as RoomView;
+ await invite(B,false);
+ expect((await app.request(ROOT+'/api',{method:'POST',headers:player.postHeaders,body:JSON.stringify({operation:'start',roomId:view.roomId,revision:view.revision})})).status).toBe(403);
+ expect((await app.request(ROOT+'/cards',{headers:player.h})).status).toBe(401);
+});
+it('招待されていても退鯖なら拒否し、在籍照会失敗を許可として扱わない',async()=>{
+ roles=[];await invite();let player=await betaPlayer();expect(player.status).toBe(200);
+ fail=true;expect((await app.request(ROOT+'/api',{headers:player.h})).status).toBe(503);
+ fail=false;expect((await app.request(ROOT+'/api',{headers:player.h})).status).toBe(200);
+ present=false;expect((await app.request(ROOT+'/api',{headers:player.h})).status).toBe(403);
+});
+it('招待したメンバーのDiscord認証は神符合戦だけのCookieを作る',async()=>{
+ await invite(A);roles=[ROLE.sanpaisha];
+ const begin=await app.request(ROOT+'/auth'),state=token(begin,'sakura_shinpu_state')!;
+ const res=await app.request('/casino/auth/callback?state='+state+'&code=ok',{headers:{cookie:'sakura_shinpu_state='+state}});
+ expect(res.status).toBe(302);expect(res.headers.get('location')).toBe(ROOT);
+ expect(token(res,'sakura_shinpu_test')).toBeTruthy();expect(token(res,'sakura_casino')).toBeUndefined();expect(token(res,'shamusho_session')).toBeUndefined();
+});
+it('招待管理は経済ページの操作権限とCSRFを要求し、正規操作で登録・解除できる',async()=>{
+ const admin=await officeLogin(),h={cookie:'shamusho_session='+admin,'content-type':'application/x-www-form-urlencoded'};
+ const page=await app.request('/economy/shinpu',{headers:h}),formCsrf=/name="_csrf" value="([^"]+)"/.exec(await page.text())![1]!;
+ const manage=(operation:string,userId=B,csrfValue=formCsrf)=>app.request('/economy/shinpu/testers',{method:'POST',headers:h,body:new URLSearchParams({_csrf:csrfValue,operation,userId})});
+ expect((await manage('add',B,'bad')).status).toBe(403);
+ expect((await manage('add')).headers.get('location')).toBe('/economy/shinpu?msg=added');expect(await betaTesters(db,cfg.guildId)).toHaveLength(1);
+ expect((await manage('add')).headers.get('location')).toBe('/economy/shinpu?msg=already');
+ const readOnly=await createSession(db,{id:'760000000000000003',username:'read',displayName:'閲覧',avatarUrl:null},{level:'shinshoku',pages:['economy'],writePages:[]});
+ const rh={cookie:'shamusho_session='+readOnly,'content-type':'application/x-www-form-urlencoded'},rp=await app.request('/economy/shinpu',{headers:rh});
+ const readCsrf=/name="_csrf" value="([^"]+)"/.exec(await rp.text())![1]!;
+ expect((await app.request('/economy/shinpu/testers',{method:'POST',headers:rh,body:new URLSearchParams({_csrf:readCsrf,operation:'remove',userId:B})})).status).toBe(403);
+ expect(await betaTesters(db,cfg.guildId)).toHaveLength(1);expect((await manage('remove')).headers.get('location')).toBe('/economy/shinpu?msg=removed');expect(await betaTesters(db,cfg.guildId)).toEqual([]);
+});
+it('サーバー外や入力不正の人を招待に登録しない',async()=>{
+ const admin=await officeLogin(),h={cookie:'shamusho_session='+admin,'content-type':'application/x-www-form-urlencoded'};
+ const page=await app.request('/economy/shinpu',{headers:h}),c=/name="_csrf" value="([^"]+)"/.exec(await page.text())![1]!;
+ present=false;const manage=(id:string)=>app.request('/economy/shinpu/testers',{method:'POST',headers:h,body:new URLSearchParams({_csrf:c,operation:'add',userId:id})});
+ expect((await manage(B)).headers.get('location')).toBe('/economy/shinpu?msg=not_member');expect((await manage('wrong')).headers.get('location')).toBe('/economy/shinpu?msg=invalid');expect(await betaTesters(db,cfg.guildId)).toEqual([]);
+});
+it('解除した人の未使用リンクでも、認証Cookieを発行しない',async()=>{
+ roles=[ROLE.sanpaisha];await invite();const link=await createLoginLink(db,{id:B,displayName:'β確認用',avatarUrl:null});await invite(B,false);
+ const response=await app.request(ROOT+'/link/'+link,{method:'POST',headers:{origin:BASE}});
+ expect(response.status).toBe(403);expect(token(response,'sakura_shinpu_test')).toBeUndefined();
+});
+it('招待の参加許可と対戦はWebを作り直しても保持する',async()=>{
+ roles=[ROLE.sanpaisha];await invite();const player=await betaPlayer();
+ await app.request(ROOT+'/api',{method:'POST',headers:player.postHeaders,body:JSON.stringify({operation:'create',capacity:2})});
+ const restarted=createWebApp({db,cfg:()=>cfg,api:{authorizeUrl:()=>BASE,exchangeCode:async()=> 'fixture',me:async()=>({id:B,username:'beta',displayName:'β確認用',avatarUrl:null}),memberRoles:async()=>[ROLE.sanpaisha]},discord:{} as DiscordActions,baseUrl:BASE});
+ expect((await restarted.request(ROOT,{headers:player.h})).status).toBe(200);
+ const result=await restarted.request(ROOT+'/api',{headers:player.h});expect(result.status).toBe(200);expect((await result.json() as {rooms:unknown[]}).rooms).toMatchObject([{mine:true,capacity:2,status:'参加受付中'}]);
+});
+it('招待解除で拒否された参加者の席はCPUへ渡し、ほかの参加者の対戦を残す',async()=>{
+ roles=[ROLE.sanpaisha];await invite();const player=await betaPlayer();
+ let view=await(await app.request(ROOT+'/api',{method:'POST',headers:player.postHeaders,body:JSON.stringify({operation:'create',capacity:2})})).json() as RoomView;
+ const admin=await officeLogin(),staffHeaders={...headers(),cookie:headers().cookie+'; shamusho_session='+admin};
+ view=await(await post({operation:'join',roomId:view.roomId},staffHeaders)).json() as RoomView;
+ view=await(await app.request(ROOT+'/api',{method:'POST',headers:player.postHeaders,body:JSON.stringify({operation:'start',roomId:view.roomId,revision:view.revision})})).json() as RoomView;
+ await invite(B,false);expect((await app.request(ROOT+'/api',{headers:player.h})).status).toBe(403);
+ const remained=await(await app.request(ROOT+'/api?room='+view.roomId,{headers:staffHeaders})).json() as RoomView;
+ expect(remained.seats).toMatchObject([{cpu:true},{cpu:false}]);expect(remained.state!.players[0]!.name).toContain('CPU引継ぎ');expect(remained.state!.players[0]!.hand).toEqual([]);
+});
+it('防御の見通しは本人とCSRFを検査し、公開結果だけ返して保存を変えない',async()=>{
+ let v=await(await post({operation:'create',capacity:2})).json() as RoomView;
+ const bToken=await createMemberSession(db,{id:B,username:'b',displayName:'相手',avatarUrl:null});const bCookie='sakura_shinpu_test='+bToken;const page=await app.request(ROOT,{headers:{cookie:bCookie}});const bCsrf=/data-csrf="([^"]+)"/.exec(await page.text())![1]!;const bh={cookie:bCookie,origin:BASE,'content-type':'application/json','x-csrf-token':bCsrf};
+ v=await(await post({operation:'join',roomId:v.roomId},bh)).json() as RoomView;v=await(await post({operation:'start',roomId:v.roomId,revision:v.revision})).json() as RoomView;
+ v=await(await post({operation:'move',roomId:v.roomId,revision:v.revision,action:'attack',ids:[v.state!.players[0]!.hand[0]!.uid],target:1})).json() as RoomView;
+ const body={operation:'preview',roomId:v.roomId,revision:v.revision,ids:[]};expect((await post(body)).status).toBe(400);expect((await post(body,{...bh,'x-csrf-token':'bad'})).status).toBe(403);const preview=await post(body,bh);expect(preview.status).toBe(200);expect(preview.headers.get('cache-control')).toContain('no-store');expect(await preview.json()).toMatchObject({revision:v.revision,without:{damage:5},selected:{damage:5}});
+ const after=await get(ROOT+'/api?room='+v.roomId);expect(after.headers.get('cache-control')).toContain('no-store');expect((await after.json() as RoomView).revision).toBe(v.revision);
 });

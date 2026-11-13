@@ -142,9 +142,9 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
     new SlashCommandBuilder()
       .setName('shinpu')
       .setNameLocalizations({ ja: '神符合戦' })
-      .setDescription('Open the staff-only Shinpu playtest')
-      .setDescriptionLocalizations({ ja: '神符合戦の運営専用テストを開く（本人にだけ表示）' })
-      .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+      .setDescription('Open the invite-only free Shinpu beta')
+      .setDescriptionLocalizations({ ja: '招待制の神符合戦無料βを開く（本人にだけ表示）' })
+      .setDefaultMemberPermissions(null)
       .setContexts(InteractionContextType.Guild)
       .toJSON(),
 
