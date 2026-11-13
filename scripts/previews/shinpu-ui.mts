@@ -1,6 +1,7 @@
 /** 神符合戦のUI確認専用。架空会員とメモリDBだけを使い、127.0.0.1で公開する。 */
 import {createServer} from 'node:http';
 import {makeDb,cfg,ROLE} from '../../test/helpers.js';
+import {shinpuSavedRooms} from '../../src/db/schema.js';
 import {createWebApp} from '../../src/web/app.js';
 import {createMemberSession} from '../../src/web/memberSessions.js';
 const baseUrl='http://127.0.0.1:4211';
@@ -17,9 +18,11 @@ Math.random=()=>{seed^=seed<<13;seed^=seed>>>17;seed^=seed<<5;return(seed>>>0)/4
 const app=createWebApp({db,cfg:()=>cfg,api:{memberRoles:async()=>[ROLE.guji]} as never,
   discord:{} as never,baseUrl,now:()=>now});
 Math.random=originalRandom;
+const initialSeed=seed;
 createServer(async(req,res)=>{
   try {
     const url=new URL(req.url!,baseUrl);
+    if(url.pathname==='/fixture/reset'&&req.method==='POST'){await db.delete(shinpuSavedRooms);seed=initialSeed;res.writeHead(200).end('reset');return;}
     if(url.pathname==='/favicon.ico'){res.writeHead(204).end();return;}
     if(['/fixture/session','/fixture/session-other'].includes(url.pathname)){
       res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify({token:tokens[url.pathname.endsWith('-other')?1:0],now:+now}));return;

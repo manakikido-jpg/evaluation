@@ -9,6 +9,7 @@ let view = null,
   target = 1,
   busy = false,
   stopped = false;
+let connected = false, forecastKey = "", forecastSerial = 0, viewEpoch = 0, refreshing = false;
 let lastPlayedAttack = '', playTimer;
 let choiceSelected = [], useTarget = 0, secondTarget = -1, chosenElement = '火', optionalPay = false;
 const ART = JSON.parse(document.body.dataset.art || '{}');
@@ -27,12 +28,12 @@ const label = {
   tool: '道具・取引',
 };
 function humanAction() {
-  return state && state.phase === 'action' && state.turn === myIndex && state.players[myIndex].hp > 0;
+  return connected && state && state.phase === 'action' && state.turn === myIndex && state.players[myIndex].hp > 0;
 }
 function humanDefense() {
-  return state && state.phase === 'defense' && state.pending.to === myIndex;
+  return connected && state && state.phase === 'defense' && state.pending.to === myIndex;
 }
-function humanChoice() { return state && state.phase === 'choice' && state.choice.player === myIndex; }
+function humanChoice() { return connected && state && state.phase === 'choice' && state.choice.player === myIndex; }
 function chosen() {
   return state.players[myIndex].hand.filter((c) => selected.includes(c.uid));
 }
@@ -46,20 +47,22 @@ function toast(t) {
   $('toast').textContent = t;
 }
 async function request(body, path = API) {
+  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),15000);
+  try {
   const r = await fetch(
     path,
     body
       ? {
-          method: 'POST',
+          method: 'POST',signal:controller.signal,
           headers: { 'content-type': 'application/json', 'x-csrf-token': document.body.dataset.csrf },
           body: JSON.stringify(body),
         }
-      : {},
+      : {signal:controller.signal},
   );
   const data = await r.json();
   if (!r.ok) {
     if (r.status === 401 || r.status === 403) {
-      stopped = true;
+      stopped = true; window.ShinpuEffects?.stop();
       for (const id of ['game','lobby','waiting','card-play','leave']) $(id).hidden = true;
       for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
       clearTimeout(playTimer); view = null; state = null; selected = [];
@@ -68,20 +71,26 @@ async function request(body, path = API) {
       $('access-error').hidden = false;
       $('access-error').focus();
     }
-    throw Error(data.error || '読み込みに失敗しました。');
+    const error=Error(data.error || '読み込みに失敗しました。');error.status=r.status;throw error;
   }
   return data;
+  }catch(e){if(e.name==='AbortError')throw Error('通信が遅れています。保存状態を確認して再接続します。');throw e;}finally{clearTimeout(timeout);}
 }
 function apply(data) {
   if (stopped) return;
   if (view?.roomId === data.roomId && view.revision > data.revision) return;
-  const changed = view?.roomId !== data.roomId || view?.revision !== data.revision;
-  const previous = view?.roomId === data.roomId ? state : null;
+  const previousView = view;
+  const wasOffline = !connected;
+  setConnection(true);
+  const selectionChanged = view?.roomId !== data.roomId || view?.revision !== data.revision;
+  const changed = wasOffline || selectionChanged;
+  const previous = view?.roomId === data.roomId && view?.round === data.round ? state : null;
+  if(view?.roomId!==data.roomId||view?.round!==data.round){lastPlayedAttack='';clearTimeout(playTimer);$('card-play').hidden=true;}
   view = data;
   state = data.state;
   myIndex = data.myIndex;
-  if (changed) showResourceChanges(previous, state);
-  if (changed) { selected = []; choiceSelected = []; optionalPay = false; secondTarget = -1; useTarget = data.myIndex; }
+  if (changed) {showResourceChanges(previous, state);window.ShinpuEffects?.observe(wasOffline?null:previousView,data);}
+  if (selectionChanged) { selected = []; choiceSelected = []; optionalPay = false; secondTarget = -1; useTarget = data.myIndex; }
   $('lobby').hidden = true;
   $('waiting').hidden = !!state;
   $('game').hidden = !state;
@@ -102,11 +111,16 @@ function apply(data) {
   }
 }
 async function refresh() {
-  if (busy || stopped) return;
+  if (busy || stopped || refreshing) return;
+  refreshing=true;
+  const epoch=viewEpoch;
   try {
-    if (view) apply(await request(null, API + '?room=' + view.roomId));
+    if (view) {const data=await request(null, API+'?room='+view.roomId);if(epoch===viewEpoch)apply(data);}
     else {
       const data = await request();
+      if(epoch!==viewEpoch||stopped)return;
+      setConnection(true);
+      const mine=data.rooms.find(r=>r.mine);if(mine){apply(await request(null,API+'?room='+mine.id));return;}
       $('room-list').replaceChildren(
         ...data.rooms.map((r) => {
           const b = el('button', '', `${r.mine ? '自分の部屋・再開 / ' : ''}${r.name}の部屋 · ${r.players}/${r.capacity}人 · ${r.status}`);
@@ -118,14 +132,17 @@ async function refresh() {
       if (!data.rooms.length) $('room-list').textContent = '参加受付中の部屋はまだありません。';
     }
   } catch (e) {
-    toast(e.message);
-  }
+    if(epoch!==viewEpoch||stopped)return;
+    setConnection(false,e.message);toast(e.message);
+  }finally{refreshing=false;}
 }
 async function send(body) {
   if (busy || stopped) return;
+  if(!connected&&['move','start','rematch'].includes(body.operation)){toast('再接続してから操作してください。');return;}
+  if(['create','join','leave'].includes(body.operation))viewEpoch++;
   const played = body.operation === 'move' ? (state?.players[myIndex]?.hand || []).filter(c => (body.ids || []).includes(c.uid)) : [];
   busy = true;
-  for (const b of document.querySelectorAll('button')) b.disabled = true;
+  for (const b of document.querySelectorAll('button:not([data-presentation-control])')) b.disabled = true;
   try {
     const data = await request(body);
     toast('');
@@ -145,6 +162,7 @@ async function send(body) {
       if (played.length && ['use', 'defend'].includes(body.action)) showPlayedCards(played, body.action === 'defend' ? '防御の札' : '札を使用');
     }
   } catch (e) {
+    if(!e.status||e.status>=500)setConnection(false,e.message);
     toast(e.message);
   } finally {
     busy = false;
@@ -241,7 +259,7 @@ function render() {
   $('target-preview').hidden = !$('target-preview').childElementCount;
   if (state.phase === 'over') {
     $('message').textContent = state.winner < 0 ? '引き分け' : state.players[state.winner].name + 'の勝利';
-    $('summary').textContent = '部屋を退出すると、新しい対戦を作れます。';
+    $('summary').textContent = '結果を確認し、全員で準備して再戦できます。';
   } else if (state.phase === 'choice') {
     $('message').textContent = humanChoice() ? state.choice.label : state.players[state.choice.player].name + 'が札を選んでいます';
     $('summary').textContent = humanChoice() ? '下の候補を押して、選択を確定してください。' : '他の人の候補や手札は表示しません。';
@@ -292,7 +310,7 @@ function render() {
   const button = $('main-action');
   button.textContent =
     state.phase === 'over'
-      ? '部屋を退出'
+      ? '同じ人で再戦する'
       : humanChoice() ? state.choice.kind === 'buy' && !choiceSelected.length ? '買わずに終える' : '選択を確定' : humanDefense()
         ? a.length
           ? 'この札で防御'
@@ -300,7 +318,7 @@ function render() {
         : a.length && a[0].type === 'attack'
           ? '⚔ 攻撃する'
           : '札を使う';
-  button.disabled = state.phase !== 'over' && !humanDefense() && !humanAction();
+  button.disabled = busy || !connected || (state.phase==='over'&&view.rematchReady?.[myIndex]) || (state.phase !== 'over' && !humanDefense() && !humanAction());
   if (humanAction())
     button.disabled =
       !a.length ||
@@ -315,7 +333,7 @@ function render() {
   if (optionalPay && a.filter(c => ['optional_money_attack','optional_money_guard'].includes(c.effect)).length * 4 > me.money) button.disabled = true;
   $('exchange-open').disabled = !humanAction();
   $('pass').disabled = !humanAction();
-  $('hint').textContent = humanChoice() ? '候補を選んで確定してください。候補と手札は本人だけに表示しています。' : humanDefense()
+  $('hint').textContent = state.phase==='over' ? '結果を確かめ、全員で準備して再戦できます。' : humanChoice() ? '候補を選んで確定してください。候補と手札は本人だけに表示しています。' : humanDefense()
     ? state.pending.singleGuard ? '鈴音の連矢への防御は1枚までです。' : '防御札は重ねられます。同属性の防具は＋2。'
     : humanAction()
       ? '通常攻撃は1枚まで。＋付きは追加できます。条件付き効果の最終値はサーバーで決まります。'
@@ -364,6 +382,7 @@ function render() {
   });
   $('hand').scrollLeft = handScroll;
   updateActionContext(a, cost);
+  updateDefenseForecast();renderOutcome();
   renderSummon();
   updateExchange();
   for (const id of ['log', 'history-log']) {
@@ -384,7 +403,7 @@ function leave() {
 $('leave').addEventListener('click', leave);
 $('main-action').addEventListener('click', () => {
   if (state.phase === 'over') {
-    leave();
+    rematch();
     return;
   }
   if (humanChoice()) { move('choose', choiceSelected); return; }
@@ -425,12 +444,15 @@ $('copy').addEventListener('click', async () => {
   }
 });
 async function init() {
+  const epoch=viewEpoch;
   const id = new URL(location.href).searchParams.get('room');
   if (id && /^[0-9a-f-]{36}$/.test(id)) {
     try {
-      apply(await request(null, API + '?room=' + id));
-    } catch {
-      await send({ operation: 'join', roomId: id });
+      const data=await request(null,API+'?room='+id);if(epoch===viewEpoch)apply(data);
+    } catch(e) {
+      if(epoch!==viewEpoch||stopped)return;
+      if(e.status===400)await send({ operation: 'join', roomId: id });
+      else setConnection(false,e.message);
     }
   } else await refresh();
 }
@@ -584,7 +606,7 @@ function renderSummon() {
 
 /** サーバーが受理した札だけを場へ出す。演出は操作や計算を止めない。 */
 function showPlayedCards(cards, caption) {
-  if (stopped || !cards.length) return;
+  if (stopped || document.hidden || document.body.dataset.effectMode==='off' || !cards.length) return;
   clearTimeout(playTimer);
   const panel = $('card-play'), art = el('div', 'card-play-art');
   for (const c of cards.slice(0, 3)) {
@@ -595,7 +617,7 @@ function showPlayedCards(cards, caption) {
   panel.replaceChildren(el('strong', 'card-play-caption', caption + (cards.length > 3 ? `・${cards.length}枚` : '')), art);
   panel.hidden = false;
   panel.classList.remove('playing'); void panel.offsetWidth; panel.classList.add('playing');
-  playTimer = setTimeout(() => { panel.hidden = true; panel.replaceChildren(); }, 1200);
+  playTimer = setTimeout(() => { panel.hidden = true; panel.replaceChildren(); }, document.body.dataset.effectMode==='short'?250:1200);
 }
 
 function renderSelfResources(me) {
@@ -625,7 +647,7 @@ function updateActionContext(a, cost) {
   const me = state.players[myIndex], fullNames = a.map(cardName).join(' ＋ ');
   const names = a.length > 2 ? a.slice(0,2).map(cardName).join(' ＋ ') + ` ほか${a.length-2}枚` : fullNames;
   let text;
-  if (state.phase === 'over') text = '対戦終了・部屋を退出して次の対戦へ';
+  if (state.phase === 'over') text = '対戦終了・全員の同意で同じ席から再戦できます';
   else if (me.hp <= 0) text = '退場しました。残りの対戦を観戦できます。';
   else if (humanChoice()) {
     const choice = state.choice, picked = choice.cards.filter(c => choiceSelected.includes(c.uid));
@@ -668,3 +690,40 @@ const dockObserver = new ResizeObserver(([entry]) => {
   document.body.style.setProperty('--command-dock-height', `${Math.ceil(entry.borderBoxSize?.[0]?.blockSize || entry.contentRect.height)}px`);
 });
 dockObserver.observe($('command-dock'));
+
+function setConnection(ok,message='') {
+  connected=ok;
+  $('connection-banner').hidden=ok||stopped;
+  $('connection-message').textContent=message+' 通信を確認しています。操作は一時停止し、保存済みの対戦に再接続します。手番の制限時間は進みます。';
+  if(!ok&&state)render();
+}
+$('reconnect').addEventListener('click',()=>{if(!busy)void (view?refresh():init());});
+$('back-lobby').addEventListener('click',()=>{viewEpoch++;view=null;state=null;selected=[];forecastKey='';$('game').hidden=true;$('waiting').hidden=true;$('lobby').hidden=false;history.replaceState(null,'',location.pathname);void refresh();});
+window.addEventListener('online',()=>{if(!busy&&!stopped)void refresh();});
+function rematch(){if(view&&state?.phase==='over')return send({operation:'rematch',roomId:view.roomId,revision:view.revision});}
+$('rematch').addEventListener('click',rematch);
+function renderOutcome(){
+  const old=view.previousSummary;$('previous-outcome').hidden=!old;if(old)$('previous-outcome-body').textContent=(old.winner==null||old.winner<0?'引き分け':old.players[old.winner].name+'の勝利')+` ／ ${old.turns}手番 ／ `+old.players.map(p=>`${p.name}：HP ${p.hp}・与ダメージ ${p.damageDealt}・防いだダメージ ${p.blocked}`).join(' ／ ');
+  const box=$('match-outcome'),summary=view.summary;box.hidden=!summary||state.phase!=='over';if(box.hidden)return;
+  $('outcome-title').textContent=summary.winner==null||summary.winner<0?'引き分け':summary.players[summary.winner].name+'の勝利';
+  $('outcome-reason').textContent=`${summary.turns}手番 ／ `+(summary.reason==='turn-limit'?'80手番の残りHPで決着':'最後までHPが残った人の勝利');
+  const hit=summary.lastHit,finisher=hit?.decisive&&summary.reason!=='turn-limit'&&summary.winner===hit.from&&summary.players[hit.to].hp===0;
+  $('outcome-hit').textContent=hit?`${finisher?'決め手の札':'直近の攻撃'}：${hit.cards.join(' ＋ ')}（${hit.damage}ダメージ）`:'';
+  $('outcome-stats').replaceChildren(...summary.players.map(p=>{const item=el('article','outcome-player');item.append(el('h3','',p.name),el('p','',`残りHP ${p.hp.toLocaleString('ja-JP')}`),el('p','',`与ダメージ ${p.damageDealt.toLocaleString('ja-JP')} ／ 被ダメージ ${p.damageTaken.toLocaleString('ja-JP')}`),el('p','',`防いだダメージ ${p.blocked.toLocaleString('ja-JP')}`));return item;}));
+  const humans=view.seats.filter(p=>!p.cpu).length,ready=view.rematchReady.filter(Boolean).length;
+  $('rematch-status').textContent=`再戦の準備 ${ready} / ${humans}人`+(view.rematchReady[myIndex]?'・あなたは準備済みです':'');
+  $('rematch').disabled=busy||!connected||view.rematchReady[myIndex];
+  $('rematch').textContent=view.rematchReady[myIndex]?'準備済み・全員を待つ':'同じ人で再戦する';
+}
+async function updateDefenseForecast(){
+  const box=$('defense-forecast');box.hidden=!humanDefense();if(box.hidden){forecastKey='';forecastSerial++;return;}
+  const key=[view.roomId,view.revision,[...selected].sort().join(','),optionalPay].join(':');if(key===forecastKey)return;
+  forecastKey=key;const serial=++forecastSerial;box.textContent='防御した場合を計算しています…';
+  try{const data=await request({operation:'preview',roomId:view.roomId,revision:view.revision,ids:selected,options:{pay:optionalPay}});
+    if(stopped||serial!==forecastSerial||forecastKey!==key||view?.revision!==data.revision||view?.roomId!==data.roomId)return;
+    box.replaceChildren(el('strong','forecast-values',`防御なし ${data.without.damage}ダメージ\n選んだ防御 ${data.selected.damage}ダメージ`),el('p','',`攻撃直後HP ${data.selected.hpAtHit}（防御札の回復前）`),el('small','',`現在の条件での計算です。回復・火傷などは別に発生します。${data.selected.hpAtHit===0?'この攻撃でHPが0になります。':''}`));
+  }catch(e){if(serial===forecastSerial&&!stopped)box.textContent=e.message+' 選択や画面の更新後に計算し直します。';}
+}
+
+window.addEventListener('pageshow',event=>{if(event.persisted&&!stopped){setConnection(false,'再確認しています。');void refresh();}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){clearTimeout(playTimer);$('card-play').hidden=true;}else if(!stopped)void refresh();});

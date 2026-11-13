@@ -295,12 +295,12 @@ it('解除した人の未使用リンクでも、認証Cookieを発行しない'
  const response=await app.request(ROOT+'/link/'+link,{method:'POST',headers:{origin:BASE}});
  expect(response.status).toBe(403);expect(token(response,'sakura_shinpu_test')).toBeUndefined();
 });
-it('招待の参加許可はWebを作り直しても保持し、対戦は新しい部屋一覧になる',async()=>{
+it('招待の参加許可と対戦はWebを作り直しても保持する',async()=>{
  roles=[ROLE.sanpaisha];await invite();const player=await betaPlayer();
  await app.request(ROOT+'/api',{method:'POST',headers:player.postHeaders,body:JSON.stringify({operation:'create',capacity:2})});
  const restarted=createWebApp({db,cfg:()=>cfg,api:{authorizeUrl:()=>BASE,exchangeCode:async()=> 'fixture',me:async()=>({id:B,username:'beta',displayName:'β確認用',avatarUrl:null}),memberRoles:async()=>[ROLE.sanpaisha]},discord:{} as DiscordActions,baseUrl:BASE});
  expect((await restarted.request(ROOT,{headers:player.h})).status).toBe(200);
- const result=await restarted.request(ROOT+'/api',{headers:player.h});expect(result.status).toBe(200);expect(await result.json()).toEqual({rooms:[]});
+ const result=await restarted.request(ROOT+'/api',{headers:player.h});expect(result.status).toBe(200);expect((await result.json() as {rooms:unknown[]}).rooms).toMatchObject([{mine:true,capacity:2,status:'参加受付中'}]);
 });
 it('招待解除で拒否された参加者の席はCPUへ渡し、ほかの参加者の対戦を残す',async()=>{
  roles=[ROLE.sanpaisha];await invite();const player=await betaPlayer();
@@ -311,4 +311,12 @@ it('招待解除で拒否された参加者の席はCPUへ渡し、ほかの参�
  await invite(B,false);expect((await app.request(ROOT+'/api',{headers:player.h})).status).toBe(403);
  const remained=await(await app.request(ROOT+'/api?room='+view.roomId,{headers:staffHeaders})).json() as RoomView;
  expect(remained.seats).toMatchObject([{cpu:true},{cpu:false}]);expect(remained.state!.players[0]!.name).toContain('CPU引継ぎ');expect(remained.state!.players[0]!.hand).toEqual([]);
+});
+it('防御の見通しは本人とCSRFを検査し、公開結果だけ返して保存を変えない',async()=>{
+ let v=await(await post({operation:'create',capacity:2})).json() as RoomView;
+ const bToken=await createMemberSession(db,{id:B,username:'b',displayName:'相手',avatarUrl:null});const bCookie='sakura_shinpu_test='+bToken;const page=await app.request(ROOT,{headers:{cookie:bCookie}});const bCsrf=/data-csrf="([^"]+)"/.exec(await page.text())![1]!;const bh={cookie:bCookie,origin:BASE,'content-type':'application/json','x-csrf-token':bCsrf};
+ v=await(await post({operation:'join',roomId:v.roomId},bh)).json() as RoomView;v=await(await post({operation:'start',roomId:v.roomId,revision:v.revision})).json() as RoomView;
+ v=await(await post({operation:'move',roomId:v.roomId,revision:v.revision,action:'attack',ids:[v.state!.players[0]!.hand[0]!.uid],target:1})).json() as RoomView;
+ const body={operation:'preview',roomId:v.roomId,revision:v.revision,ids:[]};expect((await post(body)).status).toBe(400);expect((await post(body,{...bh,'x-csrf-token':'bad'})).status).toBe(403);const preview=await post(body,bh);expect(preview.status).toBe(200);expect(preview.headers.get('cache-control')).toContain('no-store');expect(await preview.json()).toMatchObject({revision:v.revision,without:{damage:5},selected:{damage:5}});
+ const after=await get(ROOT+'/api?room='+v.roomId);expect(after.headers.get('cache-control')).toContain('no-store');expect((await after.json() as RoomView).revision).toBe(v.revision);
 });

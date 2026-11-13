@@ -6,7 +6,7 @@ import type { Db } from '../db/client.js';
 import { peekLoginLink, useLoginLink } from '../services/casino/loginLinks.js';
 import { audit } from '../services/audit.js';
 import {isBetaTester} from '../services/shinpu/beta.js';
-import { ShinpuRooms } from '../services/shinpu/rooms.js';
+import { SavedShinpuRooms,ShinpuStorageError } from '../services/shinpu/store.js';
 import { createMemberSession, deleteMemberSession, findMemberSession } from './memberSessions.js';
 import { randomToken, safeEqual } from './sessions.js';
 import type { DiscordApi, DiscordUser } from './discordApi.js';
@@ -29,7 +29,7 @@ type Deps = {
   staffOf?: (c: Context, userId: string) => Promise<boolean>;
 };
 const input = z.object({
-  operation: z.enum(['create', 'join', 'start', 'move', 'leave']),
+  operation: z.enum(['create', 'join', 'start', 'move', 'leave', 'preview', 'rematch']),
   roomId: z.string().uuid().optional(),
   capacity: z.number().int().min(2).max(6).optional(),
   revision: z.number().int().nonnegative().optional(),
@@ -57,7 +57,7 @@ function Entry({ action, name, room }: { action?: string; name?: string; room?: 
             <h1>神符合戦</h1>
             <p><strong>招待制・無料β</strong></p>
             <p>招待されたサーバーのメンバーと、宮司・神職が参加できます。</p>
-            <p>参加は無料です。対戦内の霊銭だけを使い、サーバーの銭は減りません。部屋は2時間で終了し、再起動すると対戦は消えます。</p>
+            <p>参加は無料です。対戦内の霊銭だけを使い、サーバーの銭は減りません。部屋は2時間で終了し、再起動しても保存期限内なら対戦に戻れます。</p>
             {action ? (
               <form method="post" action={action}>
                 <p>{name}さんとして入ります。このリンクは人に渡さないでください。</p>
@@ -73,7 +73,7 @@ function Entry({ action, name, room }: { action?: string; name?: string; room?: 
   );
 }
 export function mountShinpu(app: Hono<any>, d: Deps) {
-  const rooms = new ShinpuRooms(() => d.now().getTime());
+  const rooms = new SavedShinpuRooms(d.db,d.cfg().guildId,() => d.now().getTime());
   const redirect = `${d.baseUrl}/casino/auth/callback`;
   const cookieOpts = { httpOnly: true, secure: d.secure, sameSite: 'Lax' as const, path: ROOT, maxAge: 7 * 86400 };
   const allowed = async (id: string) => {
@@ -91,7 +91,7 @@ export function mountShinpu(app: Hono<any>, d: Deps) {
     try {
       const access = await allowed(s.userId);
       if (!access) {
-        for (const room of rooms.list(s.userId).filter(r=>r.mine)) rooms.leave(room.id,s.userId);
+        for (const room of (await rooms.list(s.userId)).filter(r=>r.mine)) await rooms.leave(room.id,s.userId);
         await deleteMemberSession(d.db, s.id);
         deleteCookie(c, COOKIE, { path: ROOT });
         return { response: c.json({ error: '招待されたメンバーと運営だけが参加できます。' }, 403) };
@@ -171,16 +171,18 @@ export function mountShinpu(app: Hono<any>, d: Deps) {
     return c.html(<ShinpuCatalogPage card={card} />);
   });
   app.get(`${ROOT}/api`, async (c) => {
+    c.header('Cache-Control','private, no-store');
     const auth = await requirePlayerAccess(c);
     if (auth.response) return auth.response;
     try {
       const id = c.req.query('room');
-      return c.json(id ? rooms.view(id, auth.session.userId) : { rooms: rooms.list(auth.session.userId) });
+      return c.json(id ? await rooms.view(id, auth.session.userId) : { rooms: await rooms.list(auth.session.userId) });
     } catch (e) {
-      return c.json({ error: (e as Error).message }, 400);
+      return c.json({ error: (e as Error).message }, e instanceof ShinpuStorageError?503:400);
     }
   });
   app.post(`${ROOT}/api`, async (c) => {
+    c.header('Cache-Control','private, no-store');
     const auth = await requirePlayerAccess(c);
     if (auth.response) return auth.response;
     if (c.req.header('origin') !== new URL(d.baseUrl).origin || !safeEqual(auth.session.csrfToken, c.req.header('x-csrf-token') ?? ''))
@@ -197,7 +199,7 @@ export function mountShinpu(app: Hono<any>, d: Deps) {
     try {
       if (b.operation === 'create') {
         if (!b.capacity) throw Error('人数を選んでください。');
-        const view = rooms.create(user, b.capacity);
+        const view = await rooms.create(user, b.capacity);
         await audit(d.db, {
           actorId: user.id,
           action: 'shinpu.test.create',
@@ -207,16 +209,18 @@ export function mountShinpu(app: Hono<any>, d: Deps) {
         return c.json(view);
       }
       if (!b.roomId) throw Error('部屋を選んでください。');
-      if (b.operation === 'join') return c.json(rooms.join(b.roomId, user));
+      if (b.operation === 'join') return c.json(await rooms.join(b.roomId, user));
       if (b.operation === 'leave') {
-        rooms.leave(b.roomId, user.id);
+        await rooms.leave(b.roomId, user.id);
         return c.json({ left: true });
       }
       if (b.revision === undefined) throw Error('画面を開き直してください。');
-      if (b.operation === 'start') return c.json(rooms.start(b.roomId, user.id, b.revision));
-      return c.json(rooms.move(b.roomId, user.id, { revision: b.revision, action: b.action ?? '', ids: b.ids, target: b.target, options: b.options }));
+      if (b.operation === 'start') {const v=await rooms.start(b.roomId,user.id,b.revision);await audit(d.db,{actorId:user.id,action:'shinpu.test.start',detail:{roomId:b.roomId,round:v.round},via:'web'});return c.json(v);}
+      if(b.operation==='preview')return c.json(await rooms.preview(b.roomId,user.id,{revision:b.revision,action:'defend',ids:b.ids,options:b.options}));
+      if(b.operation==='rematch'){const v=await rooms.rematch(b.roomId,user.id,b.revision);await audit(d.db,{actorId:user.id,action:'shinpu.test.rematch',detail:{roomId:b.roomId,round:v.round},via:'web'});return c.json(v);}
+      return c.json(await rooms.move(b.roomId, user.id, { revision: b.revision, action: b.action ?? '', ids: b.ids, target: b.target, options: b.options }));
     } catch (e) {
-      return c.json({ error: (e as Error).message }, 400);
+      return c.json({ error: (e as Error).message }, e instanceof ShinpuStorageError?503:400);
     }
   });
 }

@@ -99,7 +99,7 @@ export class CasinoApp {
 /** 運営本人だけに渡す入口。Webでも運営ロールを確かめる。 */
 export function shinpuTestReply(baseUrl: string | undefined, token?: string) {
   if (!baseUrl) return { content: 'Webの場所がまだ決まっていません。', allowedMentions: { parse: [] as const } };
-  return { content: '神符合戦・招待制無料β\n招待された人同士で対戦し、空いている席は式神CPUで埋められます。サーバーの銭は使いません。部屋は2時間で終了し、再起動すると対戦は消えます。\n' + (token ? 'リンクは10分・1回きりです。人に渡さないでください。' : 'ボタンから開いて、Discordで認証してください。'), allowedMentions: { parse: [] as const }, components: [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel('無料βに入る').setURL(`${baseUrl}/casino/shinpu${token ? `/link/${token}` : ''}`))] };
+  return { content: '神符合戦・招待制無料β\n招待された人同士で対戦し、空いている席は式神CPUで埋められます。サーバーの銭は使いません。部屋は2時間で終了し、再起動しても保存期限内なら対戦に戻れます。\n' + (token ? 'リンクは10分・1回きりです。人に渡さないでください。' : 'ボタンから開いて、Discordで認証してください。'), allowedMentions: { parse: [] as const }, components: [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel('無料βに入る').setURL(`${baseUrl}/casino/shinpu${token ? `/link/${token}` : ''}`))] };
 }
 
 /** 👘 /マイページ: 本人だけに出す、マイページへの 1 回きりのリンク */

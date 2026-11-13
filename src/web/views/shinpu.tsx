@@ -20,11 +20,14 @@ export function ShinpuTestPage({ csrf, name, staff = true }: { csrf: string; nam
           <div class="brand"><span class="crest" aria-hidden="true">✿</span><span>咲楽ノ宮 / 神符合戦</span></div>
           <nav>${staff ? html`<a href="/economy/shinpu">社務所へ</a>` : html`<a href="/casino/shinpu/cards">神器図鑑</a>`}<span class="tag">招待制無料β</span><button data-dialog="rules">遊び方</button><button id="leave">部屋を退出</button></nav>
         </header>
+        <section id="connection-banner" class="connection-banner" role="status" hidden><span id="connection-message"></span><button id="reconnect" data-presentation-control>再接続</button><button id="back-lobby" data-presentation-control>ロビーへ</button></section>
+        <details class="presentation-settings"><summary>音・演出</summary><button id="sound-toggle" data-presentation-control aria-pressed="false">音 OFF</button><label>音量<input id="sound-volume" type="range" min="0" max="1" step="0.05" value="0.3"/></label><label>演出<select id="effect-mode"><option value="normal">通常</option><option value="short">短い</option><option value="off">なし</option></select></label><span id="effects-status" role="status"></span></details>
+        <div id="battle-fx" class="battle-fx" aria-hidden="true" hidden></div>
         <main class="wrap" id="lobby">
           <section class="arena">
             <h1>無料βの部屋</h1>
             <p>${name}さん、招待された人同士で対戦できます。足りない席は式神CPUに任せられます。</p>
-            <p class="hint">参加は無料。部屋は2時間で終了し、再起動すると対戦は消えます。HP・MP・霊銭は上限なしの試験中です。不具合や勝敗の偏りは、使った札・人数・端末を添えて運営へ教えてください。</p>
+            <p class="hint">参加は無料。部屋は2時間で終了し、再起動しても保存期限内なら対戦に戻れます。HP・MP・霊銭は上限なしの試験中です。不具合や勝敗の偏りは、使った札・人数・端末を添えて運営へ教えてください。</p>
             <p><a href="/casino/shinpu/cards">神器図鑑（237枚）を見る</a></p>
             <label for="count">対戦人数</label
             ><select id="count">
@@ -46,7 +49,7 @@ export function ShinpuTestPage({ csrf, name, staff = true }: { csrf: string; nam
             <div class="actions">
               <button id="copy">リンクをコピー</button><button class="primary" id="start">空いている席をCPUにして開始</button>
             </div>
-            <p class="hint">作成者が開始できます。開始後の参加はできません。部屋は2時間で終了し、Webの再起動でも消えます。</p>
+            <p class="hint">作成者が開始できます。開始後の参加はできません。部屋は2時間で終了し、Webの再起動でも保存期限内は復帰できます。</p>
           </section>
         </main>
         <main class="wrap" id="game" hidden>
@@ -57,6 +60,8 @@ export function ShinpuTestPage({ csrf, name, staff = true }: { csrf: string; nam
             </div>
             <span class="statuspill" id="round"></span>
           </div>
+          <details id="previous-outcome" class="match-history" hidden><summary>前の対戦結果</summary><p id="previous-outcome-body"></p></details>
+          <section id="match-outcome" class="match-outcome" hidden><h2 id="outcome-title"></h2><p id="outcome-reason"></p><p id="outcome-hit"></p><div id="outcome-stats" class="outcome-stats"></div><p class="hint">ダメージは攻撃・反射の解決値です（火傷は含めません）。</p><p id="rematch-status" role="status"></p><button id="rematch" class="primary">同じ人で再戦する</button><p class="hint">残っている人間の参加者全員が準備すると、同じ席で新しく始まります。部屋の保存期限も2時間に更新します。</p></section>
           <section class="players" id="players" aria-label="相手・攻撃対象"></section>
           <section id="battle-result" class="battle-result" role="status" aria-live="polite" hidden></section>
           <div class="board">
@@ -75,6 +80,7 @@ export function ShinpuTestPage({ csrf, name, staff = true }: { csrf: string; nam
                 <div class="calculation">
                   <h2 id="message"></h2>
                   <div class="summary" id="summary"></div>
+                  <div id="defense-forecast" class="defense-forecast" role="status" aria-live="polite" hidden></div>
                 </div>
                 <div id="target-preview" class="target-preview"></div>
               </div>
@@ -158,6 +164,7 @@ export function ShinpuTestPage({ csrf, name, staff = true }: { csrf: string; nam
           <h2>対戦の記録</h2>
           <div class="log" id="history-log"></div>
         </dialog>
+        <script src="${assetUrl('shinpu-effects.js')}" defer></script>
         <script src="${assetUrl('shinpu.js')}" defer></script>
       </body>
     </html>`;

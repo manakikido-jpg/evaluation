@@ -1,11 +1,14 @@
 import { randomUUID } from 'node:crypto';
-import { act, cpu, create, defend, autoChoose, SUMMONER_NAMES, type ActionOptions, type State } from './engine.js';
+import { act, cpu, create, defend, autoChoose, battleSummary, defenseForecast, SUMMONER_NAMES, type BattleSummary, type ActionOptions, type State } from './engine.js';
 export type Tester = {
   id: string;
   name: string;
   avatarUrl?: string | null;
 };
-type Room = {
+export type Room = {
+  round?: number;
+  rematchReady?: string[];
+  previousSummary?: BattleSummary;
   id: string;
   owner: string;
   seats: (Tester | null)[];
@@ -25,7 +28,7 @@ export type Move = {
 };
 const LIFE_MS = 2 * 60 * 60000;
 const MOVE_MS = 120000;
-/** テスト部屋はWebプロセス内だけ。再起動で消える。銭・本番の卓のDBには書かない。 */
+/** 対戦操作と公開ビュー。永続化はstore.tsのトランザクションで行う。 */
 export class ShinpuRooms {
   private rooms = new Map<string, Room>();
   constructor(
@@ -38,7 +41,7 @@ export class ShinpuRooms {
   private room(id: string) {
     this.sweep();
     const r = this.rooms.get(id);
-    if (!r) throw Error('部屋がありません。期限切れか、Webの再起動で終了しました。');
+    if (!r) throw Error('部屋がありません。保存期限切れの可能性があります。');
     return r;
   }
   private seat(r: Room, user: string) {
@@ -80,6 +83,7 @@ export class ShinpuRooms {
       seats: [user],
       capacity,
       state: null,
+      round: 1, rematchReady: [],
       revision: 0,
       expires: this.clock() + LIFE_MS,
       next: 0,
@@ -104,7 +108,7 @@ export class ShinpuRooms {
     r.state = create(
       r.capacity,
       this.rng,
-      r.seats[0]!.name,
+      r.seats.find((p):p is Tester=>!!p)!.name,
       SUMMONER_NAMES.map((name) => ({ name, avatarUrl: r.seats.find((p) => p?.name === name)?.avatarUrl ?? null })),
     );
     while (r.seats.length < r.capacity) r.seats.push(null);
@@ -115,6 +119,7 @@ export class ShinpuRooms {
   move(id: string, user: string, move: Move) {
     const r = this.room(id),
       i = this.seat(r, user);
+    this.tick(r);
     this.check(r, move.revision);
     const s = r.state;
     if (!s || s.phase === 'over') throw Error('対戦中ではありません。');
@@ -138,13 +143,43 @@ export class ShinpuRooms {
       i = this.seat(r, user);
     if (r.state) {
       r.seats[i] = null;
-      r.state.players[i]!.name += '（CPU引継ぎ）';
+      if(r.state.phase!=='over')r.state.players[i]!.name += '（CPU引継ぎ）';
+      r.rematchReady=(r.rematchReady??[]).filter(id=>id!==user);
     } else r.seats.splice(i, 1);
     if (!r.seats.some(Boolean)) this.rooms.delete(id);
     else {
       if (r.owner === user) r.owner = r.seats.find((p): p is Tester => !!p)!.id;
       this.changed(r);
+      if(r.state?.phase==='over'&&r.seats.filter(Boolean).every(p=>r.rematchReady?.includes(p!.id)))this.nextRound(r);
     }
+  }
+  preview(id: string, user: string, move: Move) {
+    const r=this.room(id),i=this.seat(r,user);this.tick(r);this.check(r,move.revision);
+    if(r.state?.phase!=='defense'||r.state.pending?.to!==i)throw Error('いまはあなたの防御の番ではありません。');
+    return {roomId:r.id,revision:r.revision,...defenseForecast(r.state,move.ids,move.options)};
+  }
+  rematch(id: string,user: string,revision: number) {
+    const r=this.room(id);this.seat(r,user);this.check(r,revision);
+    if(r.state?.phase!=='over')throw Error('対戦が終わってから再戦できます。');
+    r.rematchReady??=[];if(r.rematchReady.includes(user))return this.view(id,user);r.rematchReady.push(user);
+    this.changed(r);
+    if(r.seats.filter(Boolean).every(p=>r.rematchReady!.includes(p!.id)))this.nextRound(r);
+    return this.view(id,user);
+  }
+  private nextRound(r: Room) {
+    r.previousSummary=battleSummary(r.state!);r.round=(r.round??1)+1;r.rematchReady=[];
+    r.state=null;r.expires=this.clock()+LIFE_MS;
+    // 全員の同意を確認した後、同じ席とCPUで開始する。
+    this.start(r.id,r.owner,r.revision);
+  }
+  snapshot(id: string): StoredRoom | undefined {
+    const r=this.rooms.get(id);return r?JSON.parse(JSON.stringify(r)) as StoredRoom:undefined;
+  }
+  restore(data: StoredRoom) {
+    if(!data||typeof data.id!=='string'||!Array.isArray(data.seats)||!Number.isSafeInteger(data.revision)||!Number.isFinite(data.expires)||!Number.isInteger(data.capacity)||data.capacity<2||data.capacity>6||data.seats.length>data.capacity||typeof data.owner!=='string'||!Number.isFinite(data.next)||!Number.isFinite(data.deadline)||!data.seats.every(p=>p===null||typeof p?.id==='string'&&typeof p?.name==='string'))throw Error('保存した対戦を読み込めません。');
+    const r=JSON.parse(JSON.stringify(data)) as Room;
+    if(r.state){if(!Array.isArray(r.state.players)||r.state.players.length!==r.capacity||!r.state.players.every(p=>[p.hp,p.mp,p.money].every(n=>Number.isSafeInteger(n)&&n>=0)&&Array.isArray(p.hand))||!Array.isArray(r.state.deck)||!['action','defense','choice','over'].includes(r.state.phase))throw Error('保存した対戦を読み込めません。');r.state.rng=this.rng;}
+    this.rooms.set(r.id,r);
   }
   private tick(r: Room) {
     const s = r.state;
@@ -169,6 +204,10 @@ export class ShinpuRooms {
     const s = r.state;
     return {
       roomId: r.id,
+      round: r.round??1,
+      rematchReady: r.seats.map(p=>!!p&&!!r.rematchReady?.includes(p.id)),
+      summary: s?.phase==='over'?battleSummary(s):null,
+      previousSummary: r.previousSummary??null,
       revision: r.revision,
       owner: r.owner === user,
       myIndex: index,
@@ -195,3 +234,5 @@ export class ShinpuRooms {
     };
   }
 }
+
+export type StoredRoom = Omit<Room,'state'> & {state: Omit<State,'rng'> | null};

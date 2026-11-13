@@ -57,7 +57,11 @@ export type Choice = { player: number; kind: 'peek' | 'buy' | 'discardDraw' | 's
 export type Summoner = { name: string; avatarUrl: string | null };
 export const SUMMONER_NAMES = ['ais', '小林'] as const;
 export type SummonEvent = Summoner & { id: number; recipient: string; healed: number; cleared: boolean };
+export type BattleStats = { damageDealt: number; damageTaken: number; blocked: number };
+export type BattleSummary = { winner: number | null; turns: number; reason: 'turn-limit' | 'last-standing'; players: ({ name: string; hp: number } & BattleStats)[]; lastHit: { from: number; to: number; cards: string[]; damage: number; decisive?: boolean } | null };
 export type State = {
+  stats?: BattleStats[];
+  lastHit?: BattleSummary['lastHit'];
   players: Player[];
   turn: number;
   turns: number;
@@ -403,6 +407,7 @@ export function defend(s: State, ids: number[] = [], options: ActionOptions = {}
     note(s, `水鏡が${from.name}に${reflected}を返した。`);
   }
   note(s, `${p.name}：${a.length ? a.map((c) => c.name).join('＋') : '防御なし'}。${damage}ダメージ${p.hp === 0 ? '、退場' : ''}。`);
+  recordCombat(s,q,a,damage);
   s.result = { id: `${s.turns}:${q.to}`, defender: q.to, damage };
   s.pending = null;
   advance(s);
@@ -643,6 +648,7 @@ function catalogDefend(s: State, a: Card[], options: ActionOptions) {
     if (c.effect === 'guard_mp') mana(p, 2);
   }
   note(s, `${p.name}：${a.length ? a.map(c => c.name).join('＋') : '防御なし'}。${damage}ダメージ${p.hp === 0 ? '、退場' : ''}。`);
+  recordCombat(s,q,a,damage);
   s.result = { id: `${s.turns}:${q.to}`, defender: q.to, damage };
   s.pending = null;
   if (from.hp > 0 && s.players.filter(p => p.hp > 0).length > 1) {
@@ -708,4 +714,32 @@ function catalogCpu(s: State) {
   if (tool) { use(tool); return; }
   if (p.money >= 4 && p.hp < 52) { act(s, 'exchange', [], 'hp'); return; }
   act(s, 'pass');
+}
+
+/** 攻撃と反射の解決結果だけを集計する。HPの差から回復をダメージと誤認しない。 */
+function recordCombat(s: State, q: Pending, guards: Card[], damage: number) {
+  s.stats ??= s.players.map(()=>({damageDealt:0,damageTaken:0,blocked:0}));
+  const from=s.stats[q.from]!,to=s.stats[q.to]!;
+  from.damageDealt+=damage; to.damageTaken+=damage;
+  to.blocked+=Math.max(0,q.power+(q.bonusDamage??0)-damage);
+  if(damage>0)s.lastHit={from:q.from,to:q.to,cards:q.cards.map(c=>c.name),damage,decisive:s.players[q.to]!.hp===0};
+  if(damage>0 && guards.some(c=>c.reflect||c.effect==='reflect_half')) {
+    const reflected=Math.floor(damage/2);to.damageDealt+=reflected;from.damageTaken+=reflected;
+    if(reflected>0&&s.players[q.from]!.hp===0)s.lastHit={from:q.to,to:q.from,cards:guards.filter(c=>c.reflect||c.effect==='reflect_half').map(c=>c.name),damage:reflected,decisive:true};
+  }
+}
+export function battleSummary(s: State): BattleSummary {
+  return {winner:s.winner,turns:s.turns,reason:s.turns>=80&&s.players.filter(p=>p.hp>0).length>1?'turn-limit':'last-standing',players:s.players.map((p,i)=>({name:p.name,hp:p.hp,...(s.stats?.[i]??{damageDealt:0,damageTaken:0,blocked:0})})),lastHit:s.lastHit?{...s.lastHit,cards:[...s.lastHit.cards]}:null};
+}
+/** 実際の防御を複製状態で解決する。乱数・札・資源を本体から消費しない。 */
+export function defenseForecast(s: State, ids: number[], options: ActionOptions = {}) {
+  if(s.phase!=='defense'||!s.pending)throw Error('今は防御する場面ではありません。');
+  const defender=s.pending.to,hp=s.players[defender]!.hp;
+  const resolve=(chosen:number[],opts:ActionOptions)=>{
+    const copy=JSON.parse(JSON.stringify(s)) as State;copy.rng=()=>0;
+    defend(copy,chosen,opts);
+    const damage=copy.result!.damage;
+    return {damage,hpAtHit:Math.max(0,hp-damage)};
+  };
+  return {without:resolve([],{}),selected:resolve(ids,options)};
 }

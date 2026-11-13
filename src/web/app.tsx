@@ -889,7 +889,7 @@ export function createWebApp(deps: WebDeps) {
       <h1>神符合戦・招待制無料β</h1>
       {messages[c.req.query('msg') ?? ''] && <p role="status">{messages[c.req.query('msg') ?? '']}</p>}
       <p>運営と、ここで指定したサーバーのメンバーだけが参加できます。まずは少人数で試してください。</p>
-      <p>参加は無料。対戦の霊銭はテスト用で、サーバーの銭や本番の対戦記録には影響しません。部屋は2時間で終了し、再起動すると対戦は消えます。</p>
+      <p>参加は無料。対戦の霊銭はテスト用で、サーバーの銭や本番の対戦記録には影響しません。部屋は2時間で終了し、再起動しても保存期限内なら対戦に戻れます。</p>
       <form method="post" action="/economy/shinpu/enter">
         <input type="hidden" name="_csrf" value={session.csrfToken} />
         <button type="submit">無料βに入る</button>
