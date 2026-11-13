@@ -89,7 +89,9 @@ import { gachaItemCounts, gachaSummaries, recentGachaDraws } from '../services/c
 import { STYLE_ITEMS, giveStyle, giveAllStyles, isGivableStyle, styleItem, stylesOf, takeStyle } from '../services/casino/styles.js';
 import { CasinoGachaAdminPage, CasinoStyleMemberSection } from './views/casinoGachaAdmin.js';
 import { grantSpecialGoen, revokeSpecialGoen, specialGoenDm, specialGoenHistory, specialGoenLog, validSpecialGoen } from '../services/specialGoen.js';
-import { SpecialGoenSection } from './views/specialGoen.js';
+import { ShuinResetSection, SpecialGoenSection } from './views/specialGoen.js';
+import { lastShuinReset, resetReceivedShuin, undoMemberShuinReset } from '../services/shuin.js';
+import { returningMemberIds } from '../services/members.js';
 import { planOmikujiReset, resetOmikujiDay } from '../services/omikujiReset.js';
 import { aiStats } from '../services/casino/aiStats.js';
 import { FORTUNE_KEYS, toneOf, TONES, type FortuneKey } from '../omikujiTexts.js';
@@ -1166,6 +1168,9 @@ export function createWebApp(deps: WebDeps) {
             names={names}
             nonce={session.level === 'guji' && !member.isBot ? randomUUID() : undefined}
           />
+          {session.level === 'guji' && !member.isBot && (
+            <ShuinResetSection memberId={id} csrf={session.csrfToken} received={card.receivedCount} goen={card.goen - (card.special ?? 0)} returner={(await returningMemberIds(db, [id])).has(id)} last={await lastShuinReset(db, id)} />
+          )}
           </>
         }
       />,
@@ -2999,6 +3004,29 @@ export function createWebApp(deps: WebDeps) {
     const sent = await deps.discord.sendDm(id, specialGoenDm(amount, reason, goen)).catch(() => false);
     return goenBack(c, id, sent ? 'goen_given' : 'goen_given_nodm');
   });
+  // 🔄 出戻りの人の御朱印をリセット（宮司）
+  const resetBack = (c: Context<Env>, id: string, msg: string) => c.redirect(`/members/${id}?msg=${msg}#sec-shuin-reset`);
+  app.post('/members/:id/shuin-reset', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.notFound();
+    if (!gujiOnly(c)) return resetBack(c, id, 'shuin_reset_forbidden');
+    const body = await c.req.parseBody();
+    if (body.confirm !== 'yes') return resetBack(c, id, 'shuin_reset_confirm');
+    const m = await getMember(db, id);
+    if (!m || m.isBot) return back(c, id, 'denied_not_found');
+    const by = c.get('session').userId;
+    const r = await resetReceivedShuin(db, id, by, { withSpecial: body.withSpecial === 'yes', now: now() });
+    if (cfg.channels.log) await deps.discord.sendMessage(cfg.channels.log, { content: `🔄 <@${id}> さんの御朱印をリセットしました（朱印 ${r.count} 件・ご縁 ${r.goen}${r.special ? `・特別ご縁 ${r.special}` : ''}。操作: <@${by}>）。`, allowed_mentions: { parse: [] } }).catch((err: unknown) => logger.warn({ err }, 'shuin reset log failed'));
+    return resetBack(c, id, 'shuin_reset_done');
+  });
+  app.post('/members/:id/shuin-reset/undo', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.notFound();
+    if (!gujiOnly(c)) return resetBack(c, id, 'shuin_reset_forbidden');
+    const r = await undoMemberShuinReset(db, id, c.get('session').userId);
+    return resetBack(c, id, r.status === 'ok' ? 'shuin_reset_undone' : 'shuin_reset_none');
+  });
+
   app.post('/members/:id/special-goen/:gid/revoke', async (c) => {
     const id = c.req.param('id');
     const gid = Number(c.req.param('gid'));

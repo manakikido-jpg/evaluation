@@ -1,3 +1,4 @@
+import { JankenApp } from './discord/janken.js';
 import { VoiceTimeApp } from './discord/voiceTime.js';
 import { CHANGELOG } from './changelog.js';
 import { recordDeploy, runningCommit } from './services/deployInfo.js';
@@ -141,6 +142,8 @@ async function main(): Promise<void> {
   const wallet = new WalletApp(db, cfg);
   // ⏱ /浮上: 自分の浮上時間（全体と縁側）
   const voiceTime = new VoiceTimeApp(db, cfg);
+  // ✊✌️✋ /じゃんけん: 同じ通話にいる人で、せーので一気に出す
+  const janken = new JankenApp(cfg);
   const shofuku = new ShofukuApp(db, cfg);
   const stickerDesk = new StickerDeskApp(db, cfg, env.WEB_BASE_URL);
   const updateDesk = new UpdateDeskApp(db, cfg, env.WEB_BASE_URL);
@@ -489,6 +492,7 @@ async function main(): Promise<void> {
     void presents.onInteraction(i);
     void wallet.onInteraction(i);
     void voiceTime.onInteraction(i).catch((err) => logger.warn({ err }, 'voice time interaction failed'));
+    void janken.onInteraction(i).catch((err) => logger.warn({ err }, 'janken interaction failed'));
     void stickerDesk.onInteraction(i);
     void updateDesk.onInteraction(i);
     void sokin.onInteraction(i);

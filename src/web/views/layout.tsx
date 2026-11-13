@@ -1,3 +1,4 @@
+import { PAGE_HINTS } from '../pageHints.js';
 import {OfficeIcon,OFFICE_HINTS} from './officeIcon.js';
 import { WEB_PAGES } from '../../config.js';
 import type { Child } from 'hono/jsx';
@@ -182,6 +183,7 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
         <meta name="htmx-config" content='{"includeIndicatorStyles":false}' />
         <title>{`${props.title} | 社務所 Web`}</title>
         <script src={assetUrl('theme.js')}></script>
+        {session && <script src={assetUrl('page-hints.js')}></script>}
         <link rel="stylesheet" href={assetUrl('style.css')} />
         {session && <link rel="stylesheet" href={assetUrl('office-mobile.css')} />}
         {session && <link rel="stylesheet" href={assetUrl('office-desktop.css')} />}
@@ -211,7 +213,7 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
               </a>
               <span class="topbar-page">{props.title}</span>
               {(!session.pages || session.pages.includes('members')) && <form class="topbar-search" method="get" action="/members"><label class="sr-only" for="nav-search">メンバーを検索</label><input id="nav-search" type="search" name="q" placeholder="メンバーを検索" /><button type="submit" aria-label="メンバーを検索">⌕</button></form>}
-              <div class="topbar-tools"><ThemeChoice /><button type="button" class="office-app-trigger" data-office-panel aria-controls="office-panel">{consoleTheme?<OfficeIcon name="notices"/>:'🔔'}<span class="sr-only">アプリと通知</span></button></div>
+              <div class="topbar-tools"><ThemeChoice />{nav && PAGE_HINTS[nav] && <button type="button" class="page-hint-toggle" data-hints-toggle aria-pressed="true" title="このページの使い方を出す・隠す">💡<span class="sr-only">ヒントを出す・隠す</span></button>}<button type="button" class="office-app-trigger" data-office-panel aria-controls="office-panel">{consoleTheme?<OfficeIcon name="notices"/>:'🔔'}<span class="sr-only">アプリと通知</span></button></div>
               {unseen > 0 && (
                 <a class="topbar-updates" href="/updates" title="新しい更新">
                   📰 <span class="badge">{unseen}</span>
@@ -281,7 +283,16 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
             <label for="nav-toggle" class="backdrop" aria-hidden="true"></label>
           </>
         )}
-        <main id="main-content" tabindex={-1} data-office-inplace={session && !props.scripts?.length ? "" : undefined} class={props.wide ? 'wide' : undefined}>{props.children}</main>
+        <main id="main-content" tabindex={-1} data-office-inplace={session && !props.scripts?.length ? "" : undefined} class={props.wide ? 'wide' : undefined}>
+          {session && nav && PAGE_HINTS[nav] && (
+            <details class="page-hint" data-page-hint>
+              <summary>❓ このページの使い方</summary>
+              <ol>{PAGE_HINTS[nav]!.map((t) => <li>{t}</li>)}</ol>
+              <p class="note">ヒントは、上の「💡」で全部のページで隠せます（もう一度押すと出ます）。</p>
+            </details>
+          )}
+          {props.children}
+        </main>
         {session && <script src={assetUrl('office-ui.js')} defer></script>}
         {session && <script src={assetUrl('office-app.js')} defer></script>}
         {session && <>

@@ -67,3 +67,37 @@ export function SpecialGoenSection(props: { memberId: string; csrf: string; rows
     </section>
   );
 }
+
+/** 🔄 出戻りの人の御朱印をリセット（宮司だけ）。受け取った朱印を全部取り消し、押した人がまた押せるようにする */
+export function ShuinResetSection(props: { memberId: string; csrf: string; received: number; goen: number; returner: boolean; last?: { at: Date; remaining: number; specialRemaining: number } }) {
+  const base = `/members/${props.memberId}/shuin-reset`;
+  return (
+    <section class="card anchor" id="sec-shuin-reset">
+      <h2>🔄 御朱印をリセット（出戻り）{props.returner && <span class="tag">出戻り</span>}</h2>
+      <p class="note">
+        この人が受け取った朱印を全部取り消して、はじめからにします（いま {props.received} 人・ご縁 {props.goen}）。取り消した朱印は、押した人がまた押せます（押し直すと今の格で数えます）。役職・銭・券は変えません。本人に DM は送りません。操作は記録に残ります。
+      </p>
+      <form method="post" action={base} class="actions" data-confirm="この人が受け取った朱印を全部取り消します。よいですか？">
+        <input type="hidden" name="_csrf" value={props.csrf} />
+        <label class="field check">
+          <input type="checkbox" name="withSpecial" value="yes" />
+          <span>✨ 特別ご縁も取り消す</span>
+        </label>
+        <label class="field check">
+          <input type="checkbox" name="confirm" value="yes" required />
+          <span>受け取った朱印を全部取り消す</span>
+        </label>
+        <button type="submit" class="danger">リセットする</button>
+      </form>
+      {props.last && (
+        <form method="post" action={`${base}/undo`} class="actions" data-confirm="いちばん新しいリセットを元に戻します。よいですか？">
+          <input type="hidden" name="_csrf" value={props.csrf} />
+          <p class="note">
+            {fmtDateTime(props.last.at)} のリセットを元に戻せます（取り消したままの朱印 {props.last.remaining} 件{props.last.specialRemaining ? `・特別ご縁 ${props.last.specialRemaining} 件` : ''}。そのあと押し直された朱印はそのまま）。
+          </p>
+          <button type="submit">元に戻す</button>
+        </form>
+      )}
+    </section>
+  );
+}

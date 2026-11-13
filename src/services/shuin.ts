@@ -1,7 +1,8 @@
 import { isRestrictedAccount as isStaffAlt } from './staffAlts.js';
 import { and, count, desc, eq, gte, inArray, isNotNull, isNull, sql, sum } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
-import { shuin } from '../db/schema.js';
+import { auditLogs as auditLog, shuin, specialGoen } from '../db/schema.js';
+import { audit } from './audit.js';
 import { specialGoenOf } from './specialGoen.js';
 
 export type GiveResult =
@@ -135,4 +136,50 @@ export async function stampedBy(db: Db, giverId: string, ids: string[], currentW
     .from(shuin)
     .where(and(eq(shuin.giverId, giverId), inArray(shuin.receiverId, ids), isNull(shuin.revokedAt), gte(shuin.weight, currentWeight)));
   return new Set(rows.map((r) => r.id));
+}
+
+// ───────── 🔄 出戻りの人の御朱印をリセット（宮司） ─────────
+
+/**
+ * その人が受け取った朱印を、全部取り消す（出戻りの人を、はじめからにする）。
+ * 取り消した朱印は、押した人がまた押せる（押し直すと今の格で数える）。役職は変えない。
+ * withSpecial: ✨ 特別ご縁も取り消す。at: 取り消した時刻（元に戻すときの目印）
+ */
+export async function resetReceivedShuin(db: Db, receiverId: string, by: string, opts: { withSpecial?: boolean; now?: Date } = {}): Promise<{ count: number; goen: number; special: number; at: Date }> {
+  const at = opts.now ?? new Date();
+  return db.transaction(async (tx) => {
+    const rows = await tx.update(shuin).set({ revokedAt: at })
+      .where(and(eq(shuin.receiverId, receiverId), isNull(shuin.revokedAt)))
+      .returning({ giverId: shuin.giverId, weight: shuin.weight });
+    const specials = opts.withSpecial
+      ? await tx.update(specialGoen).set({ revokedAt: at, revokedBy: by }).where(and(eq(specialGoen.memberId, receiverId), isNull(specialGoen.revokedAt))).returning({ amount: specialGoen.amount })
+      : [];
+    const result = { count: rows.length, goen: rows.reduce((a, r) => a + r.weight, 0), special: specials.reduce((a, r) => a + r.amount, 0), at };
+    await audit(tx as Db, { actorId: by, targetId: receiverId, action: 'shuin.reset_member', detail: { at: at.toISOString(), count: result.count, goen: result.goen, special: result.special, withSpecial: Boolean(opts.withSpecial) }, via: 'web' });
+    return result;
+  });
+}
+
+/** いちばん新しいリセット（元に戻せるもの）。まだ取り消したままの朱印の数も返す */
+export async function lastShuinReset(db: Db, receiverId: string): Promise<{ at: Date; remaining: number; specialRemaining: number } | undefined> {
+  const [last] = await db.select().from(auditLog).where(and(eq(auditLog.targetId, receiverId), inArray(auditLog.action, ['shuin.reset_member', 'shuin.reset_member_undo']))).orderBy(desc(auditLog.id)).limit(1);
+  const at = (last?.detail as { at?: string } | null)?.at;
+  if (!last || last.action !== 'shuin.reset_member' || !at) return undefined;
+  const when = new Date(at);
+  const [s] = await db.select({ n: count() }).from(shuin).where(and(eq(shuin.receiverId, receiverId), eq(shuin.revokedAt, when)));
+  const [g] = await db.select({ n: count() }).from(specialGoen).where(and(eq(specialGoen.memberId, receiverId), eq(specialGoen.revokedAt, when)));
+  const remaining = Number(s?.n ?? 0), specialRemaining = Number(g?.n ?? 0);
+  return remaining + specialRemaining > 0 ? { at: when, remaining, specialRemaining } : undefined;
+}
+
+/** いちばん新しいリセットを元に戻す（そのとき取り消した朱印・特別ご縁だけ。押し直されたものはそのまま） */
+export async function undoMemberShuinReset(db: Db, receiverId: string, by: string): Promise<{ status: 'ok'; count: number; special: number } | { status: 'none' }> {
+  const last = await lastShuinReset(db, receiverId);
+  if (!last) return { status: 'none' };
+  return db.transaction(async (tx) => {
+    const rows = await tx.update(shuin).set({ revokedAt: null }).where(and(eq(shuin.receiverId, receiverId), eq(shuin.revokedAt, last.at))).returning({ giverId: shuin.giverId });
+    const specials = await tx.update(specialGoen).set({ revokedAt: null, revokedBy: null }).where(and(eq(specialGoen.memberId, receiverId), eq(specialGoen.revokedAt, last.at))).returning({ id: specialGoen.id });
+    await audit(tx as Db, { actorId: by, targetId: receiverId, action: 'shuin.reset_member_undo', detail: { at: last.at.toISOString(), count: rows.length, special: specials.length }, via: 'web' });
+    return { status: 'ok' as const, count: rows.length, special: specials.length };
+  });
 }

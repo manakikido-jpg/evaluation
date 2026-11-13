@@ -1710,6 +1710,28 @@ describe('✨ 特別ご縁（管理画面）', () => {
   const goenNonce = async (session: string) =>
     new RegExp(`action="/members/${USER}/special-goen"[^]*?name="nonce" value="([^"]+)"`).exec(await (await get(`/members/${USER}`, session)).text())?.[1];
 
+  it('🔄 出戻りの人の御朱印リセット: 宮司だけ・確かめが要る。#記録 に残し、元に戻せる', async () => {
+    const { giveShuin, goenOf } = await import('../src/services/shuin.js');
+    await giveShuin(db, { giverId: STAFF, receiverId: USER, weight: 3, giverRank: 'shinshoku' });
+    const s = await login(STAFF);
+    expect(await (await get(`/members/${USER}`, s)).text()).not.toContain(`/members/${USER}/shuin-reset`);
+    expect((await post(s, `/members/${USER}/shuin-reset`, { confirm: 'yes' })).headers.get('location')).toBe(`/members/${USER}?msg=shuin_reset_forbidden#sec-shuin-reset`);
+    const g = await login(GUJI);
+    const page = await (await get(`/members/${USER}`, g)).text();
+    expect(page).toContain('🔄 御朱印をリセット（出戻り）');
+    expect(page).toContain('いま 1 人・ご縁 3');
+    expect((await post(g, `/members/${USER}/shuin-reset`, {})).headers.get('location')).toBe(`/members/${USER}?msg=shuin_reset_confirm#sec-shuin-reset`);
+    expect(await goenOf(db, USER)).toBe(3);
+    const before = actions.length;
+    expect((await post(g, `/members/${USER}/shuin-reset`, { confirm: 'yes' })).headers.get('location')).toBe(`/members/${USER}?msg=shuin_reset_done#sec-shuin-reset`);
+    expect(await goenOf(db, USER)).toBe(0);
+    expect(JSON.stringify(actions.slice(before))).toContain('御朱印をリセットしました');
+    expect(await (await get(`/members/${USER}`, g)).text()).toContain(`/members/${USER}/shuin-reset/undo`);
+    expect((await post(g, `/members/${USER}/shuin-reset/undo`, {})).headers.get('location')).toBe(`/members/${USER}?msg=shuin_reset_undone#sec-shuin-reset`);
+    expect(await goenOf(db, USER)).toBe(3);
+    expect((await post(g, `/members/${USER}/shuin-reset/undo`, {})).headers.get('location')).toBe(`/members/${USER}?msg=shuin_reset_none#sec-shuin-reset`);
+  });
+
   it('宮司だけが振れる。DM と #記録 で知らせ、二度押ししても 1 回だけ。取り消すとご縁が減る', async () => {
     const { goenOf } = await import('../src/services/shuin.js');
     const s = await login(STAFF);
@@ -3064,6 +3086,15 @@ describe('CSS・JS の読み込み', () => {
 });
 
 describe('更新履歴（管理画面）', () => {
+  it('❓ 社務所Web のページの上に「このページの使い方」と、出す・隠すボタンが出る', async () => {
+    const s = await login(STAFF);
+    const html = await (await get('/members', s)).text();
+    expect(html).toContain('❓ このページの使い方');
+    expect(html).toContain('data-hints-toggle');
+    expect(html).toMatch(/<script src="\/static\/page-hints\.js[^"]*"><\/script>/);
+    expect(html).not.toMatch(/<script>|onclick=|style="/);
+  });
+
   it('まだ読んでいない数がメニューに出て、開くと消える。ホームにも最近の更新', async () => {
     const { CHANGELOG } = await import('../src/changelog.js');
     const s = await login(STAFF);
