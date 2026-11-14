@@ -136,6 +136,25 @@ describe('🎰 大勝負の札', () => {
     expect((await actTable(db, lcfg, id2, B.id, { action: 'bet', bet: '500', on: 'player' }, now)).status).toBe('ok');
   });
 
+  it('卓のルーレット: 取り消して返した賭けは、1 日の上限に数えない（札が効いていても上限に届かない）', async () => {
+    const rcfg: GuildConfig = { ...cfg, casino: { ...c0, games: [...cfg.casino.games, 'roulette_table'] as never, dailyBetLimit: 1000 } };
+    await addCoins(db, A.id, 100_000, 'adjust');
+    await addTickets(db, A.id, 'casino_boost', 1);
+    await useCasinoBoost(db, A.id, now);
+    const t = await createTable(db, rcfg, 'roulette_table', A, {}, now);
+    const id = 'table' in t ? t.table.id : 0;
+    // 札で 1 日 5,000 まで。3,000 置いて取り消すのを 3 回しても、上限に届かない
+    for (let k = 0; k < 3; k++) {
+      expect((await actTable(db, rcfg, id, A.id, { action: 'bet', bet: '3000', on: 'red' }, now)).status).toBe('ok');
+      expect((await actTable(db, rcfg, id, A.id, { action: 'clear' }, now)).status).toBe('ok');
+    }
+    expect(await todayBets(db, A.id, now)).toBe(0);
+    expect((await actTable(db, rcfg, id, A.id, { action: 'bet', bet: '3000', on: 'red' }, now)).status).toBe('ok');
+    expect(await todayBets(db, A.id, now)).toBe(3000);
+    // 本当に賭けた分は数える（あと 2,000 まで）
+    expect((await actTable(db, rcfg, id, A.id, { action: 'bet', bet: '2001', on: 'black' }, now)).status).toBe('limit');
+  });
+
   it('授与所: 買うと持ち物に 1 枚入る（銭は払う）', async () => {
     await seedDefaultItems(db, { colors: [], titles: [] });
     const item = (await listItems(db)).find((i) => i.kind === 'casino_boost')!;

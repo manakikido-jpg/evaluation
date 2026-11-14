@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, ne, sql } from 'drizzle-orm';
 import type { CasinoGame, GuildConfig } from '../../config.js';
 import type { Db } from '../../db/client.js';
 import { casinoGames, coinTx, type CasinoGameRow } from '../../db/schema.js';
@@ -46,15 +46,21 @@ export const CASINO_LABEL: Record<CasinoGame, { emoji: string; name: string; not
 
 export type BetCheck = 'ok' | 'closed' | 'game_off' | 'bad_bet' | 'othello_max' | 'limit' | 'poor' | 'reserve';
 
-/** 今日（日本時間）カジノで賭けた合計 */
-/** 今日（日本時間）賭けた合計。game を決めると、そのゲームの分だけ */
+/**
+ * 今日（日本時間）賭けた合計。game を決めると、そのゲームの分だけ。
+ * 取り消して返した賭け（卓の「賭けを取り消す」・席を立つ・競馬の取り消し・対戦の引き分けなど）は数えない。
+ * ちんちろ卓の返金は、預かり（負けの備え）を返す分なので引かない
+ */
 export async function todayBets(db: Db, memberId: string, now = new Date(), game?: CasinoGame): Promise<number> {
   const since = new Date(`${jstDate(now)}T00:00:00+09:00`);
   const [row] = await db
-    .select({ n: sql<number>`coalesce(-sum(${coinTx.amount}), 0)::int` })
+    .select({
+      bet: sql<number>`coalesce(-sum(${coinTx.amount}) filter (where ${coinTx.reason} = 'casino_bet'), 0)::int`,
+      back: sql<number>`coalesce(sum(${coinTx.amount}) filter (where ${coinTx.reason} = 'casino_refund' and coalesce(${coinTx.detail}->>'game', '') <> 'chinchiro_table'), 0)::int`,
+    })
     .from(coinTx)
-    .where(and(eq(coinTx.memberId, memberId), eq(coinTx.reason, 'casino_bet'), gte(coinTx.at, since), game ? sql`${coinTx.detail}->>'game' = ${game}` : undefined));
-  return row?.n ?? 0;
+    .where(and(eq(coinTx.memberId, memberId), inArray(coinTx.reason, ['casino_bet', 'casino_refund']), gte(coinTx.at, since), game ? sql`${coinTx.detail}->>'game' = ${game}` : undefined));
+  return Math.max(0, Number(row?.bet ?? 0) - Number(row?.back ?? 0));
 }
 
 /**
