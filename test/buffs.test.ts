@@ -6,6 +6,8 @@ import { voiceTick } from '../src/services/activity.js';
 import {
   buffsOf,
   cancelNameDeco,
+  decoBaseOf,
+  setNameDecoBase,
   decoratedNick,
   dueNameDecos,
   giftGacha,
@@ -111,6 +113,28 @@ describe('🏷 名前の飾り', () => {
     expect(await dueNameDecos(db, new Date(T0.getTime() + 13 * 24 * H))).toEqual([]);
     expect((await dueNameDecos(db, new Date(T0.getTime() + 15 * 24 * H))).map((d) => d.memberId)).toEqual([U]);
   });
+
+  it('飾っている間に名前を変えたら、期限で戻すのは変えたあとの名前（前の名前に戻さない）', async () => {
+    const d = { emoji: '🌸', baseNick: 'さくら' };
+    // 飾ったまま
+    expect(decoBaseOf(d, '🌸 さくら', '表示名')).toBe('さくら');
+    // 飾ったまま名前を変えた
+    expect(decoBaseOf(d, '🌸 はなこ', '表示名')).toBe('はなこ');
+    // 絵文字を外した・ニックネームを消した → 戻さない
+    expect(decoBaseOf(d, 'はなこ', '表示名')).toBeUndefined();
+    expect(decoBaseOf(d, null, '表示名')).toBeUndefined();
+    // ニックネームなしで飾った人は、ニックネームなしに戻す
+    expect(decoBaseOf({ emoji: '🌸', baseNick: null }, '🌸 表示名', '表示名')).toBeNull();
+    // 32 文字で切れた名前も、覚えている元の名前に戻す
+    const long = 'あ'.repeat(40);
+    expect(decoBaseOf({ emoji: '🌸', baseNick: long }, decoratedNick('🌸', long), '表示名')).toBe(long);
+    // 覚え直すと、もう一度飾り札を使っても新しい名前のまま
+    await addTickets(db, U, 'name_deco', 2);
+    await startNameDeco(db, U, '🌸', 'さくら', T0);
+    await setNameDecoBase(db, U, 'はなこ');
+    expect((await startNameDeco(db, U, '🍡', '🌸 はなこ', new Date(T0.getTime() + H))).status).toBe('ok');
+    expect(await nameDecoOf(db, U)).toMatchObject({ emoji: '🍡', baseNick: 'はなこ' });
+  });
 });
 
 describe('物御籤の画面（札）', () => {
@@ -209,5 +233,25 @@ describe('🌟 金の10連券', () => {
     expect(JSON.stringify(m.components[1]!.toJSON())).toContain('"custom_id":"gacha:draw:gold"');
     expect(JSON.stringify(m.components[1]!.toJSON())).toContain('金の10連券で引く（2 枚）');
     expect(JSON.stringify(useTicketMenu({ ...emptyTickets(), gacha_gold10: 1 }).components)).toContain('"value":"gacha_gold10"');
+  });
+});
+
+describe('🏷 名前の飾りの期限（Discord）', () => {
+  it('期限が来たら絵文字だけ外す。飾ったまま名前を変えていたら、その名前のまま。絵文字を外していたら何もしない', async () => {
+    const { GachaApp } = await import('../src/discord/gacha.js');
+    const { cfg } = await import('./helpers.js');
+    const app = new GachaApp(db, () => cfg);
+    const set: [string, string | null][] = [];
+    const nicks: Record<string, string | null> = { [U]: '🌸 はなこ', '700000000000000099': 'じぶんで外した', '700000000000000098': '🍡 さくら' };
+    app.attach({
+      members: { fetch: async (id: string) => ({ nickname: nicks[id], user: { displayName: '表示名' }, setNickname: async (n: string | null) => void set.push([id, n]) }) },
+    } as never);
+    for (const [id, emoji] of [[U, '🌸'], ['700000000000000099', '🌸'], ['700000000000000098', '🍡']] as const) {
+      await addTickets(db, id, 'name_deco', 1);
+      await startNameDeco(db, id, emoji, 'さくら', T0);
+    }
+    await app.tick(new Date(T0.getTime() + 8 * 24 * H));
+    expect(set.sort()).toEqual([['700000000000000098', 'さくら'], [U, 'はなこ']].sort());
+    expect(await dueNameDecos(db, new Date(T0.getTime() + 30 * 24 * H))).toEqual([]);
   });
 });

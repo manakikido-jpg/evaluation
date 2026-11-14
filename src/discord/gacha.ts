@@ -45,6 +45,8 @@ import {
 import {
   buffsOf,
   cancelNameDeco,
+  decoBaseOf,
+  setNameDecoBase,
   decoratedNick,
   dueNameDecos,
   endNameDeco,
@@ -801,15 +803,19 @@ export class GachaApp {
     if (!i.member.manageable) return void (await i.reply({ content: 'あなたの名前は BOT から変えられません（サーバーの持ち主・BOT より上の役職）。札は使っていません。', ...EPHEMERAL }));
     if (!(await useNameChange(this.db, i.user.id))) return void (await i.reply({ content: '✏️ 名前変更の札がありません。', ...EPHEMERAL }));
     const before = i.member.displayName;
+    // 🏷 名前の飾りをつけている間は、飾りをつけたまま名前を変え、期限で戻す名前も新しい名前にする
+    const deco = await nameDecoOf(this.db, i.user.id);
+    const decorated = deco && deco.until > new Date() && !nick.startsWith(`${deco.emoji} `) ? deco : undefined;
     try {
-      await i.member.setNickname(nick, '名前変更の札');
+      await i.member.setNickname(decorated ? decoratedNick(decorated.emoji, nick) : nick, '名前変更の札');
+      if (deco && deco.until > new Date()) await setNameDecoBase(this.db, i.user.id, decorated ? nick : (decoBaseOf(deco, nick, i.member.user.displayName) ?? nick));
     } catch (err) {
       logger.warn({ err }, 'name change failed');
       await refundNameChange(this.db, i.user.id);
       return void (await i.reply({ content: '名前を変えられませんでした（札は戻しました）。神職に知らせてください（BOT の「ニックネームの管理」権限）。', ...EPHEMERAL }));
     }
     await audit(this.db, { actorId: i.user.id, targetId: i.user.id, action: 'shop.name_change', detail: { before, after: nick }, via: 'discord' });
-    await i.reply({ content: `✏️ 名前を「${nick}」にしました。`, ...EPHEMERAL, allowedMentions: { parse: [] } });
+    await i.reply({ content: decorated ? `✏️ 名前を「${nick}」にしました（🏷 飾りはそのまま。期限のあとは「${nick}」になります）。` : `✏️ 名前を「${nick}」にしました。`, ...EPHEMERAL, allowedMentions: { parse: [] } });
   }
 
   /** 🏷 名前の飾り（7 日間、名前の前に絵文字） */
@@ -817,13 +823,22 @@ export class GachaApp {
     const emoji = i.fields.getTextInputValue('emoji').trim();
     if (!validDecoEmoji(emoji)) return void (await i.reply({ content: '絵文字を 1 つだけ入れてください（例: 🌸）。券は使っていません。', ...EPHEMERAL }));
     if (!i.member.manageable) return void (await i.reply({ content: 'あなたの名前は BOT から変えられません（サーバーの持ち主・BOT より上の役職）。券は使っていません。', ...EPHEMERAL }));
-    const previous = await nameDecoOf(this.db, i.user.id);
+    let previous = await nameDecoOf(this.db, i.user.id);
+    // 飾っている間に名前を変えていたら、変えたあとの名前を元の名前として覚え直す（前の名前に戻さない）
+    if (previous && previous.until > new Date()) {
+      const fromNick = decoBaseOf(previous, i.member.nickname, i.member.user.displayName);
+      const base = fromNick === undefined ? i.member.nickname : fromNick;
+      if (base !== previous.baseNick) {
+        await setNameDecoBase(this.db, i.user.id, base);
+        previous = { ...previous, baseNick: base };
+      }
+    }
     const active = previous && previous.until > new Date();
     // 飾っている最中なら、覚えている元の名前を使う
     const current = i.member.nickname;
     const r = await startNameDeco(this.db, i.user.id, emoji, current);
     if (r.status === 'no_ticket') return void (await i.reply({ content: '🏷 名前の飾り札がありません。', ...EPHEMERAL }));
-    const base = active ? (previous.baseNick ?? i.member.user.displayName) : (current ?? i.member.user.displayName);
+    const base = active ? (previous!.baseNick ?? i.member.user.displayName) : (current ?? i.member.user.displayName);
     try {
       await i.member.setNickname(decoratedNick(emoji, base), '名前の飾り札');
     } catch (err) {
@@ -840,8 +855,9 @@ export class GachaApp {
     if (!guild) return;
     for (const d of await dueNameDecos(this.db, now)) {
       const m = await guild.members.fetch(d.memberId).catch(() => undefined);
-      // 飾った名前のままなら戻す（運営が変えていたらそのまま）
-      if (m?.nickname?.startsWith(d.emoji)) await m.setNickname(d.baseNick, '名前の飾りの期限').catch((err: unknown) => logger.warn({ err }, 'name deco restore failed'));
+      // 飾りを外すだけ。飾っている間に名前を変えていたら、変えたあとの名前にする（絵文字を外していたら、そのまま）
+      const base = m ? decoBaseOf(d, m.nickname, m.user.displayName) : undefined;
+      if (m && base !== undefined) await m.setNickname(base, '名前の飾りの期限').catch((err: unknown) => logger.warn({ err }, 'name deco restore failed'));
       await endNameDeco(this.db, d.memberId);
     }
   }

@@ -125,6 +125,26 @@ export async function startNameDeco(
   });
 }
 
+/**
+ * 飾っている間に名前を変えたときの「元の名前」を、いまのニックネームから読み直す。
+ * - 飾ったときのまま → 覚えている元の名前（null はニックネームなし）
+ * - 「絵文字 + 空白」で始まる → そのあとの部分（飾ったまま名前を変えた）
+ * - 絵文字を外した → undefined（もう飾っていない。戻さない）
+ * displayName: ニックネームがないときに飾りに使った名前（Discord の表示名）
+ */
+export function decoBaseOf(d: Pick<NameDeco, 'emoji' | 'baseNick'>, nick: string | null | undefined, displayName: string): string | null | undefined {
+  if (!nick) return undefined;
+  if (nick === decoratedNick(d.emoji, d.baseNick ?? displayName)) return d.baseNick;
+  const head = `${d.emoji} `;
+  if (nick.startsWith(head)) return nick.slice(head.length).trim() || null;
+  return undefined;
+}
+
+/** 飾っている間に名前を変えたら、期限で戻す「元の名前」も変える */
+export async function setNameDecoBase(db: Db, memberId: string, baseNick: string | null): Promise<void> {
+  await db.update(nameDecos).set({ baseNick }).where(eq(nameDecos.memberId, memberId));
+}
+
 /** ニックネームを変えられなかったとき: 記録を戻して、券を返す */
 export async function cancelNameDeco(db: Db, memberId: string, previous: NameDeco | undefined): Promise<void> {
   await db.transaction(async (tx) => {
