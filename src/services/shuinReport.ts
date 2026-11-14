@@ -35,13 +35,18 @@ export function histogram(values: readonly number[]): string {
 
 /** 時間（分）を「○ 時間」の段階に分けた人数 */
 const HOUR_BINS: [number, number, string][] = [[0, 0, '0'], [1, 59, '1 時間未満'], [60, 299, '1〜5 時間'], [300, 599, '5〜10 時間'], [600, 1199, '10〜20 時間'], [1200, 2999, '20〜50 時間'], [3000, Infinity, '50 時間〜']];
+/** 段階ごとの人数（名前と人数） */
+export type Bin = { label: string; count: number };
+export const binsText = (bins: readonly Bin[]) => bins.map((x) => `${x.label}: ${x.count}`).join('  ');
+export const hourBins = (minutes: readonly number[]): Bin[] => HOUR_BINS.map(([a, b, label]) => ({ label, count: minutes.filter((v) => v >= a && v <= b).length }));
 export function hourHistogram(minutes: readonly number[]): string {
-  return HOUR_BINS.map(([a, b, label]) => `${label}: ${minutes.filter((v) => v >= a && v <= b).length}`).join('  ');
+  return binsText(hourBins(minutes));
 }
 /** 発言の数を段階に分けた人数 */
 const MSG_BINS: [number, number][] = [[0, 0], [1, 9], [10, 49], [50, 199], [200, 999], [1000, Infinity]];
+export const messageBins = (counts: readonly number[]): Bin[] => MSG_BINS.map(([a, b]) => ({ label: a === b ? String(a) : b === Infinity ? `${a}〜` : `${a}〜${b}`, count: counts.filter((v) => v >= a && v <= b).length }));
 export function messageHistogram(counts: readonly number[]): string {
-  return MSG_BINS.map(([a, b]) => `${a === b ? a : b === Infinity ? `${a}〜` : `${a}〜${b}`}: ${counts.filter((v) => v >= a && v <= b).length}`).join('  ');
+  return binsText(messageBins(counts));
 }
 const hours = (m: number | undefined) => (m === undefined ? '―' : `${(m / 60).toFixed(1)} 時間`);
 const hourSummary = (v: number[]) => `中央値 ${hours(quantile(v, 0.5))}（25%: ${hours(quantile(v, 0.25))}・75%: ${hours(quantile(v, 0.75))}・最大 ${hours(v.length ? Math.max(...v) : undefined)}）`;

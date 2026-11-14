@@ -209,7 +209,7 @@ export function ColumnChart(props: {
  * 横棒（1 系列）。カテゴリごとの時間など、名前が長いものの比べっこに。
  * 名前は左、値は棒の先に（文字の色で）。
  */
-export function BarList(props: { rows: { name: string; value: number }[]; unit: string; label: string; format?: (v: number) => string }) {
+export function BarList(props: { rows: { name: string; value: number; cls?: 's1' | 's2' | 's3'; tip?: string }[]; unit: string; label: string; format?: (v: number) => string }) {
   const f = props.format ?? fmt;
   const rows = props.rows;
   const ROW = 28;
@@ -234,12 +234,12 @@ export function BarList(props: { rows: { name: string; value: number }[]; unit: 
               <text x={L - 8} y={y + bar - 3} text-anchor="end" fill={C.muted} font-size="12">
                 {r.name.length > 14 ? `${r.name.slice(0, 13)}…` : r.name}
               </text>
-              {d && <path class="bar s1" d={d} fill={C.s1} />}
+              {d && <path class={`bar ${r.cls ?? 's1'}`} d={d} fill={SC[r.cls ?? 's1']} />}
               <text class="barvalue" x={L + len + 6} y={y + bar - 3} fill={C.muted} font-size="12">
                 {f(r.value)}
                 {props.unit}
               </text>
-              <rect class="hit" x={0} y={4 + i * ROW} width={W} height={ROW} fill="transparent" data-tip={tip(r.name, [`${f(r.value)}${props.unit}`])}>
+              <rect class="hit" x={0} y={4 + i * ROW} width={W} height={ROW} fill="transparent" data-tip={tip(r.name, [`${f(r.value)}${props.unit}`, ...(r.tip ? [r.tip] : [])])}>
                 <title>{`${r.name}: ${f(r.value)}${props.unit}`}</title>
               </rect>
             </g>
@@ -252,6 +252,53 @@ export function BarList(props: { rows: { name: string; value: number }[]; unit: 
 
 /** 系列の色（s1・s2・s3）。s3 は「不明」などの灰色 */
 const SC: Record<string, string> = { s1: C.s1, s2: C.s2, s3: C.muted };
+
+/**
+ * 横棒（プラスとマイナス）。0 の線から右にプラス（s2）、左にマイナス（s1）。カジノの胴元の収支など。
+ * 名前は左、値は棒の先に
+ */
+export function SignedBarList(props: { rows: { name: string; value: number; tip?: string }[]; unit: string; label: string; format?: (v: number) => string }) {
+  const f = props.format ?? ((v: number) => (v > 0 ? `+${fmt(v)}` : v < 0 ? `−${fmt(-v)}` : '0'));
+  const rows = props.rows;
+  const ROW = 28;
+  const L = 170;
+  const VAL = 96;
+  const lo = Math.min(0, ...rows.map((r) => r.value));
+  const hi = Math.max(0, ...rows.map((r) => r.value));
+  const span = hi - lo || 1;
+  const left = L + (lo < 0 ? VAL : 0);
+  const bw = W - left - VAL;
+  const x = (v: number) => left + ((v - lo) / span) * bw;
+  const h = ROW * rows.length + 8;
+  const bar = 14;
+  return (
+    <div class="chart-wrap">
+      <svg class="chart" viewBox={`0 0 ${W} ${h}`} role="img" aria-label={props.label}>
+        <line class="base" x1={x(0)} x2={x(0)} y1={0} y2={h} stroke={C.muted} />
+        {rows.map((r, i) => {
+          const y = 4 + i * ROW + (ROW - bar) / 2;
+          const a = Math.min(x(0), x(r.value));
+          const len = Math.max(r.value !== 0 ? 1.5 : 0, Math.abs(x(r.value) - x(0)));
+          const cls = r.value < 0 ? 's1' : 's2';
+          return (
+            <g>
+              <text x={L - 8} y={y + bar - 3} text-anchor="end" fill={C.muted} font-size="12">
+                {r.name.length > 14 ? `${r.name.slice(0, 13)}…` : r.name}
+              </text>
+              {len > 0 && <rect class={`bar ${cls}`} x={a} y={y} width={len} height={bar} rx={3} fill={SC[cls]} />}
+              <text class="barvalue" x={r.value < 0 ? x(r.value) - 6 : x(r.value) + 6} y={y + bar - 3} text-anchor={r.value < 0 ? 'end' : 'start'} fill={C.muted} font-size="12">
+                {f(r.value)}
+              </text>
+              <rect class="hit" x={0} y={4 + i * ROW} width={W} height={ROW} fill="transparent" data-tip={tip(r.name, [`${f(r.value)}${props.unit}`, ...(r.tip ? [r.tip] : [])])}>
+                <title>{`${r.name}: ${f(r.value)}${props.unit}`}</title>
+              </rect>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
 export type Series = { name: string; cls: 's1' | 's2' | 's3'; values: number[] };
 
 function Legend(props: { series: { name: string; cls: string }[] }) {

@@ -3017,6 +3017,21 @@ describe('チャンネル（管理画面）', () => {
 });
 
 describe('推移（管理画面）', () => {
+  it('📋 レポート: 推移のタブから開け、同じ集計をグラフと表で出す。期間は 7・30・90 日', async () => {
+    const s = await login(STAFF);
+    expect(await (await get('/stats?range=30d', s)).text()).toContain('href="/stats/report"');
+    const page = await (await get('/stats/report', s)).text();
+    expect(page).toContain('サーバーのレポート');
+    expect(page).toMatch(/aria-current="page"[^>]*>\s*30 日/);
+    for (const head of ['ひと目でわかる数字', '週ごとの推移', 'にぎわう時間と曜日', 'どんな人がいるか', 'よく来る人と、たまに来る人', 'よく使われた場所', 'カジノ', '考えたいこと']) expect(page).toContain(head);
+    expect(page).toContain('<svg');
+    expect(page).toContain('/static/charts.js');
+    expect(await (await get('/stats/report?days=7', s)).text()).toMatch(/aria-current="page"[^>]*>\s*7 日/);
+    // 知らない日数は 30 日
+    expect(await (await get('/stats/report?days=999', s)).text()).toMatch(/aria-current="page"[^>]*>\s*30 日/);
+    expect((await app.request('/stats/report')).status).toBe(302);
+  });
+
   it('神職も見られる。グラフと表が出て、知らない期間は 30 日になる', async () => {
     const s = await login(STAFF);
     const page = await (await get('/stats?range=1y', s)).text();

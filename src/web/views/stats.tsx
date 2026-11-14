@@ -96,6 +96,7 @@ export function StatsPage(props: {
             {label}
           </a>
         ))}
+        <a href="/stats/report">📋 レポート</a>
       </nav>
       {view === 'gender' && props.gender && props.genderNow && <GenderSections buckets={props.gender} now={props.genderNow} per={per} daily={daily} prev={props.prev?.gender} />}
       {view === 'active' && props.activity && <ActiveSections a={props.activity} per={per} daily={daily} prev={props.prev?.active} />}

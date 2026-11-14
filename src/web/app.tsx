@@ -193,6 +193,8 @@ import { createSession, deleteSession, findSession, markChecked, randomToken, re
 /** ロールの確かめ直しに失敗しても使い続けてよい時間 */
 const RECHECK_GRACE_MS = 30 * 60_000;
 import { isStatsView, StatsPage } from './views/stats.js';
+import { ServerReportPage } from './views/serverReport.js';
+import { serverReportData } from '../services/serverReport.js';
 import { RecentUpdates, UpdatesPage } from './views/updates.js';
 import { Layout, type SessionView } from './views/layout.js';
 import { createMemberSession } from './memberSessions.js';
@@ -755,6 +757,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/security', requireAdmin);
   app.use('/security/*', requireAdmin, requireCsrf);
   app.use('/stats', requireAdmin);
+  app.use('/stats/*', requireAdmin);
   app.use('/economy', requireAdmin);
   app.use('/economy/*', requireAdmin);
   app.use('/glossary', requireAdmin);
@@ -1969,6 +1972,13 @@ export function createWebApp(deps: WebDeps) {
         names={names}
       />,
     );
+  });
+
+  /** 📋 サーバーのレポート（VPS の server-report.js と同じ数字をグラフで。読むだけ） */
+  app.get('/stats/report', async (c) => {
+    const days = Number(c.req.query('days'));
+    const d = await serverReportData(db, cfg, { now: now(), days: [7, 30, 90].includes(days) ? days : 30 });
+    return c.html(<ServerReportPage session={c.get('session')} d={d} coinName={cfg.economy.currencyName} />);
   });
 
   app.get('/stats', async (c) => {
