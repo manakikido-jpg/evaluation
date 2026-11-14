@@ -1,9 +1,12 @@
-import { and, eq, gte, inArray, isNull } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm';
 import type { GuildConfig, Rank } from '../config.js';
 import type { Db } from '../db/client.js';
 import { activityDaily, memberEvents, members, shuin, specialGoen, voiceUsage } from '../db/schema.js';
 import { autoRanks, highestRank } from '../domain/ranks.js';
+import { UJIKO_GOEN, UJIKO_MINUTES } from '../domain/ujikoEvaluation.js';
+import { loadAppointRoles } from './appointRoles.js';
 import { resetState } from './evalReset.js';
+import { engawaChannelIds, ujikoEvaluation } from './ujikoEvaluation.js';
 
 /**
  * 📊 御朱印の昇格条件を考えるための集計（読むだけ。DB・Discord は何も変えない）。
@@ -30,11 +33,28 @@ export function histogram(values: readonly number[]): string {
   return BINS.map(([a, b]) => `${a === b ? a : b === Infinity ? `${a}〜` : `${a}〜${b}`}: ${values.filter((v) => v >= a && v <= b).length}`).join('  ');
 }
 
+/** 時間（分）を「○ 時間」の段階に分けた人数 */
+const HOUR_BINS: [number, number, string][] = [[0, 0, '0'], [1, 59, '1 時間未満'], [60, 299, '1〜5 時間'], [300, 599, '5〜10 時間'], [600, 1199, '10〜20 時間'], [1200, 2999, '20〜50 時間'], [3000, Infinity, '50 時間〜']];
+export function hourHistogram(minutes: readonly number[]): string {
+  return HOUR_BINS.map(([a, b, label]) => `${label}: ${minutes.filter((v) => v >= a && v <= b).length}`).join('  ');
+}
+/** 発言の数を段階に分けた人数 */
+const MSG_BINS: [number, number][] = [[0, 0], [1, 9], [10, 49], [50, 199], [200, 999], [1000, Infinity]];
+export function messageHistogram(counts: readonly number[]): string {
+  return MSG_BINS.map(([a, b]) => `${a === b ? a : b === Infinity ? `${a}〜` : `${a}〜${b}`}: ${counts.filter((v) => v >= a && v <= b).length}`).join('  ');
+}
+const hours = (m: number | undefined) => (m === undefined ? '―' : `${(m / 60).toFixed(1)} 時間`);
+const hourSummary = (v: number[]) => `中央値 ${hours(quantile(v, 0.5))}（25%: ${hours(quantile(v, 0.25))}・75%: ${hours(quantile(v, 0.75))}・最大 ${hours(v.length ? Math.max(...v) : undefined)}）`;
+
 const num = (v: number | undefined) => (v === undefined ? '―' : Number.isInteger(v) ? String(v) : v.toFixed(1));
 const pct = (a: number, b: number) => (b ? `${((a / b) * 100).toFixed(1)}%` : '―');
 const summary = (v: number[]) => `中央値 ${num(quantile(v, 0.5))}（25%: ${num(quantile(v, 0.25))}・75%: ${num(quantile(v, 0.75))}・最大 ${num(v.length ? Math.max(...v) : undefined)}）`;
 
-export type ShuinReportOptions = { now?: Date; proposal?: Record<string, number> };
+/**
+ * roleNames: Discord のロールの名前（ID → 名前）。あれば「階級ごと」を出す（なければその節は名前なしの注意だけ）。
+ * grades: 階級として数えるロールの名前の一部（例: 案内人）。役職の名前が入るロール（例: 新役衛士）と、任命で一緒に付けるロールは、はじめから数える。
+ */
+export type ShuinReportOptions = { now?: Date; proposal?: Record<string, number>; roleNames?: ReadonlyMap<string, string>; grades?: string[] };
 
 export async function buildShuinReport(db: Db, cfg: GuildConfig, opts: ShuinReportOptions = {}): Promise<string> {
   const now = opts.now ?? new Date();
@@ -65,8 +85,52 @@ export async function buildShuinReport(db: Db, cfg: GuildConfig, opts: ShuinRepo
   for (const g of groups) line(`- ${g.label}: ${g.ids.length} 人`);
   line();
 
-  // ── 3. 浮上（発言・通話）
+  // 1 人ずつの数（あとの節で使う）
+  const today = jstDate(now);
   const since = (days: number) => jstDate(new Date(now.getTime() - (days - 1) * DAY));
+  const usageSince = async (from: string) => {
+    const msgRows = await db.select({ id: activityDaily.memberId, n: sql<number>`coalesce(sum(${activityDaily.messageCount}), 0)::int` }).from(activityDaily).where(and(gte(activityDaily.date, from), lte(activityDaily.date, today))).groupBy(activityDaily.memberId);
+    const vcRows = await db.select({ id: voiceUsage.memberId, n: sql<number>`coalesce(sum(${voiceUsage.minutes}), 0)::int` }).from(voiceUsage).where(and(gte(voiceUsage.date, from), lte(voiceUsage.date, today))).groupBy(voiceUsage.memberId);
+    return { msg: new Map(msgRows.map((r) => [r.id, Number(r.n)])), vc: new Map(vcRows.map((r) => [r.id, Number(r.n)])) };
+  };
+  const use = { 7: await usageSince(since(7)), 30: await usageSince(since(30)) };
+  const engawaIds = await engawaChannelIds(db, today);
+  const engawaOf = async (from?: string) => {
+    if (!engawaIds.length) return new Map<string, number>();
+    const rows = await db.select({ id: voiceUsage.memberId, n: sql<number>`coalesce(sum(${voiceUsage.minutes}), 0)::int` }).from(voiceUsage)
+      .where(and(inArray(voiceUsage.channelId, engawaIds), lte(voiceUsage.date, today), from ? gte(voiceUsage.date, from) : undefined)).groupBy(voiceUsage.memberId);
+    return new Map(rows.map((r) => [r.id, Number(r.n)]));
+  };
+  const engawa30 = await engawaOf(since(30));
+  const engawaAll = await engawaOf();
+  // 氏子の条件（評価のページと同じ数え方。参拝者だけ）
+  const evaluation = await ujikoEvaluation(db, cfg, { q: '', status: 'all' }, now);
+
+  // ── 2b. 階級ごと
+  line('## 2b. 階級ごと（役職の中で分けたロール。いちばん上の役職とは別に、そのロールを持っている人で数える）');
+  if (!opts.roleNames?.size) {
+    line('- ロールの名前を読めなかったので出していません（BOT のトークンで Discord からロールの一覧を読みます）。');
+  } else {
+    const appoint = await loadAppointRoles(db);
+    const companion = new Set(Object.values(appoint));
+    const rankRoleIds = new Set(ranks.map((r) => r.roleId));
+    const keywords = (opts.grades ?? []).map((k) => k.trim()).filter(Boolean);
+    const gradeRoles = [...opts.roleNames]
+      .filter(([id, name]) => !rankRoleIds.has(id) && (companion.has(id) || ranks.some((r) => name.includes(r.name)) || keywords.some((k) => name.includes(k))))
+      .map(([id, name]) => ({ id, name, ids: people.filter((p) => p.roleIds.includes(id)).map((p) => p.id) }))
+      .filter((g) => g.ids.length)
+      .sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+    line(`数えるロール: 役職の名前が入るロール・任命で一緒に付けるロール${keywords.length ? `・名前に「${keywords.join('」「')}」が入るロール` : ''}（ほかのロールは --grades 名前の一部,名前の一部 で足せます）`);
+    if (!gradeRoles.length) line('- あてはまるロールを持っている人はいません。');
+    for (const g of gradeRoles) {
+      const a30 = g.ids.filter((id) => (use[30].msg.get(id) ?? 0) > 0 || (use[30].vc.get(id) ?? 0) > 0).length;
+      const a7 = g.ids.filter((id) => (use[7].msg.get(id) ?? 0) > 0 || (use[7].vc.get(id) ?? 0) > 0).length;
+      line(`- ${g.name}（${g.ids.length} 人）: 浮上 7 日 ${a7} 人（${pct(a7, g.ids.length)}）・30 日 ${a30} 人（${pct(a30, g.ids.length)}）・30 日の通話 ${hourSummary(g.ids.map((id) => use[30].vc.get(id) ?? 0))}・30 日の縁側 ${hourSummary(g.ids.map((id) => engawa30.get(id) ?? 0))}`);
+    }
+  }
+  line();
+
+  // ── 3. 浮上（発言・通話）
   const activeSets = async (days: number) => {
     const from = since(days);
     const msg = new Set((await db.select({ id: activityDaily.memberId }).from(activityDaily).where(and(gte(activityDaily.date, from), gte(activityDaily.messageCount, 1)))).map((r) => r.id));
@@ -85,6 +149,45 @@ export async function buildShuinReport(db: Db, cfg: GuildConfig, opts: ShuinRepo
       const any = new Set([...m, ...v]).size;
       line(`- ${g.label}（${g.ids.length} 人）: 浮上 ${any} 人（${pct(any, g.ids.length)}）＝ 発言だけ ${m.length - both}・通話だけ ${v.length - both}・両方 ${both}`);
     }
+  }
+  line();
+
+  // ── 3b. 浮上の中身（どれくらい来ているか）
+  line('## 3b. 浮上の中身（通話にいた時間・発言の数で分ける）');
+  line('通話の時間は AFK などを除いた通話にいた時間（ミュートや 1 人の時間もふくむ）。発言は BOT が数えた数。人数は段階ごと。');
+  for (const d of [7, 30] as const) {
+    line(`### 直近 ${d} 日`);
+    for (const g of groups) {
+      if (!g.ids.length) continue;
+      const vc = g.ids.map((id) => use[d].vc.get(id) ?? 0);
+      const msg = g.ids.map((id) => use[d].msg.get(id) ?? 0);
+      line(`- ${g.label}（${g.ids.length} 人）`);
+      line(`  通話 ${hourSummary(vc)}`);
+      line(`  通話の分布 ${hourHistogram(vc)}`);
+      line(`  発言 ${summary(msg)}`);
+      line(`  発言の分布 ${messageHistogram(msg)}`);
+    }
+  }
+  line();
+
+  // ── 3c. 縁側の時間
+  line('## 3c. 縁側の時間');
+  line(`縁側 = 名前に「縁側」が入る通話（宵縁側はのぞく）と、前に縁側として数えた通話（${engawaIds.length} こ）。直近 30 日と全期間は、いた時間そのまま。`);
+  for (const g of groups) {
+    if (!g.ids.length) continue;
+    line(`- ${g.label}（${g.ids.length} 人）: 30 日 ${hourSummary(g.ids.map((id) => engawa30.get(id) ?? 0))} ・ 全期間 ${hourSummary(g.ids.map((id) => engawaAll.get(id) ?? 0))}`);
+    line(`  30 日の分布 ${hourHistogram(g.ids.map((id) => engawa30.get(id) ?? 0))}`);
+  }
+  {
+    const rows = evaluation.rows;
+    const goenOk = rows.filter((r) => r.goen >= UJIKO_GOEN);
+    const minOk = rows.filter((r) => r.minutes >= UJIKO_MINUTES);
+    const both = rows.filter((r) => r.achieved).length;
+    line(`### 氏子の条件（ご縁 ${UJIKO_GOEN}・縁側 ${UJIKO_MINUTES / 60} 時間。評価のページと同じ数え方。参拝者 ${rows.length} 人）`);
+    line(`- 両方に届いた: ${both} 人（${pct(both, rows.length)}）・ご縁だけ: ${goenOk.length - both} 人・縁側だけ: ${minOk.length - both} 人・どちらもまだ: ${rows.length - goenOk.length - minOk.length + both} 人`);
+    line(`- 評価の縁側の時間: ${hourSummary(rows.map((r) => r.minutes))}`);
+    line(`  分布 ${hourHistogram(rows.map((r) => r.minutes))}`);
+    line(`- あと少し（ご縁は届いて、縁側があと 5 時間以内）: ${rows.filter((r) => r.goen >= UJIKO_GOEN && !r.achieved && r.remainingMinutes <= 300).length} 人 ・ （縁側は届いて、ご縁があと 10 以内）: ${rows.filter((r) => r.minutes >= UJIKO_MINUTES && !r.achieved && r.remainingGoen <= 10).length} 人`);
   }
   line();
 

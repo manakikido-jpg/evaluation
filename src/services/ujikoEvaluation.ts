@@ -128,7 +128,7 @@ export function evaluationCsv(data: EvaluationData): string {
  * - total: 全期間に、どこかの通話にいた時間
  */
 /** 縁側の通話（今の名前に「縁側」がある・前に縁側として数えた）。評価のページと同じ選び方 */
-async function engawaChannelIds(db: Db, today: string): Promise<string[]> {
+export async function engawaChannelIds(db: Db, today: string): Promise<string[]> {
   const [channelRows, previouslyEngawa] = await Promise.all([
     db.select({ id: voiceChannels.channelId, name: voiceChannels.name }).from(voiceChannels),
     db.selectDistinct({ id: voiceUsage.channelId }).from(voiceUsage).where(and(sql`${voiceUsage.sanpaishaMinutes} > 0`, lte(voiceUsage.date, today))),

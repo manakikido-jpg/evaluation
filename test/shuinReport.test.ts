@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '../src/db/client.js';
-import { activityDaily, memberEvents, members, shuin, specialGoen, voiceUsage } from '../src/db/schema.js';
+import { activityDaily, memberEvents, members, shuin, specialGoen, voiceChannels, voiceUsage } from '../src/db/schema.js';
 import { buildShuinReport, histogram, quantile } from '../src/services/shuinReport.js';
 import { ROLE, cfg, makeDb } from './helpers.js';
 
@@ -77,5 +77,31 @@ describe('📊 御朱印の昇格条件の集計（読むだけ）', () => {
     expect(text).toMatch(/### いまの条件[\s\S]*- 氏子（ご縁 20）以上: 1 人/);
     expect(text).toMatch(/### 暫定案[\s\S]*- 氏子（ご縁 15）以上: 1 人[\s\S]*- 世話役（ご縁 50）以上: 0 人/);
     for (const secret of [A, B, C, 'ひみつの名前']) expect(text).not.toContain(secret);
+  });
+
+  it('縁側の時間・浮上の中身・階級ごとも出す（ロールの名前があるときだけ階級）', async () => {
+    const base = { username: 'u', displayName: 'ひみつの名前', avatarUrl: null };
+    const GRADE = '100000000000000077';
+    await db.insert(members).values([
+      { ...base, id: A, roleIds: [ROLE.sanpaisha, GRADE], joinedAt: daysAgo(40) },
+      { ...base, id: B, roleIds: [ROLE.ujiko], joinedAt: daysAgo(20) },
+    ]);
+    await db.insert(voiceChannels).values({ channelId: 'en', name: '大きな縁側', lastSeen: NOW, firstSeen: NOW });
+    await db.insert(voiceUsage).values([
+      { memberId: A, date: '2026-10-20', channelId: 'en', minutes: 90 },
+      { memberId: B, date: '2026-10-21', channelId: 'v', minutes: 10 },
+    ]);
+    await db.insert(activityDaily).values({ memberId: A, date: '2026-10-20', messageCount: 12 });
+    const text = await buildShuinReport(db, cfg, { now: NOW, roleNames: new Map([[GRADE, '新役参拝者'], ['999', '関係ない']]) });
+    expect(text).toContain('## 2b. 階級ごと');
+    expect(text).toMatch(/- 新役参拝者（1 人）: 浮上 7 日 1 人（100.0%）/);
+    expect(text).not.toContain('関係ない');
+    expect(text).toMatch(/## 3b\. 浮上の中身[\s\S]*- 参拝者（1 人）\n  通話 中央値 1\.5 時間/);
+    expect(text).toContain('発言の分布 0: 0  1〜9: 0  10〜49: 1');
+    expect(text).toMatch(/## 3c\. 縁側の時間[\s\S]*- 参拝者（1 人）: 30 日 中央値 1\.5 時間/);
+    expect(text).toMatch(/### 氏子の条件（ご縁 40・縁側 20 時間/);
+    // ロールの名前がないときは、階級ごとを飛ばす
+    expect(await buildShuinReport(db, cfg, { now: NOW })).toContain('ロールの名前を読めなかったので出していません');
+    for (const secret of [A, B, 'ひみつの名前']) expect(text).not.toContain(secret);
   });
 });
