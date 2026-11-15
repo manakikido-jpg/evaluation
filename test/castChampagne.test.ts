@@ -39,8 +39,19 @@ it('キャスト本人・第三者・別部屋・片方不在の購入を拒否�
  await expect(prepareChampagne(db,session.id,'sakura',{...party,customerId:CAST},here,clock)).rejects.toThrow('お客');
  await expect(prepareChampagne(db,session.id,'bad',party,here,clock)).rejects.toThrow('ボトル');
  const q=await quote();
- for(const who of [{...party,customerId:OTHER},{...party,channelId:'else'}])await expect(buyChampagne(db,q.id,who,here,clock)).rejects.toThrow('確認');
+ await expect(buyChampagne(db,q.id,{...party,customerId:OTHER},here,clock)).rejects.toThrow('確認');
  await expect(buyChampagne(db,q.id,party,()=>false,clock)).rejects.toThrow('両方');expect((await walletOf(db,CUSTOMER)).balance).toBe(50000);
+});
+it('予約のスレッドや DM のボタンから押しても、指名したお客なら贈れる（乾杯は通話の部屋に出す）',async()=>{
+ const elsewhere={...party,channelId:'reservation-thread'};
+ const q=await prepareChampagne(db,session.id,'sakura',elsewhere,here,clock);
+ expect(q.channelId).toBe(ROOM);
+ const r=await buyChampagne(db,q.id,elsewhere,here,clock);
+ expect(r.fresh).toBe(true);expect(r.purchase.channelId).toBe(ROOM);
+ // 第三者はどこから押してもだめ・部屋がまだない通話もだめ
+ await expect(prepareChampagne(db,session.id,'moon',{customerId:OTHER,channelId:ROOM},here,clock)).rejects.toThrow('指名したお客だけ');
+ await db.update(castSessions).set({channelId:null}).where(eq(castSessions.id,session.id));
+ await expect(prepareChampagne(db,session.id,'moon',party,here,clock)).rejects.toThrow('部屋が見つかりません');
 });
 it('終了・期限切れ・予約中・通報中は引き落とさず、5分で確認を失効する',async()=>{
  const q=await quote();await expect(buyChampagne(db,q.id,party,here,()=>new Date(NOW.getTime()+5*60000))).rejects.toThrow('期限');
