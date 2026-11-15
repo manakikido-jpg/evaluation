@@ -1,0 +1,2 @@
+ALTER TABLE "direct_transfers" DROP CONSTRAINT "direct_transfers_fee";--> statement-breakpoint
+ALTER TABLE "direct_transfers" ADD CONSTRAINT "direct_transfers_fee" CHECK (("direct_transfers"."fee" = 0 OR "direct_transfers"."fee" = ("direct_transfers"."amount" + 1) / 2) AND "direct_transfers"."total" = "direct_transfers"."amount" + "direct_transfers"."fee");

@@ -147,7 +147,7 @@ async function main(): Promise<void> {
   const shofuku = new ShofukuApp(db, cfg);
   const stickerDesk = new StickerDeskApp(db, cfg, env.WEB_BASE_URL);
   const updateDesk = new UpdateDeskApp(db, cfg, env.WEB_BASE_URL);
-  const sokin = new SokinApp(db, cfg);
+  const sokin = new SokinApp(db, cfg, actions);
   const visitProfile = new VisitApp(db, cfg, env.WEB_BASE_URL);
   const casino = new CasinoApp(cfg, env.WEB_BASE_URL, db);
   const eventLottery = new EventLotteryApp(db,cfg,actions);

@@ -117,7 +117,7 @@ export async function seedDefaultItems(
   }
   const singles: Omit<typeof shopItems.$inferInsert, 'id' | 'updatedAt' | 'position'>[] = [
     { kind: 'hanafubuki', name: '花吹雪', emoji: '🌸', description: '選んだ人へ、#境内 にお祝いのメッセージを出す', price: 300 },
-    { kind: 'gift', name: '旧・自由額送金', emoji: '🎁', description: '銭の贈り物は小判に移行しました', price: 0, enabled: false },
+    { kind: 'gift', name: '旧・自由額送金', emoji: '🎁', description: '銭は /送金 から直接送れます', price: 0, enabled: false },
     { kind: 'ema_pin', name: '絵馬の奉納', emoji: '📌', description: '自分の自己紹介（#絵馬-男性・#絵馬-女性）を 7 日間ピン留め', price: 800, durationDays: 7 },
     { kind: 'omikuji_extra', name: 'おみくじ もう 1 回', emoji: '🎟', description: 'その日のおみくじを、もう 1 回引ける（1 日 1 回まで）', price: 100 },
     { kind: 'menzaifu', name: '免罪符', emoji: '🧾', description: '厄を 1 つ祓う（1 人 1 回まで。値段は設定の値）', price: 0 },
@@ -470,7 +470,7 @@ export function giftDailyLimitOf(cfg: GuildConfig, roleIds: readonly string[]): 
  * 花びらを贈る（送り手が手数料 20% を追加で払う）。贈れるのは役職（参拝者から）のある人か運営。
  * 1 日に贈れる合計に上限がある（サブアカウントで集めにくいように）。
  */
-/** @deprecated 旧送金の互換用。現行Discordの窓口は小判へ移行し、この関数を呼ばない。 */
+/** @deprecated 旧送金の互換用。旧20％の互換用。現行DiscordはdirectTransfersの確認付き50％送金を使い、この関数を呼ばない。 */
 export async function giveGift(db: Db, cfg: GuildConfig, from: { id: string; roleIds: readonly string[] }, toId: string, amount: number, now = new Date()): Promise<GiftResult> {
   const e = cfg.economy;
   if (from.id === toId) return { status: 'self' };
