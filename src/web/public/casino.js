@@ -304,6 +304,34 @@ const paintSoundButton = () => {
     b.title = Sound.on ? '音を消す' : '音を出す';
   });
 };
+/**
+ * 🔋 軽い表示: ずっと動く飾り（桜・星・電球・光の帯）や、ぼかしを止めて、スマホが熱くなりにくくする。
+ * 自動（スマホなど指で操作する画面は軽く）→ 軽い → きれい の順に切りかえ。選んだものは Cookie に覚える（サーバーが次の画面で <html> に付ける）
+ */
+const DISPLAY_COOKIE = 'casino_display';
+const displayMode = () => (document.documentElement.classList.contains('c-lite') ? 'lite' : document.documentElement.classList.contains('c-rich') ? 'rich' : 'auto');
+const liteMode = () => displayMode() === 'lite' || (displayMode() === 'auto' && matchMedia('(pointer: coarse)').matches);
+window.casinoLite = liteMode;
+const DISPLAY_LABEL = { auto: ['🔋', '表示: 自動（スマホは軽く）'], lite: ['⚡', '表示: 軽い'], rich: ['✨', '表示: きれい'] };
+const paintDisplayButton = () => {
+  const [icon, label] = DISPLAY_LABEL[displayMode()];
+  document.querySelectorAll('[data-display-toggle]').forEach((b) => {
+    b.textContent = icon;
+    b.title = `${label}（押すと切りかえ）`;
+    b.setAttribute('aria-label', `${label}。押すと切りかえ`);
+  });
+};
+paintDisplayButton();
+document.addEventListener('click', (e) => {
+  const b = e.target instanceof Element ? e.target.closest('[data-display-toggle]') : null;
+  if (!b) return;
+  const next = { auto: 'lite', lite: 'rich', rich: 'auto' }[displayMode()];
+  const root = document.documentElement;
+  root.classList.toggle('c-lite', next === 'lite');
+  root.classList.toggle('c-rich', next === 'rich');
+  document.cookie = next === 'auto' ? `${DISPLAY_COOKIE}=; path=/casino; max-age=0; samesite=lax` : `${DISPLAY_COOKIE}=${next}; path=/casino; max-age=31536000; samesite=lax`;
+  paintDisplayButton();
+});
 document.addEventListener('click', (e) => {
   const t = e.target instanceof Element ? e.target : null;
   if (!t) return;
@@ -484,7 +512,7 @@ const tickCountdowns = () => {
     n.classList.toggle('soon', left <= 5);
   });
 };
-setInterval(tickCountdowns, 250);
+setInterval(() => { if (!document.hidden) tickCountdowns(); }, 250);
 const myTurn = (root) => Boolean(root?.querySelector('.c-pbar, .c-turn.mine, .c-hero.myturn, button[value="stand"], .c-draw, button[value="play"], .mj-mine.myturn'));
 const initLive = () => {
   if (liveTimer) clearInterval(liveTimer);
@@ -575,6 +603,7 @@ document.addEventListener('click', (e) => {
   applyHints(on);
 });
 setInterval(() => {
+  if (document.hidden) return;
   const cat = document.querySelector('[data-hand-cat]')?.getAttribute('data-hand-cat') ?? '';
   document.querySelectorAll('.c-guide-list li').forEach((li) => li.classList.toggle('now', cat !== '' && li.getAttribute('data-cat') === cat));
   const now = Date.now() + Number(document.documentElement.dataset.skew || 0);
@@ -940,8 +969,11 @@ const initSlots = (root) => {
         paint(r);
       }
     }
-    raf = requestAnimationFrame(frame);
+    // 🔋 回っているリールがなければ、絵を描き直さない（スマホが熱くならないように）。回し始めたら kick で再開
+    if (reels.some((r) => r.state === 'spin' || r.state === 'slide')) raf = requestAnimationFrame(frame);
+    else { raf = 0; last = 0; }
   };
+  const kick = () => { if (alive && !raf) raf = requestAnimationFrame(frame); };
   reels.forEach(paint);
   raf = requestAnimationFrame(frame);
 
@@ -994,6 +1026,7 @@ const initSlots = (root) => {
     const t = performance.now();
     reels.forEach((r) => {
       r.state = 'spin';
+      kick();
       r.spinAt = t;
       r.el.classList.add('spin');
     });
@@ -1116,6 +1149,7 @@ const initSlots = (root) => {
       },
     };
     r.state = 'slide';
+    kick();
     const b = stopBtns[i];
     if (b) {
       b.disabled = true;
@@ -1558,6 +1592,7 @@ const paintPopBars = () => {
 // ⏰ 締め切り 10 秒前から「締め切り間近！」、5 秒前からカウントの音
 let kbBeep = -1;
 setInterval(() => {
+  if (document.hidden) return;
   const stage = document.querySelector('.kb-stage');
   const banner = stage?.querySelector('.kb-hurry');
   const cd = stage?.querySelector('.kb-head .c-count[data-deadline]');
@@ -2257,7 +2292,15 @@ const initKeiba = () => {
   kbAnim = state;
   const draw = () => {
     if (kbAnim !== state || !document.body.contains(el)) return;
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    // 🔋 軽い表示では、レースの最中以外（パドック・結果）は 1 秒に 15 回だけ描く・細かさも少し下げる
+    const lite = liteMode();
+    const nowMs = performance.now();
+    if (lite && data.phase !== 'racing' && nowMs - (state.drawn || 0) < 66) {
+      state.raf = requestAnimationFrame(draw);
+      return;
+    }
+    state.drawn = nowMs;
+    const dpr = Math.min(lite ? 1.5 : 2, window.devicePixelRatio || 1);
     const W = el.clientWidth;
     const naturalHeight = W * (W < 560 ? 0.62 : 0.5);
     const heightLimit = window.innerWidth >= 1180 ? Math.max(280, window.innerHeight * 0.62) : window.innerWidth > window.innerHeight ? Math.max(160, window.innerHeight * 0.48) : naturalHeight;
@@ -2602,8 +2645,11 @@ const initAtSlot = (root) => {
         paint(r);
       }
     }
-    raf = requestAnimationFrame(frame);
+    // 🔋 回っているリールがなければ、絵を描き直さない。回し始めたら kick で再開
+    if (reels.some((r) => r.state === 'spin' || r.state === 'slide')) raf = requestAnimationFrame(frame);
+    else { raf = 0; last = 0; }
   };
+  const kick = () => { if (alive && !raf) raf = requestAnimationFrame(frame); };
   reels.forEach(paint);
   raf = requestAnimationFrame(frame);
 
@@ -2742,6 +2788,7 @@ const initAtSlot = (root) => {
       },
     };
     r.state = 'slide';
+    kick();
   };
 
   const stopReel = (i) => {
@@ -2800,6 +2847,7 @@ const initAtSlot = (root) => {
     const t = performance.now();
     reels.forEach((r) => {
       r.state = 'spin';
+      kick();
       r.spinAt = t;
       r.el.classList.add('spin');
     });
@@ -2833,6 +2881,7 @@ const initAtSlot = (root) => {
     const t = performance.now();
     reels.forEach((r) => {
       r.state = 'spin';
+      kick();
       r.spinAt = t;
       r.el.classList.add('spin');
     });
@@ -2905,6 +2954,7 @@ const initAtSlot = (root) => {
     moving.forEach((i, k) =>
       later(() => {
         reels[i].state = 'spin';
+        kick();
         slideTo(i, stops[i], () => {
           if (reels.every((x) => x.state === 'still')) reveal();
         });

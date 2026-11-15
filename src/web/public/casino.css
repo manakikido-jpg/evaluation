@@ -2379,3 +2379,24 @@ body[class*="cs-background-"] .c-sky { background: transparent; }
 .kb-stable-actions, .kb-stable-actions form { min-width: 0; max-width: 100%; }
 .kb-stable-actions select, .kb-stable-actions input[type="text"] { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }
 .kb-stable-actions .c-btn { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+
+
+/* ───── 🔋 軽い表示（スマホなど指で操作する画面は自動・🔋ボタンで切りかえ）: ずっと動く飾りとぼかしを止める ───── */
+html.c-lite .c-sky::before, html.c-lite .c-sky::after { animation: none; }
+html.c-lite .c-petal { display: none; }
+html.c-lite .c-top, html.c-lite .c-pbar, html.c-lite .c-dock, html.c-lite .mj-overlay, html.c-lite .cs-preview-scene .cs-preview { backdrop-filter: none; -webkit-backdrop-filter: none; }
+html.c-lite .c-top { background: rgba(6, 12, 10, 0.94); }
+html.c-lite body[class*="cs-background-"] .c-top { background: #08101df5; }
+html.c-lite .c-pbar, html.c-lite .c-dock { background: rgb(8, 14, 12); }
+html.c-lite .c-pot.has, html.c-lite .c-pseat.turn .c-pseat-box, html.c-lite .c-jug.holding, html.c-lite .c-jug:has(.c-gogo.lit), html.c-lite .c-jug-side, html.c-lite .c-bulbs, html.c-lite .c-cab-bulbs, html.c-lite .c-at-shine, html.c-lite .c-at-panel::after, html.c-lite .c-at-led, html.c-lite .c-at-top, html.c-lite .sc-lines, html.c-lite .sc-bg-svg, html.c-lite .c-at-lamp::after, html.c-lite .c-wheel2.idle .c-wheel2-disc, html.c-lite .c-mine-dot, html.c-lite .c-at-stops .c-stop.col-rainbow, html.c-lite .c-atm.in-at::after, html.c-lite .c-coins i { animation: none !important; }
+html.c-lite .c-jreel.hit-0::after, html.c-lite .c-jreel.hit-1::after, html.c-lite .c-jreel.hit-2::after, html.c-lite .c-gogo.lit, html.c-lite .c-jug.lamp-pre .c-gogo, html.c-lite .c-linelamps .ln.on, html.c-lite .c-winline.show, html.c-lite .c-bonus b, html.c-lite .c-seg-blink { animation-iteration-count: 4 !important; }
+@media (pointer: coarse) {
+  html:not(.c-rich) .c-sky::before, html:not(.c-rich) .c-sky::after { animation: none; }
+  html:not(.c-rich) .c-petal { display: none; }
+  html:not(.c-rich) .c-top, html:not(.c-rich) .c-pbar, html:not(.c-rich) .c-dock, html:not(.c-rich) .mj-overlay, html:not(.c-rich) .cs-preview-scene .cs-preview { backdrop-filter: none; -webkit-backdrop-filter: none; }
+  html:not(.c-rich) .c-top { background: rgba(6, 12, 10, 0.94); }
+  html:not(.c-rich) body[class*="cs-background-"] .c-top { background: #08101df5; }
+  html:not(.c-rich) .c-pbar, html:not(.c-rich) .c-dock { background: rgb(8, 14, 12); }
+  html:not(.c-rich) .c-pot.has, html:not(.c-rich) .c-pseat.turn .c-pseat-box, html:not(.c-rich) .c-jug.holding, html:not(.c-rich) .c-jug:has(.c-gogo.lit), html:not(.c-rich) .c-jug-side, html:not(.c-rich) .c-bulbs, html:not(.c-rich) .c-cab-bulbs, html:not(.c-rich) .c-at-shine, html:not(.c-rich) .c-at-panel::after, html:not(.c-rich) .c-at-led, html:not(.c-rich) .c-at-top, html:not(.c-rich) .sc-lines, html:not(.c-rich) .sc-bg-svg, html:not(.c-rich) .c-at-lamp::after, html:not(.c-rich) .c-wheel2.idle .c-wheel2-disc, html:not(.c-rich) .c-mine-dot, html:not(.c-rich) .c-at-stops .c-stop.col-rainbow, html:not(.c-rich) .c-atm.in-at::after, html:not(.c-rich) .c-coins i { animation: none !important; }
+  html:not(.c-rich) .c-jreel.hit-0::after, html:not(.c-rich) .c-jreel.hit-1::after, html:not(.c-rich) .c-jreel.hit-2::after, html:not(.c-rich) .c-gogo.lit, html:not(.c-rich) .c-jug.lamp-pre .c-gogo, html:not(.c-rich) .c-linelamps .ln.on, html:not(.c-rich) .c-winline.show, html:not(.c-rich) .c-bonus b, html:not(.c-rich) .c-seg-blink { animation-iteration-count: 4 !important; }
+}

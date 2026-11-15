@@ -24,7 +24,7 @@ const fmt = (n: number) => n.toLocaleString('ja-JP');
 const money = (coin: Coin, n: number) => `${coin.emoji}${fmt(n)} ${coin.name}`;
 
 /** revealFrom: 結果を見せる前の残高（ルーレットが止まるまで、こちらを出しておく） */
-export type CasinoMe = { presentation?:'immersive'; presentationRequested?:boolean; styleUntil?: number; baseStyles?: Partial<Record<StyleSlot, string>>; styles?: Partial<Record<StyleSlot, string>>; sharedStyles?: Record<string, Partial<Record<StyleSlot, string>>>; session: MemberSession; balance: number; coin: Coin; revealFrom?: number; revealAt?: number; revealWait?: boolean; /** 🎰 大勝負の札が効いている間 */ boostUntil?: Date; /** 重ねた枚数 */ boostLevel?: number; boostEx?: boolean };
+export type CasinoMe = { /** 🔋 表示の軽さ（Cookie。なければ自動） */ display?: 'lite' | 'rich'; presentation?:'immersive'; presentationRequested?:boolean; styleUntil?: number; baseStyles?: Partial<Record<StyleSlot, string>>; styles?: Partial<Record<StyleSlot, string>>; sharedStyles?: Record<string, Partial<Record<StyleSlot, string>>>; session: MemberSession; balance: number; coin: Coin; revealFrom?: number; revealAt?: number; revealWait?: boolean; /** 🎰 大勝負の札が効いている間 */ boostUntil?: Date; /** 重ねた枚数 */ boostLevel?: number; boostEx?: boolean };
 
 /** back: ロビーへ戻る（'gate' は入口へ）。jansou: 雀荘の看板。wide: 横に広く（麻雀の卓） */
 export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Child; htmx?: boolean; back?: boolean | 'gate'; jansou?: boolean; wide?: boolean; lobby?: boolean; adminPreview?: boolean | 'casino'; game?:CasinoGame; roundKey?:string }) {
@@ -33,7 +33,7 @@ export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Ch
   const immersive=me?.presentation==='immersive'&&props.game!=='slots'&&props.game!=='atslot';
   const scene=immersive&&props.game?GAME_SCENES[props.game]:undefined;
   return (
-    <html lang="ja">
+    <html lang="ja" class={me?.display === 'lite' ? 'c-lite' : me?.display === 'rich' ? 'c-rich' : undefined}>
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -64,6 +64,9 @@ export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Ch
             </span>
           </a>
           {props.lobby && <nav class="cl-top-nav" aria-label="カジノの案内"><a href="/casino/hall" aria-current="page">ロビー</a><a href="/casino/hall?group=table#available-tables">みんなの卓</a><a href="/casino/wardrobe">着せ替え</a><a href="/casino/style-gacha">勝負の御籤</a><a href="/casino/stats">📊 記録</a></nav>}
+          <button type="button" class="c-sound" data-display-toggle title="表示: 自動（スマホは軽く）（押すと切りかえ）" aria-label="表示: 自動（スマホは軽く）。押すと切りかえ">
+            🔋
+          </button>
           <button type="button" class="c-sound" data-sound-toggle aria-pressed={immersive?'false':'true'} title={immersive?'音を出す':'音を消す'}>
             {immersive?'🔇':'🔊'}
           </button>
