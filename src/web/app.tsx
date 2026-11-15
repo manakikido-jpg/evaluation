@@ -1,3 +1,7 @@
+import type { DocumentTranscriber } from '../services/documents/audio.js';
+import { DOCUMENT_CSP } from '../services/documents/export.js';
+import { mountDocuments } from './documents.js';
+import type { DocumentAI } from '../services/documents/generate.js';
 import { memberEngawaMinutes } from '../services/ujikoEvaluation.js';
 import {ARCADE_KINDS,isArcadeKind} from '../domain/casinoArcade.js';
 import { deployRuns, reflectedTimes } from '../services/deployInfo.js';
@@ -354,6 +358,8 @@ import type { GuildChannel, GuildRole, RolePatch } from '../lib/discordRest.js';
 import { recentProfitShares } from '../services/casino/profitShare.js';
 
 export type WebDeps = {
+  documentAI?: DocumentAI;
+  documentAudio?: DocumentTranscriber;
   db: Db;
   /** 設定（管理画面で変えた値を重ねたもの）。関数なら毎回読み直す */
   cfg: GuildConfig | (() => GuildConfig);
@@ -404,6 +410,9 @@ export function createWebApp(deps: WebDeps) {
     await next();
   });
 
+  // 共有用の静的資料だけ、固定CSSのハッシュを許可。運営画面のCSPは変えない。
+  app.use(async(c,next)=>{await next();if(c.req.method==='GET'&&c.res.status===200&&/^\/minutes\/documents\/[a-f0-9-]{36}\/(?:print|export\.html)$/.test(c.req.path))c.header('Content-Security-Policy',DOCUMENT_CSP);});
+
   app.use(
     secureHeaders({
       contentSecurityPolicy: {
@@ -421,6 +430,8 @@ export function createWebApp(deps: WebDeps) {
   );
 
   // 送れる大きさの上限（掲示の本文でも十分な 256KB）
+  const documentAudioBody = bodyLimit({maxSize:21*1024*1024,onError:c=>c.text('音声が大きすぎます。20MB以下に分けてください。',413)});
+  const documentBody = bodyLimit({maxSize:2*1024*1024,onError:c=>c.text('資料の送信内容が大きすぎます。',413)});
   const smallBody = bodyLimit({ maxSize: 256 * 1024, onError: (c) => c.text('送る内容が大きすぎます。', 413) });
   // 掲示・キャストの写真は大きめに（写真の上限 8MB ＋ 本文）
   const noticeBody = bodyLimit({ maxSize: 9 * 1024 * 1024, onError: (c) => c.text('写真が大きすぎます（8MB まで）。', 413) });
@@ -436,6 +447,10 @@ export function createWebApp(deps: WebDeps) {
       ? bodyLimit({ maxSize: 1024 * 1024, onError: c => c.text('送る内容が大きすぎます。', 413) })(c, next)
       : c.req.method !== 'POST'
       ? smallBody(c, next)
+      : c.req.path === '/minutes/documents/audio'
+      ? documentAudioBody(c,next)
+      : c.req.path.startsWith('/minutes/documents')
+      ? documentBody(c,next)
       : c.req.path === '/office/icon'
       ? artBody(c, next)
       : c.req.path === '/visit/order'
@@ -1309,6 +1324,8 @@ export function createWebApp(deps: WebDeps) {
     await audit(db, { actorId: c.get('session').userId, action: 'idea.delete', detail: { id, title: found.idea.title }, via: 'web' });
     return c.redirect('/ideas?msg=deleted');
   });
+
+  mountDocuments(app, db, () => cfg.guildId, now, deps.documentAI, deps.documentAudio);
 
   app.get('/minutes', async (c) => {
     const q = c.req.query('q');

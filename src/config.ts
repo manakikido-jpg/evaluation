@@ -1000,6 +1000,10 @@ export function loadEnv(env: NodeJS.ProcessEnv = process.env): Env {
 }
 
 const webEnvSchema = z.object({
+  /** 議事録の資料作成用。未設定なら見出し整理だけ利用できる。ブラウザーには出さない */
+  DOCUMENT_AI_API_KEY: z.string().optional(),
+  DOCUMENT_TRANSCRIBE_MODEL: z.string().trim().min(1).max(100).default('gpt-4o-mini-transcribe'),
+  DOCUMENT_AI_MODEL: z.string().trim().min(1).max(100).default('gpt-4.1-mini'),
   DISCORD_TOKEN: z.string().min(1, 'DISCORD_TOKEN を設定してください'),
   DISCORD_CLIENT_ID: z.string().regex(/^\d{17,20}$/, 'DISCORD_CLIENT_ID を設定してください'),
   DISCORD_CLIENT_SECRET: z.string().min(1, 'DISCORD_CLIENT_SECRET を設定してください'),

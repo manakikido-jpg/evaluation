@@ -1,0 +1,22 @@
+/** 架空の会議だけを使うローカル確認。実Discord・外部AI・本番DBへ接続しない。 */
+import { serve } from '@hono/node-server';
+import { Hono } from 'hono';
+import { setCookie } from 'hono/cookie';
+import { makeDb,cfg,ROLE } from '../../test/helpers.js';
+import { createWebApp } from '../../src/web/app.js';
+import { createSession } from '../../src/web/sessions.js';
+import type { DiscordApi } from '../../src/web/discordApi.js';
+import type { DiscordActions } from '../../src/lib/discordRest.js';
+import { organizeHeadings } from '../../src/services/documents/generate.js';
+const {db,close}=await makeDb(),clock=new Date('2026-11-15T00:00:00Z');
+const user={id:'770000000000000001',username:'fixture',displayName:'確認用の運営',avatarUrl:null};
+const write=await createSession(db,user,{level:'shinshoku',pages:['minutes'],writePages:['minutes']},clock),read=await createSession(db,{...user,id:'770000000000000002'},{level:'shinshoku',pages:['minutes'],writePages:[]},clock);
+const source='決定事項\n交流会は土曜日に開催する\n保留\n参加費は次回確認する\n次の作業\n担当者が案内文を作成する';
+let fail=false,transcriptions=0,generations=0;
+const api:DiscordApi={authorizeUrl:()=>'',exchangeCode:async()=>'',me:async()=>user,memberRoles:async()=>[ROLE.shinshoku]};
+const make=()=>createWebApp({db,cfg,api,discord:{guildChannels:async()=>[]} as unknown as DiscordActions,baseUrl:'http://127.0.0.1:4216',now:()=>clock,documentAI:{model:'ローカル確認用（代替AI）',generate:async(_title,text)=>{generations++;if(fail){fail=false;throw Error('fixture failure');}return {...organizeHeadings(text),summary:'架空の会議の下書きです。交流会の予定、保留事項、次の作業を整理しました。'};}},documentAudio:{model:'ローカル確認用（代替文字起こし）',transcribe:async()=>{transcriptions++;await new Promise(resolve=>setTimeout(resolve,800));return source;}}});
+let app=make();const outer=new Hono();
+outer.get('/fixture/login',c=>{setCookie(c,'shamusho_session',c.req.query('readonly')==='1'?read:write,{path:'/',httpOnly:true,sameSite:'Lax'});return c.redirect('/minutes/documents');});
+outer.post('/fixture/fail-next',c=>{fail=true;return c.json({ok:true});});outer.post('/fixture/restart',c=>{app=make();return c.json({ok:true});});outer.get('/fixture/stats',c=>c.json({transcriptions,generations}));outer.all('*',c=>app.fetch(c.req.raw));
+const server=serve({fetch:outer.fetch,hostname:'127.0.0.1',port:4216},()=>console.log('minutes document fixture ready'));
+process.on('SIGTERM',()=>{server.close();void close().finally(()=>process.exit(0));});

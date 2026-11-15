@@ -74,6 +74,7 @@ export function MinutesPage(props: { session: AdminSession; meetings: MeetingRow
     <Layout title="議事録" session={session} nav="minutes">
       <div class="page-head">
         <h1>📓 議事録</h1>
+        <a class="button-link" href="/minutes/documents">議事録から資料を作る</a>
         <a class="button-link primary" href="/minutes/new">
           ＋ 会議を記録
         </a>
@@ -341,6 +342,7 @@ export function MeetingViewPage(props: {
       </p>
       <div class="page-head">
         <h1>📓 {m.title}</h1>
+        <a class="button-link" href={`/minutes/documents/new?meeting=${m.id}`}>この議事録から資料を作る</a>
         <a class="button-link" href={`/minutes/${m.id}/edit`}>
           直す
         </a>
