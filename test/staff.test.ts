@@ -12,16 +12,18 @@ import { cfg, makeDb, ROLE } from './helpers.js';
 const STAFF = '830000000000000001';
 const USER = '830000000000000002';
 const OTHER = '830000000000000003';
+const GUJI = '830000000000000004';
 
 let db: Db;
 let close: () => Promise<void>;
 let calls: string[];
 let staff: StaffApp;
+let discord: DiscordActions;
 
 beforeEach(async () => {
   ({ db, close } = await makeDb());
   calls = [];
-  const discord: DiscordActions = {
+  discord = {
     addRole: async (_g, u, r) => void calls.push(`addRole ${u} ${r}`),
     removeRole: async (_g, u, r) => void calls.push(`removeRole ${u} ${r}`),
     sendDm: async (u) => (calls.push(`dm ${u}`), true),
@@ -49,6 +51,7 @@ beforeEach(async () => {
     [STAFF, [ROLE.shinshoku]],
     [USER, [ROLE.ujiko]],
     [OTHER, [ROLE.ujiko]],
+    [GUJI, [ROLE.guji]],
   ] as const) {
     await recordJoin(db, { id, username: id, displayName: `n${id.slice(-1)}`, avatarUrl: null, roleIds: [...roles], isBot: false, joinedAt: null });
   }
@@ -235,5 +238,50 @@ describe('1 分ごとの処理', () => {
     const [u] = await recentActivity(db, USER);
     expect(u).toMatchObject({ vcMinutes: 1, messageCount: 2 });
     expect(await recentActivity(db, STAFF)).toEqual([]);
+  });
+});
+
+describe('#記録 のモデレーション記録（宮司の分は残さない）', () => {
+  function logging() {
+    const logged: string[] = [];
+    const client = {
+      channels: {
+        fetch: async (id: string) =>
+          id === cfg.channels.log ? { isSendable: () => true, send: async (p: { content: string }) => (logged.push(p.content), { id: 'x' }) } : null,
+      },
+    };
+    return { logged, app: new StaffApp(client as never, db, cfg, discord, 'https://shamusho.example.com') };
+  }
+
+  it('神職の BAN は #記録 に出る。宮司の BAN は出さない（社務所Web の記録には別に残る）', async () => {
+    // 神職の一発 BAN → 記録に出る
+    {
+      const { logged, app } = logging();
+      const { i } = command(STAFF, [ROLE.shinshoku], 'ban', { user: USER, strings: { reason: 'あらし' } });
+      await app.onInteraction(i as never);
+      expect(logged.some((c) => c.includes('一発 BAN'))).toBe(true);
+    }
+    // 宮司の一発 BAN → 記録に出ない
+    {
+      const { logged, app } = logging();
+      const { i } = command(GUJI, [ROLE.guji], 'ban', { user: OTHER, strings: { reason: 'あらし' } });
+      await app.onInteraction(i as never);
+      expect(logged.some((c) => c.includes('一発 BAN'))).toBe(false);
+      expect(calls).toContain(`ban ${OTHER}`); // BAN そのものは実行される
+    }
+  });
+
+  it('厄 2 つ目の BAN も、宮司の分は #記録 に出さない', async () => {
+    const run = async (actorRoles: string[], actorId: string, targetId: string) => {
+      const { logged, app } = logging();
+      await app.onInteraction(command(actorId, actorRoles, 'yaku', { sub: 'add', user: targetId, strings: { reason: '1つ目' } }).i as never);
+      const second = command(actorId, actorRoles, 'yaku', { sub: 'add', user: targetId, strings: { reason: '2つ目' } });
+      await app.onInteraction(second.i as never);
+      const ok = button(actorId, actorRoles, customIdOf(second.replies.at(-1))!);
+      await app.onInteraction(ok.i as never);
+      return logged;
+    };
+    expect((await run([ROLE.shinshoku], STAFF, USER)).some((c) => c.includes('厄 2 つ目で BAN'))).toBe(true);
+    expect((await run([ROLE.guji], GUJI, OTHER)).some((c) => c.includes('厄 2 つ目で BAN'))).toBe(false);
   });
 });

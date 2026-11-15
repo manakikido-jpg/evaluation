@@ -149,7 +149,7 @@ export class StaffApp {
     if (i.commandName === 'ban') {
       const r = await instantBan(this.ctx, actor, target.id, i.options.getString('reason', true), i.options.getString('note') ?? '');
       if (r.status === 'denied') return void (await say(DENIED[r.reason]));
-      await this.log(`⛔ 一発 BAN ${mention(target.id)}（${i.options.getString('reason', true)}）by ${mention(actor.id)}`);
+      await this.modLog(`⛔ 一発 BAN ${mention(target.id)}（${i.options.getString('reason', true)}）by ${mention(actor.id)}`, actor);
       return void (await say(r.banOk ? `⛔ ${mention(target.id)} さまを BAN しました。` : '⚠️ BAN に失敗しました。BOT の権限（メンバーを BAN）と、ロールの位置を確認してください。記録は残しています。'));
     }
     if (i.commandName === 'kick') {
@@ -194,7 +194,7 @@ export class StaffApp {
     this.pending.delete(nonce);
     await i.deferUpdate();
     const r = await giveYaku(this.ctx, actor, p.targetId, p.reason, true);
-    if (r.status === 'banned' && !r.duplicate) await this.log(`⛔ 厄 2 つ目で BAN ${mention(p.targetId)}（${p.reason}）by ${mention(actor.id)}`);
+    if (r.status === 'banned' && !r.duplicate) await this.modLog(`⛔ 厄 2 つ目で BAN ${mention(p.targetId)}（${p.reason}）by ${mention(actor.id)}`, actor);
     await i.editReply({ content: this.yakuResultText(p.targetId, r), components: [], allowedMentions: NO_MENTIONS });
   }
 
@@ -280,6 +280,12 @@ export class StaffApp {
             : `${e.currencyName}が足りません（必要 ${r.price} / 持っている ${r.balance}）。`;
     if (r.status === 'ok') await this.log(`📜 免罪符 ${mention(i.user.id)} が厄を祓いました（残り ${r.remaining}）`);
     await i.editReply({ content: text, embeds: [], components: [] });
+  }
+
+  /** モデレーションの記録を #記録 へ。宮司が行った分は、ほかの運営の目に触れないよう #記録 には残さない（社務所Web の記録には残る）。 */
+  private async modLog(content: string, actor: Actor): Promise<void> {
+    if (actor.level === 'guji') return;
+    await this.log(content);
   }
 
   private async log(content: string): Promise<void> {
