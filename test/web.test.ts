@@ -705,6 +705,64 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     expect(await (await get('/settings', g)).text()).toContain('今日はまだだれも引いていません。');
   });
 
+  it('お年玉の受取場所は宮司が通話・カテゴリーを選び、再読込後も保持する（銭や投稿は動かさない）', async () => {
+    const { ConfigStore, loadOverrides } = await import('../src/services/settings.js');
+    const { walletOf } = await import('../src/services/economy.js');
+    const store = new ConfigStore(db, cfg);
+    app = createWebApp({ db, cfg: () => store.current, fileCfg: cfg, api: fakeApi, discord: fakeActions, baseUrl: BASE, now: () => clock, onSettingsSaved: () => store.refresh() });
+    const g = await login(GUJI);
+    const csrf = await csrfOf(g);
+    const go = (entries: [string, string][]) => app.request('/settings/otoshidama/places', { method: 'POST', headers: { cookie: `shamusho_session=${g}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams([['_csrf', csrf], ...entries]).toString() });
+    const before = actions.length;
+    const r = await go([['receiveMode', 'selected'], ['voiceChannelIds', '910000000000000004'], ['voiceChannelIds', '910000000000000004'], ['categoryIds', '910000000000000001']]);
+    expect(r.headers.get('location')).toBe('/settings?msg=otoshi_places_saved&at=give#sec-give');
+    expect(store.current.otoshidama).toEqual({ receiveMode: 'selected', voiceChannelIds: ['910000000000000004'], categoryIds: ['910000000000000001'] });
+    expect((await loadOverrides(db)).otoshidama).toEqual(store.current.otoshidama);
+    const reloaded = new ConfigStore(db, cfg);
+    await reloaded.refresh();
+    expect(reloaded.current.otoshidama).toEqual(store.current.otoshidama);
+    const html = await (await get('/settings?at=give', g)).text();
+    expect(html).toContain('お年玉を受け取れる場所');
+    expect(html).toContain('name="voiceChannelIds" value="910000000000000004" checked');
+    expect(html).toContain('name="categoryIds" value="910000000000000001" checked');
+    expect((await listAudit(db, { action: 'otoshidama.places' }))[0]).toMatchObject({ actorId: GUJI, detail: store.current.otoshidama });
+    expect(actions).toHaveLength(before);
+    expect((await walletOf(db, GUJI)).balance).toBe(0);
+    expect((await go([['receiveMode', 'auto']])).headers.get('location')).toContain('otoshi_places_saved');
+    expect(store.current.otoshidama).toEqual({ receiveMode: 'auto', voiceChannelIds: [], categoryIds: [] });
+  });
+
+  it('お年玉の受取場所: 対象なし・不正ID・違う種類・別サーバーのID・上限超過は保存しない', async () => {
+    const { loadOverrides } = await import('../src/services/settings.js');
+    const g = await login(GUJI);
+    const csrf = await csrfOf(g);
+    const cases: [string, string][][] = [
+      [], [['receiveMode', 'nope']], [['receiveMode', 'selected']],
+      [['receiveMode', 'selected'], ['voiceChannelIds', 'oops']],
+      [['receiveMode', 'selected'], ['voiceChannelIds', '910000000000000002']],
+      [['receiveMode', 'selected'], ['categoryIds', '910000000000000004']],
+      [['receiveMode', 'selected'], ['voiceChannelIds', '910000000000000999']],
+      [['receiveMode', 'selected'], ...Array.from({ length: 201 }, () => ['voiceChannelIds', '910000000000000004'] as [string, string])],
+    ];
+    for (const entries of cases) {
+      const response = await app.request('/settings/otoshidama/places', { method: 'POST', headers: { cookie: `shamusho_session=${g}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams([['_csrf', csrf], ...entries]).toString() });
+      expect(response.headers.get('location')).toContain('otoshi_places_invalid');
+      expect((await loadOverrides(db)).otoshidama).toBeUndefined();
+    }
+    expect(await listAudit(db, { action: 'otoshidama.places' })).toHaveLength(0);
+  });
+
+  it('お年玉の受取場所: 未ログイン・神職・CSRFなしでは設定できない', async () => {
+    const body = { receiveMode: 'selected', voiceChannelIds: '910000000000000004' };
+    expect((await post('/settings/otoshidama/places', '', body)).status).toBe(302);
+    const s = await login(STAFF);
+    expect((await post('/settings/otoshidama/places', s, { ...body, _csrf: await csrfOf(s) })).status).toBe(403);
+    const g = await login(GUJI);
+    expect((await post('/settings/otoshidama/places', g, body)).status).toBe(403);
+    const { loadOverrides } = await import('../src/services/settings.js');
+    expect((await loadOverrides(db)).otoshidama).toBeUndefined();
+  });
+
   it('設定は宮司だけ。保存すると反映され、記録に残る', async () => {
     const s = await login(STAFF);
     expect((await get('/settings', s)).status).toBe(403);
@@ -768,6 +826,7 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
       db,
       os.parse({
         rooms: {coreTimeMultiplier:5},
+        otoshidama: { receiveMode: 'selected', voiceChannelIds: ['910000000000000004'], categoryIds: [] },
         fortuneGames: { enabled: true, lotteryBonus: 1234 },
         recording: { enabled: true, retentionDays: 3, maxMinutes: 10, voiceChannelIds: ['910000000000000004'] },
         gacha: { price: 777, enabled: false },
@@ -779,6 +838,7 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     );
     const res = await post('/settings', g, form);
     expect(res.headers.get('location')).toBe('/settings?msg=saved');
+    expect(store.current.otoshidama).toEqual({ receiveMode: 'selected', voiceChannelIds: ['910000000000000004'], categoryIds: [] });
     expect(store.current.economy.menzaifuPrice).toBe(800);
     expect(store.current.rooms.coreTimeMultiplier).toBe(5);
     expect(store.current.recording).toMatchObject({ enabled: true, retentionDays: 3, maxMinutes: 10, voiceChannelIds: ['910000000000000004'] });

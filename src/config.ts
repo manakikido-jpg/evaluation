@@ -5,6 +5,15 @@ import { DEFAULT_ITEMS, DEFAULT_MESSAGES, DEFAULT_PLACES, FORTUNE_KEYS, type For
 
 const snowflake = z.string().regex(/^\d{17,20}$/, 'Discord の ID（17〜20 桁の数字）を入れてください');
 
+/** お年玉を受け取れる通話。未設定は今までどおり縁側の名前で決める。 */
+export const otoshidamaSchema = z.object({
+  receiveMode: z.enum(['auto', 'selected']).default('auto'),
+  voiceChannelIds: z.array(snowflake).max(200).default([]),
+  categoryIds: z.array(snowflake).max(50).default([]),
+}).refine((v) => v.receiveMode !== 'selected' || v.voiceChannelIds.length + v.categoryIds.length > 0, {
+  message: '受け取れる通話かカテゴリーを1つ以上選んでください',
+});
+
 /**
  * 社務所Web の、人ごとに見せるかを選べるページ（宮司だけのページ・更新履歴は入れない）。
  * prefixes: そのページの URL の 1 段目
@@ -809,6 +818,7 @@ export const guildConfigSchema = z
       .default({ omamori: [] }),
     ranks: z.array(rankSchema).min(1),
     economy: economySchema.default(economySchema.parse({})),
+    otoshidama: otoshidamaSchema.default(otoshidamaSchema.parse({})),
     omikujiStreak: omikujiStreakSchema.default(omikujiStreakSchema.parse({})),
     omikujiSpecial: omikujiSpecialSchema.default(omikujiSpecialSchema.parse({})),
     omikujiTexts: omikujiTextsSchema.default(omikujiTextsSchema.parse({})),

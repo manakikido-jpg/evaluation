@@ -51,6 +51,7 @@ import { fortuneGamesSchema } from '../config.js';
 import { ensureLotteryRound } from '../services/casino/fortune.js';
 import { lotteryFinances, recentLotteryRounds, scratchFinances, scratchPeriod } from '../services/casino/fortuneStats.js';
 import { FortuneAdminPage } from './views/fortune.js';
+import { otoshidamaSchema } from '../config.js';
 import { bagMessage, putStaffBag, setBagMessage, undoBag } from '../services/otoshidama.js';
 import { avgAtWin, findAtSevenMisses, payAtSevenRefund } from '../services/casino/atRefund.js';
 import { mountRecordings } from './recordings.js';
@@ -3667,6 +3668,7 @@ export function createWebApp(deps: WebDeps) {
     const raw = {
       ...(prev.fortuneGames ? { fortuneGames: prev.fortuneGames } : {}),
       ...(prev.recording ? { recording: prev.recording } : {}),
+      ...(prev.otoshidama ? { otoshidama: prev.otoshidama } : {}),
       economy: {
         currencyName: field(body, 'currencyName', 20),
         currencyEmoji: field(body, 'currencyEmoji', 10),
@@ -3945,6 +3947,35 @@ export function createWebApp(deps: WebDeps) {
   });
 
   // 🧧 運営のお年玉袋（社務所Web から。宮司だけ。銭は運営から、残りは運営に戻る）
+  app.post('/settings/otoshidama/places', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const body = await c.req.parseBody({ all: true });
+    const values = (key: string) => body[key] === undefined ? [] : [body[key]].flat();
+    const parsed = otoshidamaSchema.safeParse({
+      receiveMode: body.receiveMode,
+      voiceChannelIds: values('voiceChannelIds'),
+      categoryIds: values('categoryIds'),
+    });
+    const back = (msg: string) => `/settings?msg=${msg}&at=give#sec-give`;
+    if (!parsed.success || body.receiveMode === undefined) return c.redirect(back('otoshi_places_invalid'));
+    const places = parsed.data;
+    places.voiceChannelIds = [...new Set(places.voiceChannelIds)];
+    places.categoryIds = [...new Set(places.categoryIds)];
+    // IDの形だけでなく、このサーバーの通話/カテゴリーかを確かめる。
+    if (places.voiceChannelIds.length || places.categoryIds.length) {
+      const channels = await loadChannels(true);
+      if (places.voiceChannelIds.some((id) => !channels.some((ch) => ch.id === id && (ch.type === 2 || ch.type === 13))) ||
+          places.categoryIds.some((id) => !channels.some((ch) => ch.id === id && ch.type === 4))) {
+        return c.redirect(back('otoshi_places_invalid'));
+      }
+    }
+    const prev = await loadOverrides(db);
+    await saveOverrides(db, { ...prev, otoshidama: places }, c.get('session').userId);
+    await deps.onSettingsSaved?.();
+    await audit(db, { actorId: c.get('session').userId, action: 'otoshidama.places', detail: places, via: 'web' });
+    return c.redirect(back('otoshi_places_saved'));
+  });
+
   app.post('/settings/otoshidama', async (c) => {
     if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
     const body = await c.req.parseBody();

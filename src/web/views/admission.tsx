@@ -39,6 +39,8 @@ export const ADMISSION_FLASH: Record<string, { text: string; kind: 'ok' | 'warn'
   gift_queued: { text: '🎁 受け付けました。1 分以内に、いまオンラインの人へ配ります（下の「最近のプレゼント」で人数が見られます）。', kind: 'ok' },
   gift_revoked: { text: '↩ 回収しました。', kind: 'ok' },
   gift_revoked_short: { text: '↩ 回収しました。もう使っていた人からは、残っている分だけ回収しました。', kind: 'warn' },
+  otoshi_places_saved: { text: 'お年玉を受け取れる場所を保存しました。BOTには1分以内に反映されます。', kind: 'ok' },
+  otoshi_places_invalid: { text: '受取方法を選び、指定する場合はこのサーバーの通話かカテゴリーを1つ以上選んでください。保存はしていません。', kind: 'warn' },
   otoshi_put: { text: '🧧 運営のお年玉袋を出しました。', kind: 'ok' },
   otoshi_invalid: { text: 'チャンネル・入れる量（100〜100,000）・人数（2〜50。量より少なく）を入れて、確認にチェックを入れてください。', kind: 'warn' },
   otoshi_post_failed: { text: 'チャンネルに出せませんでした（BOT の権限を見てください）。銭は動いていません。', kind: 'warn' },
@@ -2000,11 +2002,41 @@ export function SettingsPage(props: {
           </button>
         </form>
       )}
+      <form method="post" action="/settings/otoshidama/places" class="give-form" id="sec-otoshidama-places">
+        <Csrf session={props.session} />
+        <h3>🧧 お年玉を受け取れる場所</h3>
+        <p class="note">通常の袋・運営の袋の両方に使います。受け取るボタンを押した時点の通話で確かめます。保存後は、すでに出ている袋にも適用します。</p>
+        <label class="field">
+          <span>受け取れる場所の決め方</span>
+          <select name="receiveMode">
+            <option value="auto" selected={cfg.otoshidama.receiveMode === 'auto'}>今までどおり（縁側を自動で選ぶ）</option>
+            <option value="selected" selected={cfg.otoshidama.receiveMode === 'selected'}>下で選んだ通話・カテゴリーだけ</option>
+          </select>
+        </label>
+        <p class="note">自動では、名前に「縁側」がある通話・カテゴリーが対象です。縁側がなければ、どの通話でも受け取れます。下のチェックは「下で選んだ通話・カテゴリーだけ」のときに使います。</p>
+        <details open={cfg.otoshidama.receiveMode === 'selected'}>
+          <summary>受け取れる通話・カテゴリーを選ぶ</summary>
+          <p class="note">通話かカテゴリーを1つ以上選んでください。カテゴリーを選ぶと、その中に今後増える通話も対象です。両方選んだ場合は、どちらかに当てはまれば受け取れます。</p>
+          <fieldset>
+            <legend>カテゴリーごと</legend>
+            {(props.categories ?? []).map((ch) => <label class="field check"><input type="checkbox" name="categoryIds" value={ch.id} checked={cfg.otoshidama.categoryIds.includes(ch.id)} /><span>{ch.name}</span></label>)}
+            {cfg.otoshidama.categoryIds.filter((id) => !(props.categories ?? []).some((ch) => ch.id === id)).map((id) => <label class="field check"><input type="checkbox" name="categoryIds" value={id} checked /><span>見つからないカテゴリー（{id}）。外して保存してください</span></label>)}
+          </fieldset>
+          <fieldset>
+            <legend>通話を1つずつ</legend>
+            {(props.voiceChannels ?? []).map((ch) => <label class="field check"><input type="checkbox" name="voiceChannelIds" value={ch.id} checked={cfg.otoshidama.voiceChannelIds.includes(ch.id)} /><span>{ch.name}{ch.category ? `（${ch.category}）` : ''}</span></label>)}
+            {cfg.otoshidama.voiceChannelIds.filter((id) => !(props.voiceChannels ?? []).some((ch) => ch.id === id)).map((id) => <label class="field check"><input type="checkbox" name="voiceChannelIds" value={id} checked /><span>見つからない通話（{id}）。外して保存してください</span></label>)}
+          </fieldset>
+        </details>
+        <p class="note">シクレの宿・通話にいない人・サブアカウントは対象にできません。入鯖承認済み・1人1回の条件も変わりません。この設定を保存しても銭の配布や袋の投稿は行いません。</p>
+        {props.at === 'give' && props.flash?.startsWith('otoshi_places_') && <Flash code={props.flash} />}
+        <button type="submit" class="ok">受け取れる場所を保存する</button>
+      </form>
       <form method="post" action="/settings/otoshidama" class="give-form">
         <Csrf session={props.session} />
         <h3>🧧 運営のお年玉袋</h3>
         <p class="note">
-          えらんだチャンネルに「⛩ 運営からのお年玉！」の袋を出します。先着の人が「🧧 もらう」を押すと、1 人分を受け取ります（量は運しだい・合わせると入れた量ちょうど）。銭は運営から出すので、あなたの財布は減りません。24 時間で締め切り、残りは運営に戻ります（だれの財布にも入りません）。受け取れるのは入鯖が承認され、受取時にこのサーバーの通話にいる人だけ・1 人 1 回です。
+          えらんだチャンネルに「⛩ 運営からのお年玉！」の袋を出します。先着の人が「🧧 もらう」を押すと、1 人分を受け取ります（量は運しだい・合わせると入れた量ちょうど）。銭は運営から出すので、あなたの財布は減りません。24 時間で締め切り、残りは運営に戻ります（だれの財布にも入りません）。受け取れるのは入鯖が承認され、受取時に上の設定で対象にした通話にいる人だけ・1 人 1 回です。シクレの宿は対象外です。
         </p>
         <div class="fields">
           <label class="field">
