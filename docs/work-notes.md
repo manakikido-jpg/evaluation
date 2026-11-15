@@ -6,7 +6,7 @@
 - 実装：auto/selectedの設定と独立した保存フォームを追加。通話/ステージ/カテゴリーをこのサーバーのIDと種別で検査。カテゴリー配下の新しい通話を含め、受取時の現在の通話と親IDで判定。独立保存と他設定からの保存保持、宮司/CSRF/監査を実装。DB追加なし。現時点は未push。
 - 関連検証：2ファイル195件成功、型/build成功。ブラウザーで新フォームが非表示になる既存タブCSSとの干渉を発見（新しい内側formへanchorを付けたため）。内側anchorを削除し戻り先を既存sec-giveへ統一して修正。実際のDiscordや本番は未操作。
 - ブラウザー最終：390/1440pxで設定保存→再読込/選択保持、ステージ選択可・テキスト不可、空選択の拒否/DB設定保持、投稿0回、横はみ出しなし、JS例外0を確認（架空チャンネルとメモリDBのみ）。検証スクリプトのchecked要素の添字変動と、既存のその場保存が不正入力を残す仕様について誤った期待を直し、製品側の問題とは区別した。画像/workspace/artifacts/otoshidama-places-{390,1440}.webp、ログ/tmp/otoshidama-places-browser-success.log。最終型/build成功。4dd498b4の全280ファイル3,009件成功（689.48秒、4worker）。ログ/tmp/otoshidama-places-{final-types,final-build,all}.log。以後は記録のみ。push前fetchの本番はdc32c60cのまま。
-- 保存先：codex/otoshidama-receive-places、実装4dd498b4。検証記録を同じ枝へ保存し、本番向け下書きPRを作成する。次はCI/レビュー確認。本番合流/実Discord/実配布は行わない。
+- 保存済み：[下書きPR #176](https://github.com/manakikido-jpg/evaluation/pull/176)、codex/otoshidama-receive-places、実装4dd498b4・検証記録4a95a4cc。OPEN/Draft/未合流。4a95a4ccのCI2本は実行中で、成功とは扱わない。この保存先の追記も同じ枝へ保存する（実装/試験コードは4dd498b4のまま）。次は最新headのCI/レビュー確認。本番合流/実Discord/実配布は未実行。
 
 ## 2026年11月15日：メンバー限定の交流ゲームの設計（Claude・設計書のみ）
 - 依頼：アバターで集まる交流空間＋RPG要素のゲームを、まず設計する。決定は docs/user-decisions.md の同日分。
