@@ -8,6 +8,7 @@
 - 現在：型/build成功後、全テスト実行中（/tmp/minutes-docs-all.log）。その後は資料/記録の最終更新→fetch→commit/push→本番向け下書きPR。音声/AIに必要な連携設定の説明をdocs/deploy-vps.md、再現と見本をdocs/previews/minutes-documents.mdへ保存。
 - 最終検証：型/build成功、全281ファイル・3,025件成功（708.03秒、4worker）。最終JSのブラウザーも全機能/4幅/権限/出力を成功。追加の文字起こし・要約は代替実装で確認し、実API利用は未実施。Wordの本文とPDF2ページを実ファイルで確認。確認用サーバー停止。直前fetchの本番984d0544から変更なし。
 - 保存先：codex/minutes-document-builderへ実装/0163/テスト/見本/手順をcommit・pushし、本番向け下書きPRを作る。次は新headのCI/レビューと本人の連携設定。本番未反映。APIの実値は取り扱わず、実音声認識の精度・本番通信経路・実端末は未確認。
+- PR保存完了：#175 https://github.com/manakikido-jpg/evaluation/pull/175 （OPEN/Draft/未合流）、ブランチcodex/minutes-document-builder、検証済み実装e964ef6cをpush済み。e964ef6cのCI2本は実行中で、成功とは扱わない。以後はPR番号等の記録だけを追記し、実装/試験/依存関係は変更しない。次は新headのCI/レビュー、反映指示と運営のAPI設定。
 
 ## 2026年11月10日：コアタイム中の宿代を通常の3倍にする（検証完了・PRへ保存）
 - 最終検証：型チェック/build成功、全275ファイル2,977件成功（576.01秒、4worker）。直前fetchの本番b457825dのまま。codex/coretime-room-price-tripleへ保存し、本番向けPRを作成する。本番合流/実残高変更/手動Discord投稿は未実行。次はPRのCI確認と合流指示待ち。
