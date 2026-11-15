@@ -147,10 +147,10 @@ export async function setBagMessage(db: Db, id: number, messageId: string): Prom
 
 export type ClaimResult =
   | { status: 'ok'; amount: number; order: number; left: number; bag: OtoshidamaBag }
-  | { status: 'gone' | 'ended' | 'own' | 'already' | 'not_member' | 'not_in_voice' | 'secret_room' | 'not_engawa' };
+  | { status: 'gone' | 'ended' | 'own' | 'already' | 'not_member' | 'not_in_voice' | 'secret_room' | 'not_engawa' | 'not_in_place' };
 
 /** ボタンを押した: 次の 1 人分を受け取る */
-export async function claimBag(db: Db, cfg: GuildConfig, bagId: number, member: { id: string; roleIds: readonly string[]; bot?: boolean; voiceChannelId: string | null; /** 縁側の通話にいるか（undefined は確かめない） */ inEngawa?: boolean }, now = new Date()): Promise<ClaimResult> {
+export async function claimBag(db: Db, cfg: GuildConfig, bagId: number, member: { id: string; roleIds: readonly string[]; bot?: boolean; voiceChannelId: string | null; voiceCategoryId?: string | null; /** 縁側の通話にいるか（undefined は確かめない） */ inEngawa?: boolean }, now = new Date()): Promise<ClaimResult> {
   if (member.bot || !cfg.ranks.some((r) => member.roleIds.includes(r.roleId))) return { status: 'not_member' };
   // 🔗 サブアカウントは受け取れない（銭が入らないので、ほかの人の分が減るだけになる）
   if (await isRestrictedAccount(db, member.id)) return { status: 'not_member' };
@@ -158,8 +158,14 @@ export async function claimBag(db: Db, cfg: GuildConfig, bagId: number, member: 
   // 🤫 シクレの宿（ほかの人から見えない部屋）にいる間は受け取れない
   const [room] = await db.select({ kind: tempVoice.kind }).from(tempVoice).where(eq(tempVoice.channelId, member.voiceChannelId));
   if (room?.kind === 'secret') return { status: 'secret_room' };
-  // 🏮 縁側の通話にいる人だけ
-  if (member.inEngawa === false) return { status: 'not_engawa' };
+  if (cfg.otoshidama.receiveMode === 'selected') {
+    // 設定したカテゴリー配下は新しく増えた通話も対象。取得できない場所は許可しない。
+    const places = cfg.otoshidama;
+    if (!places.voiceChannelIds.includes(member.voiceChannelId) &&
+        !(member.voiceCategoryId && places.categoryIds.includes(member.voiceCategoryId))) return { status: 'not_in_place' };
+  } else if (member.inEngawa === false) {
+    return { status: 'not_engawa' };
+  }
   return db.transaction(async (tx) => {
     await lock(tx, `otoshidama:${bagId}`);
     const [bag] = await tx.select().from(otoshidamaBags).where(eq(otoshidamaBags.id, bagId));
@@ -237,7 +243,7 @@ export function bagMessage(bag: OtoshidamaBag, claims: OtoshidamaClaim[], coin: 
         : `🧧 残り **${left}** 袋`,
     ...(claims.length ? ['', '**受け取った人**', ...claims.slice(0, 20).map((c, i) => `${i + 1}. <@${c.memberId}> … ${c.amount.toLocaleString('ja-JP')} 枚`)] : []),
     ...(claims.length > 20 ? [`-# ほか ${claims.length - 20} 人`] : []),
-    ...(!full && !expired ? [`-# 1 人 1 回・入鯖が承認され、今このサーバーの通話にいる人だけ。<t:${Math.floor(bag.expiresAt.getTime() / 1000)}:R> に締め切り（残りは${bag.fromStaff ? '運営' : '置いた人'}に戻ります）`] : []),
+    ...(!full && !expired ? [`-# 1 人 1 回・入鯖が承認され、今、受け取り対象の通話にいる人だけ（シクレの宿は対象外）。<t:${Math.floor(bag.expiresAt.getTime() / 1000)}:R> に締め切り（残りは${bag.fromStaff ? '運営' : '置いた人'}に戻ります）`] : []),
   ];
   const open = !full && !expired;
   return {
@@ -256,6 +262,7 @@ export function bagMessage(bag: OtoshidamaBag, claims: OtoshidamaClaim[], coin: 
 export const CLAIM_MESSAGES: Record<Exclude<ClaimResult['status'], 'ok'>, string> = {
   not_in_voice: 'お年玉を受け取れるのは、今このサーバーの通話にいる人だけです。通話に入ってから、もう一度押してください。',
   secret_room: 'シクレの宿にいる間は、お年玉を受け取れません。ほかの通話に移ってから、もう一度押してください。',
+  not_in_place: '今いる通話は、お年玉の受け取り対象ではありません。運営が指定した通話へ移ってから、もう一度押してください。',
   not_engawa: 'お年玉を受け取れるのは、縁側の通話にいる人だけです。縁側に入ってから、もう一度押してください。',
   gone: 'このお年玉袋は見つかりませんでした。',
   ended: 'このお年玉袋は、もう空か締め切りです。',
