@@ -9,8 +9,10 @@ class LifeScene {
     this.T=T; this.data=data; this.table=data.table; this.root=root; this.cars=new Map(); this.disposed=false;
     this.reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.renderer=new T.WebGLRenderer({antialias:true,powerPreference:'low-power'});
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.5));
-    this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=T.PCFSoftShadowMap;
+    // 🔋 軽い表示（スマホは自動）では、細かさを下げて影を描かない
+    const lite=typeof window.casinoLite==='function'&&window.casinoLite();
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio||1,lite?1:1.5));
+    this.renderer.shadowMap.enabled=!lite;this.renderer.shadowMap.type=T.PCFSoftShadowMap;
     this.renderer.outputColorSpace=T.SRGBColorSpace;this.renderer.toneMapping=T.ACESFilmicToneMapping;this.renderer.toneMappingExposure=.9;
     this.world=new T.Scene();this.world.background=new T.Color(0xb9dded);this.goal=data.tiles.length-1;this.route=createLifeRoute(T,data.tiles.length,data.tiles.flatMap((tile,n)=>tile.kind==='fork'?[n]:[]));
     this.camera=new T.PerspectiveCamera(40,1,.1,100);this.yaw=.72;this.elevation=.95;this.distance=innerWidth<600?65:54;

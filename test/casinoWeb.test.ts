@@ -185,6 +185,17 @@ describe('🎰 カジノ: 入口とログイン', () => {
     expect((await app.request('/casino/link/short')).status).toBe(200);
   });
 
+  it('🔋 表示の軽さ: ボタンがあり、Cookie で軽い／きれいを <html> に付ける（なければ自動）', async () => {
+    const { cookie } = await casinoLogin(A);
+    const auto = await (await get('/casino/hall', cookie!)).text();
+    expect(auto).toContain('data-display-toggle');
+    expect(auto).not.toMatch(/<html[^>]*class=/);
+    const page = async (v: string) => (await app.request('/casino/hall', { headers: { cookie: `sakura_casino=${cookie}; casino_display=${v}` } })).text();
+    expect(await page('lite')).toMatch(/<html lang="ja" class="c-lite"/);
+    expect(await page('rich')).toMatch(/<html lang="ja" class="c-rich"/);
+    expect(await page('zzz')).not.toMatch(/<html[^>]*class=/);
+  });
+
   it('位が外れたら、次に確かめたときにログアウト', async () => {
     const { cookie } = await casinoLogin(A);
     roles.set(A, []);
