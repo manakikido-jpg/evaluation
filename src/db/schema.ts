@@ -2746,3 +2746,24 @@ export const kisekiTickets = pgTable('kiseki_tickets', {
 },t=>[uniqueIndex('kiseki_ticket_request').on(t.memberId,t.requestId),index('kiseki_ticket_member').on(t.memberId),
  check('kiseki_ticket_price_time',sql`${t.price}=1500 and ${t.seconds}=3600`),
  check('kiseki_ticket_period',sql`(${t.startedAt} is null and ${t.endsAt} is null) or (${t.startedAt} is not null and ${t.endsAt} is not null and ${t.endsAt}=${t.startedAt}+interval '1 hour')`)]);
+
+
+/** 直接送金の確認と確定結果。確認IDごとに一度だけ確定する。 */
+export const directTransfers = pgTable('direct_transfers', {
+  id: text('id').primaryKey(),
+  fromId: text('from_id').notNull(),
+  toId: text('to_id').notNull(),
+  amount: integer('amount').notNull(),
+  fee: integer('fee').notNull(),
+  total: integer('total').notNull(),
+  note: text('note').notNull().default(''),
+  status: text('status').$type<'pending' | 'sent' | 'cancelled'>().notNull().default('pending'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  sentAt: timestamp('sent_at', { withTimezone: true }),
+}, t => [index('direct_transfers_from_idx').on(t.fromId, t.createdAt),
+  check('direct_transfers_amount', sql`${t.amount} > 0 AND ${t.amount} <= 1000000000`),
+  check('direct_transfers_fee', sql`(${t.fee} = 0 OR ${t.fee} = (${t.amount} + 1) / 2) AND ${t.total} = ${t.amount} + ${t.fee}`),
+  check('direct_transfers_status', sql`${t.status} IN ('pending', 'sent', 'cancelled')`),
+]);
+export type DirectTransfer = typeof directTransfers.$inferSelect;

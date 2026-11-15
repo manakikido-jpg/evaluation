@@ -178,7 +178,7 @@ export class ShopApp {
     const balance = await this.balance(i.user.id);
     const e = this.cfg().economy;
     if (kobanValue(item.kind) !== undefined) return void (await i.update(kobanBuyConfirm(item, balance, kobanStaff(this.cfg(), roleIdsOf(i.member))) as never));
-    if (item.kind === 'gift') return void (await i.update(done('銭の贈り物は小判になりました。SHOPの小判か /持ち物 から贈ってください。')));
+    if (item.kind === 'gift') return void (await i.update(done('銭は /送金 で相手と金額を指定して直接送れます（手数料50％。運営は免除）。持っている小判も /持ち物 から贈れます。')));
     if (item.kind === 'hanafubuki') return void (await i.update(shopPickTarget(item, e, balance, isBooster(i))));
     if (item.kind === 'mycolor') return this.myColorPick(i, item.id);
     if (item.kind === 'otoshidama') {
@@ -223,7 +223,7 @@ export class ShopApp {
   /** 花吹雪: 相手を選んだら一言の入力欄を出す。旧自由額送金は案内だけ。 */
   private async target(i: UserSelectMenuInteraction<'cached'>, itemId: number): Promise<void> {
     const item = await getItem(this.db, itemId);
-    if (item?.kind === 'gift') return void (await i.reply({ ...done('銭の贈り物は小判になりました。/持ち物 の小判から贈ってください。'), ...EPHEMERAL }));
+    if (item?.kind === 'gift') return void (await i.reply({ ...done('銭は /送金 で相手と金額を指定してください（手数料50％。運営は免除）。持っている小判も使えます。'), ...EPHEMERAL }));
     const targetId = i.values[0];
     if (!item?.enabled || !targetId) return void (await i.update(done('この授与品は、今は受けられません。')));
     const target = i.members.get(targetId);
@@ -240,7 +240,7 @@ export class ShopApp {
   }
 
   private async submitWithTarget(i: ModalSubmitInteraction<'cached'>, kind: 'hana' | 'gift', itemId: number, targetId: string): Promise<void> {
-    if (kind === 'gift') return void (await i.reply({ ...done('銭の贈り物は小判になりました。/持ち物 の小判から贈ってください。'), ...EPHEMERAL }));
+    if (kind === 'gift') return void (await i.reply({ ...done('銭は /送金 で相手と金額を指定してください（手数料50％。運営は免除）。持っている小判も使えます。'), ...EPHEMERAL }));
     if (i.isFromMessage()) await i.deferUpdate();
     else await i.deferReply(EPHEMERAL);
     const item = await getItem(this.db, itemId);

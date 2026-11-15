@@ -126,9 +126,12 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
     new SlashCommandBuilder()
       .setName('sokin')
       .setNameLocalizations({ ja: '送金' })
-      .setDescription('Buy or send koban')
-      .setDescriptionLocalizations({ ja: '小判を買う・贈る窓口を開く（贈ると相手に銭が入る）' })
+      .setDescription('Send coins after confirming a 50% fee')
+      .setDescriptionLocalizations({ ja: '銭を直接送る（手数料50％を上乗せ。運営は免除。確認後に送る）' })
       .setContexts(InteractionContextType.Guild)
+      .addUserOption(o => o.setName('user').setNameLocalizations({ ja: '相手' }).setDescription('Recipient').setDescriptionLocalizations({ ja: '送る相手' }).setRequired(true))
+      .addIntegerOption(o => o.setName('amount').setNameLocalizations({ ja: '金額' }).setDescription('Amount received, excluding fee').setDescriptionLocalizations({ ja: '相手が受け取る銭（手数料は別に50％かかります）' }).setMinValue(1).setMaxValue(1000000000).setRequired(true))
+      .addStringOption(o => o.setName('note').setNameLocalizations({ ja: 'ひとこと' }).setDescription('Optional message').setDescriptionLocalizations({ ja: '相手へのひとこと（省略可）' }).setMaxLength(200))
       .toJSON(),
 
     new SlashCommandBuilder()
