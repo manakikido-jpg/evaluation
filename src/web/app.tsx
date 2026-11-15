@@ -177,7 +177,7 @@ import {
 import type { Db } from '../db/client.js';
 import type { AdminSession } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
-import { audit, listAudit } from '../services/audit.js';
+import { audit, hideGujiAudit, listAudit } from '../services/audit.js';
 import { eventsOf, findMemberByNameOrId, getMember, memberDiff, recentLeaves, homeStats, isMemberSort, listMembers, membersWithRole, namesOf, roleMemberCounts, searchMembersWithoutRole, setMemberRole, shuinHistory, type MemberListQuery } from '../services/members.js';
 import { goenOf, goshuinchoOf } from '../services/shuin.js';
 import { jstDate, recentActivity } from '../services/activity.js';
@@ -912,7 +912,7 @@ export function createWebApp(deps: WebDeps) {
     const canSee = (page: string) => !session.pages || session.pages.includes(page as never);
     const [base, recent, yakuRows, pending, review, soudanOpen, trend, unknownInvites, permissionCount, inviteRows, undecidedGuide] = await Promise.all([
       homeStats(db, startOfTodayJst(t)),
-      listAudit(db, { limit: 10 }),
+      hideGujiAudit(db, cfg, await listAudit(db, { limit: 40 }), session.userId).then((r) => r.slice(0, 10)),
       membersWithYaku(db),
       pendingApplications(db),
       omairiList(db, ['review']),
@@ -1031,7 +1031,7 @@ export function createWebApp(deps: WebDeps) {
     const gRoleNames = gDraws.some((d) => d.roleId) ? await roleNameMap() : new Map<string, string>();
     const vcByCategory = (await usageByMember(db, since30)).find((m) => m.memberId === id);
     const engawa = await memberEngawaMinutes(db, id, since30, now());
-    const [card, history, events, audits, yakuRows, activeYaku, used, wallet, coinTx, activity, memoRows, denied] = await Promise.all([
+    const [card, history, events, audits0, yakuRows, activeYaku, used, wallet, coinTx, activity, memoRows, denied] = await Promise.all([
       goshuinchoOf(db, id),
       shuinHistory(db, id),
       eventsOf(db, id),
@@ -1045,6 +1045,7 @@ export function createWebApp(deps: WebDeps) {
       memosOf(db, id),
       checkTarget(mod(), actorOf(session), id),
     ]);
+    const audits = await hideGujiAudit(db, cfg, audits0, session.userId);
     const goenRows = await specialGoenHistory(db, id);
     const names = await namesOf(db, [
       ...goenRows.flatMap((r) => [r.grantedBy, r.revokedBy ?? '']),
@@ -7422,7 +7423,7 @@ export function createWebApp(deps: WebDeps) {
   });
 
   app.get('/audit', async (c) => {
-    const rows = await listAudit(db, { limit: 200 });
+    const rows = await hideGujiAudit(db, cfg, await listAudit(db, { limit: 200 }), c.get('session').userId);
     const names = await namesOf(db, rows.flatMap((a) => [a.actorId, a.targetId ?? '']).filter(Boolean));
     return c.html(<AuditPage session={c.get('session')} rows={rows} names={names} now={now()} />);
   });
