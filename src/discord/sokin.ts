@@ -1,10 +1,14 @@
 import { MessageFlags, type Interaction } from 'discord.js';
 import type { EconomyConfig, GuildConfig } from '../config.js';
+import type { DirectTransfer } from '../db/schema.js';
+import type { DiscordActions } from '../lib/discordRest.js';
+import { prepareTransfer, confirmTransfer, cancelTransfer, ownedTransfer, TransferError } from '../services/directTransfers.js';
 import type { Db } from '../db/client.js';
 import { logger } from '../lib/logger.js';
 import { giftCost, giftFee, type GiftResult } from '../services/shop.js';
 
-/** 送れる量（staff: 運営は手数料・1 回の最高・1 日の上限なし） */
+/** 旧20％パネルの互換表示用。新規送金では使わない。
+ * 送れる量（staff: 運営は手数料・1 回の最高・1 日の上限なし） */
 export type SokinInfo = { balance: number; left: number; staff?: boolean };
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
@@ -105,18 +109,67 @@ export function sokinDm(e: EconomyConfig, fromName: string, amount: number, note
   return [`💸 **${fromName}** さんから ${e.currencyEmoji}${e.currencyName} **${fmt(amount)} 枚**が届きました（咲楽ノ宮）。`, ...(note ? [`> ${note.replace(/\n/g, ' ')}`] : []), '-# 残りは `/残高` で見られます'].join('\n');
 }
 
-/** 旧 /送金 の互換入口。新しい送金は小判へ案内する。上の旧表示ヘルパーは履歴確認用。 */
-export class SokinApp {
-  constructor(_db: Db, private readonly cfg: () => GuildConfig) {}
+/** 直接送金の確認。手数料は相手に入る額とは別に上乗せする。 */
+export function directTransferConfirm(e: EconomyConfig, t: DirectTransfer) {
+  return { content: '', embeds: [{ title: '💸 送金の確認', color: COLOR,
+    description: [`相手：<@${t.toId}>`, `相手の受取額：**${fmt(t.amount)} ${e.currencyName}**`, t.fee === 0 ? '手数料：**なし**（運営のため免除）' : `手数料（50％）：**${fmt(t.fee)} ${e.currencyName}**`, `あなたの支払総額：**${fmt(t.total)} ${e.currencyName}**`,
+      ...(t.note ? [`ひとこと：${t.note}`] : []), '', '手数料は運営回収です。相手には受取額だけが入ります。', '確認は10分間有効です。送った後は取り消せません。'].join('\n') }],
+    components: [row(btn(`sokin:confirm:${t.id}`, `合計${fmt(t.total)}銭を払って送る`, 3), btn(`sokin:cancel:${t.id}`, 'やめる'))], allowedMentions: { parse: [] as string[] } };
+}
 
-  /** /送金 と旧パネルは、小判への案内だけにする。古い確定ボタンでも銭は動かさない。 */
+/** /送金の確認・確定。古い20％のボタンからは送金しない。 */
+export class SokinApp {
+  constructor(private readonly db: Db, private readonly cfg: () => GuildConfig, private readonly discord?: Pick<DiscordActions, 'sendDm'>) {}
   async onInteraction(i: Interaction): Promise<void> {
     if (!i.inCachedGuild() || i.guildId !== this.cfg().guildId) return;
     const command = i.isChatInputCommand() && i.commandName === 'sokin';
-    const oldPanel = 'customId' in i && i.customId.startsWith('sokin:');
-    if ((!command && !oldPanel) || !i.isRepliable()) return;
-    await i.reply({ content: '銭を人に贈る方法は小判になりました。SHOPで買った小判を贈ると、相手に額面分の銭が入ります。券や品物のプレゼントはこれまでどおり使えます。',
-      components: [row(btn('koban:shop', '🪙 小判を買う', 1), btn('koban:inventory', '🪙 持っている小判を贈る'))] as never,
-      ...EPHEMERAL }).catch(err => logger.warn({ err }, 'koban redirect failed'));
+    const panel = 'customId' in i && i.customId.startsWith('sokin:');
+    if ((!command && !panel) || !i.isRepliable()) return;
+    let committed: { transfer: DirectTransfer; balance: number } | undefined;
+    try {
+      if (command && i.isChatInputCommand()) {
+        await i.deferReply(EPHEMERAL);
+        const user = i.options.getUser('user');
+        const amount = i.options.getInteger('amount');
+        if (!user || amount === null) return void await i.editReply('相手と金額を指定して、/送金を開き直してください。');
+        const [sender, target] = await Promise.all([i.guild.members.fetch({ user: i.user.id, force: true }), i.guild.members.fetch({ user: user.id, force: true })]);
+        const t = await prepareTransfer(this.db, this.cfg(), { id: i.id,
+          from: { id: sender.id, roleIds: [...sender.roles.cache.keys()], bot: sender.user.bot },
+          to: { id: target.id, roleIds: [...target.roles.cache.keys()], bot: target.user.bot }, amount, note: i.options.getString('note') ?? '' });
+        if (t.status !== 'pending') return void await i.editReply({ content: 'この送金の確認はすでに終了しています。新しく送る場合は/送金を使ってください。', components: [] });
+        return void await i.editReply(directTransferConfirm(this.cfg().economy, t) as never);
+      }
+      if (!i.isButton()) return void await i.reply({ content: '送金の方法が変わりました。相手と金額を指定して、/送金を開き直してください。', ...EPHEMERAL });
+      const [, action, id] = i.customId.split(':');
+      if (!id || !['confirm', 'cancel'].includes(action ?? '')) return void await i.reply({ content: '送金の方法が変わりました。/送金で相手と金額を指定してください（手数料50％）。', ...EPHEMERAL });
+      const t = await ownedTransfer(this.db, id, i.user.id);
+      if (!t) return void await i.reply({ content: 'この確認を操作できるのは、送る本人だけです。', ...EPHEMERAL });
+      await i.deferUpdate();
+      if (action === 'cancel') {
+        await cancelTransfer(this.db, id, i.user.id);
+        return void await i.editReply({ content: '送金をやめました。銭は引いていません。', embeds: [], components: [] });
+      }
+      const sender = await i.guild.members.fetch({ user: i.user.id, force: true });
+      const target = t.status === 'sent' ? undefined : await i.guild.members.fetch({ user: t.toId, force: true });
+      const r = await confirmTransfer(this.db, this.cfg(), id,
+        { id: sender.id, roleIds: [...sender.roles.cache.keys()], bot: sender.user.bot },
+        { id: t.toId, roleIds: target ? [...target.roles.cache.keys()] : [], bot: target?.user.bot });
+      committed = r;
+      let notice = '';
+      if (!r.repeated && this.discord) {
+        try { if (!await this.discord.sendDm(t.toId, sokinDm(this.cfg().economy, sender.displayName, t.amount, t.note))) notice = '\n相手へのDMは届きませんでした。送金は完了しています。'; }
+        catch { notice = '\n相手へのDMは届きませんでした。送金は完了しています。'; }
+      }
+      await i.editReply({ content: `${r.repeated ? 'この確認の送金はすでに完了しています。追加の支払いはありません。\n' : ''}<@${t.toId}> さんへ${fmt(t.amount)}銭を送りました。手数料${fmt(t.fee)}銭、支払総額${fmt(t.total)}銭。現在の残高${fmt(r.balance)}銭。${notice}`, embeds: [], components: [], allowedMentions: { parse: [] } });
+    } catch (err) {
+      if (!(err instanceof TransferError)) logger.warn({ err }, 'direct transfer failed');
+      const content = committed
+        ? `送金は確定しています。<@${committed.transfer.toId}> さんの受取額${fmt(committed.transfer.amount)}銭・手数料${fmt(committed.transfer.fee)}銭・支払総額${fmt(committed.transfer.total)}銭です。追加の支払いはありません。`
+        : err instanceof TransferError ? err.message
+        : command ? '確認画面を作れませんでした。相手と金額を確認して、/送金をやり直してください。この段階では銭を引いていません。'
+        : '送金の結果を確認できませんでした。同じ確認からもう一度お試しください。二重の支払いは防いでいます。';
+      if (i.deferred || i.replied) await i.editReply({ content, allowedMentions: { parse: [] } }).catch(() => undefined);
+      else await i.reply({ content, ...EPHEMERAL }).catch(() => undefined);
+    }
   }
 }

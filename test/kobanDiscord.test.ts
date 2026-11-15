@@ -65,13 +65,14 @@ it('専用の小判売り場から全4種類を選べ、持ち物が空でも購
  expect((await walletOf(db,A)).balance).toBe(10000);
 });
 
-it('旧送金コマンド・確定ボタン・モーダルは小判への案内だけで、銭を動かさない',async()=>{
+it('相手/金額のない旧コマンド・古い確定ボタン・モーダルは新しい送金への案内だけで、銭を動かさない',async()=>{
  const { SokinApp }=await import('../src/discord/sokin.js');const old=new SokinApp(db,()=>cfg);
- const command=interaction('');Object.assign(command.i,{isChatInputCommand:()=>true,commandName:'sokin'});
- await old.onInteraction(command.i as never);expect(JSON.stringify(command.views)).toContain('koban:shop');
- for(const kind of ['button','modal','user']){const req=interaction('sokin:send:old',kind,B);await old.onInteraction(req.i as never);expect(JSON.stringify(req.views)).toContain('小判');}
+ const command=interaction('');Object.assign(command.i,{isChatInputCommand:()=>true,commandName:'sokin',options:{getUser:()=>null,getInteger:()=>null,getString:()=>null},async deferReply(){command.i.deferred=true;}});
+ await old.onInteraction(command.i as never);expect(JSON.stringify(command.views)).toContain('相手と金額を指定');
+ expect(JSON.stringify(command.views)).not.toContain('koban:shop');
+ for(const kind of ['button','modal','user']){const req=interaction('sokin:send:old',kind,B);await old.onInteraction(req.i as never);expect(JSON.stringify(req.views)).toContain('/送金');}
  expect((await walletOf(db,A)).balance).toBe(10000);expect((await walletOf(db,B)).balance).toBe(0);
- const { commandList }=await import('../src/services/commandList.js');expect(commandList().find(c=>c.name==='送金')?.options).toEqual([]);
+ const { commandList }=await import('../src/services/commandList.js');expect(commandList().find(c=>c.name==='送金')?.options.map(o=>[o.name,o.required])).toEqual([['相手',true],['金額',true],['ひとこと',false]]);
 });
 it('旧SHOPの銭の贈り物は表示せず、古い選択や入力画面も支払いを拒否する。券や品物の機能は残す',async()=>{
  const gift=(await listItems(db)).find(i=>i.kind==='gift')!;
