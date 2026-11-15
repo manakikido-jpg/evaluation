@@ -929,7 +929,9 @@ const initSlots = (root) => {
     return { role: line < 0 ? 'none' : found[line], line, roles: [...new Set(found.filter((r) => r !== 'none'))] };
   };
   const rowsOf = (reel, st, k) => [0, 1, 2].filter((row) => keyAt(reel, st - 1 + row) === k);
-  const paint = (r) => r.strip.style.setProperty('--at', r.pos.toFixed(3));
+  // 🔋 帯の位置は transform を直に書く（--at を変えると、帯の中の絵ぜんぶの計算がやり直しになる）。帯は N-6 コマ目から置いてある
+  const STRIP_OFF = N - 6;
+  const paint = (r) => { r.strip.style.transform = `translateY(calc(${(1 + STRIP_OFF - r.pos).toFixed(3)} * var(--h)))`; };
   const stopBtns = [...jug.querySelectorAll('[data-stop]')];
   const lever = jug.querySelector('[data-lever]');
   const spinLever = jug.querySelector('[data-lever-spin]');
@@ -2623,7 +2625,9 @@ const initAtSlot = (root) => {
   /** フリーズ中（リールが回らない）・溜め中（最後のリールを少し止められない） */
   let frozen = false;
   let held = false;
-  const paint = (r) => r.strip.style.setProperty('--at', r.pos.toFixed(3));
+  // 🔋 帯の位置は transform を直に書く（--at を変えると、帯の中の絵ぜんぶの計算がやり直しになる）。帯は N-6 コマ目から置いてある
+  const STRIP_OFF = N - 6;
+  const paint = (r) => { r.strip.style.transform = `translateY(calc(${(1 + STRIP_OFF - r.pos).toFixed(3)} * var(--h)))`; };
   const frame = (t) => {
     if (!alive) return;
     const dt = last ? Math.min(0.05, (t - last) / 1000) : 0;

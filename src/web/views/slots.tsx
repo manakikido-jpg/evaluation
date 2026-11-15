@@ -285,7 +285,8 @@ export function SlotsPage(p: GamePage & { machine: number; data: FloorData; seat
                 // 回し始めは決まった目と違う所から（最初の一瞬に結果が見えないように）
                 <div class={`c-jreel r${i}${mode !== 'spin' && winLine >= 0 ? ` hit-${PAYLINES[winLine]!.rows[i]}` : ''}`} data-reel={String(i)} data-strip={strip.join(',')} data-at={String(mode === 'spin' ? (stops[i]! + 7 + i * 5) % REEL_LEN : stops[i])}>
                   <div class={`c-jstrip at-${mode === 'spin' ? (stops[i]! + 7 + i * 5) % REEL_LEN : stops[i]}`} aria-hidden="true">
-                    {[...strip, ...strip, ...strip].map((k) => (
+                    {/* 🔋 帯は 3 周分のうち、回っているあいだに見えうる所だけ（N-6〜2N+2）。casino.js の STRIP_OFF と合わせる */}
+                    {[...strip, ...strip, ...strip].slice(REEL_LEN - 6, REEL_LEN * 2 + 3).map((k) => (
                       <Sym k={k} />
                     ))}
                   </div>

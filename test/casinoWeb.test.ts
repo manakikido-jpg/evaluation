@@ -223,6 +223,9 @@ describe('🎰 カジノ: 遊ぶ', () => {
     const html = await (await get(loc, cookie!)).text();
     expect(html).toContain('c-jug');
     expect(html).toContain('data-stops=');
+    // 🔋 リールの帯は、見えうる所だけ（21 コマ × 3 周のうち 15〜44 コマ目の 30 コマ。CSS の --off: 15 と合わせる）
+    const strip = /<div class="c-jstrip[^"]*"[^>]*>([\s\S]*?)<\/div>/.exec(html)![1]!;
+    expect(strip.match(/class="sy /g)).toHaveLength(30);
     if (html.includes('data-aim')) {
       // ボーナスを引いた（持ち越し中）
       expect(await balance(A)).toBe(4900);

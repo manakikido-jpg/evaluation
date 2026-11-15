@@ -431,7 +431,8 @@ export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView;
                 return (
                   <div class={`c-jreel r${i}${mode === 'still' && winLine >= 0 ? ` hit-${AT_PAYLINES[winLine]!.rows[i]}` : ''}`} data-reel={String(i)} data-at={String(at)}>
                     <div class={`c-jstrip at-${at}`} aria-hidden="true">
-                      {[...strip, ...strip, ...strip].map((k) => (
+                      {/* 🔋 帯は見えうる所だけ（N-6〜2N+2）。casino.js の STRIP_OFF と合わせる */}
+                      {[...strip, ...strip, ...strip].slice(AT_REEL_LEN - 6, AT_REEL_LEN * 2 + 3).map((k) => (
                         <Sym k={k} art={p.art} />
                       ))}
                     </div>
