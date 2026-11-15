@@ -40,7 +40,7 @@ it('キャスト本人・第三者・別部屋・片方不在の購入を拒否�
  await expect(prepareChampagne(db,session.id,'bad',party,here,clock)).rejects.toThrow('ボトル');
  const q=await quote();
  await expect(buyChampagne(db,q.id,{...party,customerId:OTHER},here,clock)).rejects.toThrow('確認');
- await expect(buyChampagne(db,q.id,party,()=>false,clock)).rejects.toThrow('両方');expect((await walletOf(db,CUSTOMER)).balance).toBe(50000);
+ await expect(buyChampagne(db,q.id,party,()=>false,clock)).rejects.toThrow('2 人とも');expect((await walletOf(db,CUSTOMER)).balance).toBe(50000);
 });
 it('予約のスレッドや DM のボタンから押しても、指名したお客なら贈れる（乾杯は通話の部屋に出す）',async()=>{
  const elsewhere={...party,channelId:'reservation-thread'};
@@ -135,7 +135,12 @@ it('通話の5つ目の操作から選択・確認・乾杯し、同時確定で
  expect(dm).toHaveBeenCalledTimes(2);expect(fetchUser).toHaveBeenCalledWith(CAST);
  const body=dm.mock.calls[0]![0] as {embeds:{title:string;description:string;image?:{url:string}}[];files?:unknown[];allowedMentions:unknown};
  expect(body.embeds[0]!.title).toContain('シャンパンが届きました');expect(body.embeds[0]!.description).toContain('350 枚を受け取りました');expect(body.embeds[0]!.image?.url).toBe('attachment://champagne.gif');expect(body.files).toHaveLength(1);expect(body.allowedMentions).toEqual({parse:[]});
- states.delete(CAST);const absent=interaction(`cast:champagne:${session.id}`);await app.onInteraction(absent as unknown as Interaction);expect(JSON.stringify(absent.editReply.mock.calls)).toContain('両方');
+ // 🍾 BOT の部屋でなくても、2 人が同じ通話（宿や縁側など）にいれば贈れる
+ states.set(CUSTOMER,{channelId:'yado-vc'});states.set(CAST,{channelId:'yado-vc'});
+ const elsewhere=interaction(`cast:champagne:${session.id}`);await app.onInteraction(elsewhere as unknown as Interaction);expect(JSON.stringify(elsewhere.editReply.mock.calls)).toContain('桜のしずく');
+ // ちがう通話にいる・片方がいないときは贈れない
+ states.set(CAST,{channelId:'engawa-vc'});const apart=interaction(`cast:champagne:${session.id}`);await app.onInteraction(apart as unknown as Interaction);expect(JSON.stringify(apart.editReply.mock.calls)).toContain('2 人とも');
+ states.delete(CAST);const absent=interaction(`cast:champagne:${session.id}`);await app.onInteraction(absent as unknown as Interaction);expect(JSON.stringify(absent.editReply.mock.calls)).toContain('2 人とも');
 
 });
 it('コアタイムは全ボトルを3倍。確認済みの額は時間帯や倍率を変えても維持',async()=>{

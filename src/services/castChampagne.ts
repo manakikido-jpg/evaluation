@@ -27,7 +27,7 @@ export function assertChampagneActive(s:CastSession|undefined,party:Party,here:C
  // 押した場所（通話の部屋・予約のスレッド・DM）は問わない。お客とキャストが通話の部屋にいるかは here で確かめる
  if(!s.channelId)fail('通話の部屋が見つかりません。部屋ができてから贈ってください。');
  if(s.status!=='active'||!s.startedAt||s.startedAt>now||!s.endsAt||s.endsAt<=now)fail('キャストとの通話中だけ贈れます。');
- if(!here(s))fail('お客とキャストが、両方その通話の部屋にいるときに贈れます。');
+ if(!here(s))fail('お客とキャストが、同じ通話（VC）に 2 人ともいるときに贈れます。');
 }
 /** 確認時の価格と配分を5分間保存する。ブラウザやボタンの値段は受け取らない。 */
 export async function prepareChampagne(db:Db,sessionId:number,bottleId:string,party:Party,here:ChampagnePresence,clock=()=>new Date(),pricing?:CastConfig) {

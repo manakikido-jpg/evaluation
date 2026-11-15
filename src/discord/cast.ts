@@ -1459,9 +1459,13 @@ export class CastApp {
     this.refresh();
   }
 
+  /** 🍾 お客とキャストが、同じ通話にいるか（BOT が作った部屋でなくても、同じ通話ならよい。宿や縁側で話していることもあるため） */
   private champagneHere(s: CastSession): boolean {
     const states = this.guild?.voiceStates.cache;
-    return !!s.channelId && states?.get(s.customerId)?.channelId === s.channelId && states?.get(s.castId)?.channelId === s.channelId;
+    const a = states?.get(s.customerId)?.channelId ?? null;
+    const b = states?.get(s.castId)?.channelId ?? null;
+    if (!a || a !== b) logger.info({ sessionId: s.id, room: s.channelId, customerIn: a, castIn: b }, 'champagne: not together');
+    return Boolean(a && a === b);
   }
 
   private async champagneMenu(i: ButtonInteraction<'cached'>, id: number): Promise<void> {
