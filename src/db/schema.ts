@@ -2746,3 +2746,23 @@ export const kisekiTickets = pgTable('kiseki_tickets', {
 },t=>[uniqueIndex('kiseki_ticket_request').on(t.memberId,t.requestId),index('kiseki_ticket_member').on(t.memberId),
  check('kiseki_ticket_price_time',sql`${t.price}=1500 and ${t.seconds}=3600`),
  check('kiseki_ticket_period',sql`(${t.startedAt} is null and ${t.endsAt} is null) or (${t.startedAt} is not null and ${t.endsAt} is not null and ${t.endsAt}=${t.startedAt}+interval '1 hour')`)]);
+
+/** 議事録から作る資料。原文は作成時の写し、本文は編集可能な下書き。 */
+export const minutesDocuments = pgTable('minutes_documents', {
+  id: text('id').primaryKey(),
+  guildId: text('guild_id').notNull(),
+  nonce: text('nonce').notNull(),
+  title: text('title').notNull(),
+  source: text('source').notNull(),
+  body: jsonb('body').$type<import('../services/documents/model.js').DocumentBody>().notNull(),
+  revision: integer('revision').notNull().default(1),
+  status: text('status').notNull().default('draft'),
+  generationId: text('generation_id'),
+  generationStartedAt: timestamp('generation_started_at',{withTimezone:true}),
+  generatedAt: timestamp('generated_at',{withTimezone:true}),
+  createdBy: text('created_by').notNull(),
+  updatedBy: text('updated_by').notNull(),
+  createdAt: timestamp('created_at',{withTimezone:true}).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at',{withTimezone:true}).notNull().defaultNow(),
+},t=>[uniqueIndex('minutes_documents_nonce_idx').on(t.guildId,t.nonce),index('minutes_documents_updated_idx').on(t.guildId,t.updatedAt)]);
+export type MinutesDocument = typeof minutesDocuments.$inferSelect;

@@ -1,3 +1,5 @@
+import { createDocumentTranscriber } from '../services/documents/audio.js';
+import { createDocumentAI } from '../services/documents/generate.js';
 import { CHANGELOG } from '../changelog.js';
 import { recordDeploy, runningCommit } from '../services/deployInfo.js';
 import { deliverOfficePush, pushAccess } from '../services/officeNotifications.js';
@@ -35,6 +37,8 @@ async function main(): Promise<void> {
 
   const app = createWebApp({
     db,
+    documentAudio: createDocumentTranscriber(env.DOCUMENT_AI_API_KEY, env.DOCUMENT_TRANSCRIBE_MODEL),
+    documentAI: createDocumentAI(env.DOCUMENT_AI_API_KEY, env.DOCUMENT_AI_MODEL),
     cfg: () => store.current,
     fileCfg,
     onSettingsSaved: () => store.refresh(),
