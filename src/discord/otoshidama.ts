@@ -39,7 +39,11 @@ export class OtoshidamaApp {
     const bagId = Number(interaction.customId.split(':')[2]);
     try {
       const voiceChannelId = interaction.guild.voiceStates.cache.get(interaction.user.id)?.channelId ?? null;
-      const r = await claimBag(this.db, this.cfg(), bagId, { id: interaction.user.id, roleIds: [...interaction.member.roles.cache.keys()], bot: interaction.user.bot, voiceChannelId, inEngawa: inEngawa(interaction.guild, voiceChannelId) });
+      const voiceCategoryId = voiceChannelId ? interaction.guild.channels?.cache.get(voiceChannelId)?.parentId ?? null : null;
+      const r = await claimBag(this.db, this.cfg(), bagId, {
+        id: interaction.user.id, roleIds: [...interaction.member.roles.cache.keys()], bot: interaction.user.bot,
+        voiceChannelId, voiceCategoryId, inEngawa: inEngawa(interaction.guild, voiceChannelId),
+      });
       if (r.status !== 'ok') return void (await interaction.reply({ content: CLAIM_MESSAGES[r.status], ...EPHEMERAL }));
       const state = await bagState(this.db, bagId);
       if (state) await interaction.update({ ...bagMessage(state.bag, state.claims, this.coin()), allowedMentions: { parse: [] } } as Parameters<typeof interaction.update>[0]);
