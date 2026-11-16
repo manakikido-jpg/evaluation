@@ -85,6 +85,7 @@ import { processCoreTimeNotices } from './services/coreTime.js';
 import { StickyApp } from './discord/sticky.js';
 import { VoicePanelApp } from './discord/voicePanel.js';
 import { VcHelpApp } from './discord/vcHelp.js';
+import { AltNameApp } from './discord/altNames.js';
 import { ReactionRoleApp } from './discord/reactionRoles.js';
 import { InnGuestApp } from './discord/innGuest.js';
 import { RoomApp } from './discord/rooms.js';
@@ -198,6 +199,7 @@ async function main(): Promise<void> {
   const vcHelp = new VcHelpApp(cfg);
   const innGuest = new InnGuestApp(db, cfg);
   new ReactionRoleApp(db, cfg).attach(client);
+  const altNames = new AltNameApp(db, cfg);
   let eventLotteryTicker: NodeJS.Timeout | undefined;
   let ticker: NodeJS.Timeout | undefined;
   let omairiTicker: NodeJS.Timeout | undefined;
@@ -446,6 +448,7 @@ async function main(): Promise<void> {
       // 🛡 BOT を通さないロールの変更を見張る（待つので後ろで）
       void roleGuard.onMemberUpdate(old, m).catch((err) => logger.warn({ err }, 'role guard failed'));
       void appointRoles.onMemberUpdate(old, m).catch((err) => logger.warn({ err }, 'appoint roles failed'));
+      void altNames.onMemberUpdate(old, m).catch((err) => logger.warn({ err }, 'alt name sync failed'));
       // ブースト（奉納）を始めた・やめたら、すぐお礼を
       if ((old.premiumSince?.getTime() ?? null) !== (m.premiumSince?.getTime() ?? null)) await boost.tick(m.id);
     })();

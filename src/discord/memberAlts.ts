@@ -3,7 +3,8 @@ import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { logger } from '../lib/logger.js';
 import { audit } from '../services/audit.js';
-import { ALT_CODE_TTL_MS, issueAltCode, redeemAltCode, requestMemberAlt, subJoinPlan, type AltRequestResult } from '../services/memberAlts.js';
+import { altNameTargets, ALT_CODE_TTL_MS, issueAltCode, redeemAltCode, requestMemberAlt, subJoinPlan, type AltRequestResult } from '../services/memberAlts.js';
+import { namesOf } from '../services/members.js';
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 const TEXT: Record<AltRequestResult | 'okMain', string> = {
@@ -165,6 +166,10 @@ export async function onSubAltJoin(db: Db, cfg: () => GuildConfig, member: Guild
     await member.roles.add(id, 'サブアカウントが入ったので').then(() => added.push(id)).catch((err: unknown) => logger.warn({ err, roleId: id }, 'sub alt join role failed'));
   }
   if (!added.length) return false;
+  // 🏷 入ってきたサブの名前を、本アカウントに合わせる（「本アカウントの名前 サブ」）
+  const mainName = (await namesOf(db, [plan.mainId])).get(plan.mainId) ?? '';
+  const target = (await altNameTargets(db, plan.mainId, mainName)).find((t) => t.altId === member.id);
+  if (target && member.manageable && member.nickname !== target.nick) await member.setNickname(target.nick, 'サブアカウントの名前を本アカウントに合わせる').catch((err: unknown) => logger.warn({ err, altId: member.id }, 'alt rename on join failed'));
   await audit(db, { actorId: 'system', targetId: member.id, action: 'member_alt.join', detail: { mainId: plan.mainId, roleIds: added }, via: 'system' });
   const log = cfg().channels.log ? member.guild.channels.cache.get(cfg().channels.log!) : undefined;
   if (log?.isSendable()) {

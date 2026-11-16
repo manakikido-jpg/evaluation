@@ -185,3 +185,19 @@ export async function redeemAltCode(db: Db, altId: string, rawCode: string, now 
   }
 }
 
+
+// ───────── 🏷 サブの名前を本アカウントに合わせる ─────────
+
+/** 本アカウントの名前に「サブ」を付けた、サブの名前（32 文字まで）。2 つ目からは「サブ2」「サブ3」 */
+export function altNickname(mainName: string, index: number): string {
+  const suffix = ` サブ${index <= 0 ? '' : index + 1}`;
+  const base = (mainName ?? '').trim();
+  const room = Math.max(1, 32 - suffix.length);
+  return (base.slice(0, room).trim() || 'メンバー') + suffix;
+}
+
+/** 本アカウント mainId の承認ずみサブに付ける名前の一覧（古いサブから サブ・サブ2…）。mainName はいまの表示名 */
+export async function altNameTargets(db: Db, mainId: string, mainName: string): Promise<{ altId: string; nick: string }[]> {
+  const alts = (await altsOfMain(db, mainId)).filter((a) => a.status === 'approved').sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  return alts.map((a, i) => ({ altId: a.altId, nick: altNickname(mainName, i) }));
+}

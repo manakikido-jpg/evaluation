@@ -8,7 +8,7 @@ import { applyTiersToOpenRounds } from '../services/casino/fortune.js';
 import { RoomsPage } from './views/rooms.js';
 import { listRooms } from '../services/rooms.js';
 import { closeRoomNow } from '../services/tempVoice.js';
-import { altConfig, saveAltConfig, approveMemberAlt, altsOfMain, listMemberAlts, memberAltOf, removeMemberAlt, requestMemberAlt } from '../services/memberAlts.js';
+import { altConfig, saveAltConfig, altNameTargets, approveMemberAlt, altsOfMain, listMemberAlts, memberAltOf, removeMemberAlt, requestMemberAlt } from '../services/memberAlts.js';
 import { MemberAltLinks, MemberAltsPage } from './views/memberAlts.js';
 import { mountOffice } from './office.js';
 import { unsubscribeOffice } from '../services/officeNotifications.js';
@@ -4293,6 +4293,14 @@ export function createWebApp(deps: WebDeps) {
     await saveAltConfig(db, { requireApproval: body.requireApproval === 'yes', joinRoleIds: picked }, c.get('session').userId);
     return c.redirect('/alts?msg=settings');
   });
+  // 🏷 承認ずみのサブの名前を、本アカウントの名前に合わせる（「本アカウントの名前 サブ」）
+  const syncAltName = async (altId: string) => {
+    const row = await memberAltOf(db, altId);
+    if (!row || row.status !== 'approved') return;
+    const mainName = (await namesOf(db, [row.mainId])).get(row.mainId) ?? '';
+    const t = (await altNameTargets(db, row.mainId, mainName)).find((x) => x.altId === altId);
+    if (t) await deps.discord.setNickname(cfg.guildId, altId, t.nick, 'サブアカウントの名前を本アカウントに合わせる').catch((err: unknown) => logger.warn({ err, altId }, 'alt rename failed'));
+  };
   app.post('/alts/add', async (c) => {
     const body = await c.req.parseBody();
     const by = c.get('session').userId;
@@ -4300,10 +4308,12 @@ export function createWebApp(deps: WebDeps) {
     const r = await requestMemberAlt(db, { altId, mainId: typeof body.mainId === 'string' ? body.mainId.trim() : '', reason: typeof body.reason === 'string' ? body.reason : '', by, via: 'web' });
     if (r !== 'ok') return c.redirect(`/alts?msg=${r}`);
     await approveMemberAlt(db, altId, by);
+    await syncAltName(altId);
     return c.redirect('/alts?msg=added');
   });
   app.post('/alts/:id/approve', async (c) => {
     const r = await approveMemberAlt(db, c.req.param('id'), c.get('session').userId);
+    if (r.status === 'ok') await syncAltName(c.req.param('id'));
     return c.redirect(`/alts?msg=${r.status === 'ok' ? (r.kept ? 'approved_kept' : 'approved') : 'removed'}`);
   });
   app.post('/alts/:id/remove', async (c) => {
