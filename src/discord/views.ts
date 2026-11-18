@@ -37,7 +37,7 @@ const cardButton = (userId: string) =>
 const listButton = (userId: string) =>
   new ButtonBuilder().setCustomId(shuinId('list', userId)).setLabel('朱印をくれた人').setStyle(ButtonStyle.Secondary);
 
-export type Reply = { content?: string; embeds?: APIEmbed[]; components?: Row[] };
+export type Reply = { content?: string; embeds?: APIEmbed[]; components?: Row[]; allowedMentions?: { parse: never[] } };
 
 const DENIED: Record<GiveDenied, string> = {
   self: 'ご自身の御朱印帳には朱印を押せません。',
@@ -162,16 +162,21 @@ export function goshuinchoReply(
   return { embeds: [embed.toJSON()], components: [row(...buttons)] };
 }
 
-/** 朱印をくれた人の一覧 */
-export function giversReply(ownerId: string, givers: { giverId: string }[], total: number): Reply {
-  if (!givers.length) return { content: `${mention(ownerId)} さまは、まだ朱印を頂いていません。` };
-  const lines = givers.map((g) => `${mention(g.giverId)} さま`).join('、');
+/**
+ * 朱印をくれた人の一覧。
+ * 名前は @メンション ではなく、BOT が覚えている表示名の文字で出す（埋め込みの @ は、相手を知らない端末だと「不明なユーザー」になるため）。
+ * names: 人の ID → 表示名（なければ「退出した人」）。
+ */
+export function giversReply(ownerId: string, givers: { giverId: string }[], total: number, names?: Map<string, string>): Reply {
+  const nameOf = (id: string) => names?.get(id) ?? '退出した人';
+  if (!givers.length) return { content: `${nameOf(ownerId)} さまは、まだ朱印を頂いていません。`, allowedMentions: { parse: [] } };
+  const lines = givers.map((g) => `${nameOf(g.giverId)} さま`).join('、');
   const more = total > givers.length ? `\nほか ${total - givers.length} 人` : '';
   const embed = new EmbedBuilder()
     .setColor(SHU)
     .setTitle(`朱印をくれた人（${total} 人）`)
-    .setDescription(`${mention(ownerId)} さまの御朱印帳\n\n${lines}${more}`);
-  return { embeds: [embed.toJSON()] };
+    .setDescription(`${nameOf(ownerId)} さまの御朱印帳\n\n${lines}${more}`);
+  return { embeds: [embed.toJSON()], allowedMentions: { parse: [] } };
 }
 
 /** #慶事 での昇格の発表 */

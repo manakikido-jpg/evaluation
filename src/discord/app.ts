@@ -49,7 +49,7 @@ import { allTicketsLine } from './gacha.js';
 import { listPrizes } from '../services/gacha.js';
 import { activeCoreTime, coreTimeBonus } from '../services/coreTime.js';
 import { setOmairiStatus } from '../services/applications.js';
-import { ActivityTracker, getMember, leaveNotice, recordJoin, recordLeave, recordPromotion, syncAllMembers, upsertMember, type MemberSnapshot } from '../services/members.js';
+import { ActivityTracker, getMember, leaveNotice, namesOf, recordJoin, recordLeave, recordPromotion, syncAllMembers, upsertMember, type MemberSnapshot } from '../services/members.js';
 import { giversOf, goenOf, goshuinchoOf, receivedCountOf, stampedBy } from '../services/shuin.js';
 import { takeUncheckedSpecialGoen } from '../services/specialGoen.js';
 import { COMMAND, parseShuinId } from './ids.js';
@@ -544,7 +544,8 @@ export class ShuinApp {
   private async list(interaction: Repliable, ownerId: string): Promise<void> {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const [givers, total] = await Promise.all([giversOf(this.db, ownerId, 100), receivedCountOf(this.db, ownerId)]);
-    await this.reply(interaction, giversReply(ownerId, givers, total));
+    const names = await namesOf(this.db, [ownerId, ...givers.map((g) => g.giverId)]);
+    await this.reply(interaction, giversReply(ownerId, givers, total, names));
   }
 
   /** 1 分ごと: ✨ 特別ご縁を振られた人の昇格を確かめる（社務所Web から振ったもの） */

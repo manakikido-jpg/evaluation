@@ -125,10 +125,17 @@ describe('表示', () => {
     expect(r.embeds![0]!.fields?.find((f) => f.name === '頂いた朱印')?.value).toBe('まだありません');
   });
 
-  it('朱印をくれた人の一覧（100 人を超えたら「ほか」）', () => {
-    const r = giversReply(B, [{ giverId: '1' }], 120);
+  it('朱印をくれた人の一覧（名前は文字で出す・@メンションにしない・100 人を超えたら「ほか」）', () => {
+    const names = new Map([[B, 'おさむ'], ['1', 'さくら']]);
+    const r = giversReply(B, [{ giverId: '1' }], 120, names);
     expect(r.embeds![0]!.title).toBe('朱印をくれた人（120 人）');
-    expect(r.embeds![0]!.description).toContain('ほか 119 人');
+    const desc = r.embeds![0]!.description!;
+    expect(desc).toContain('おさむ さまの御朱印帳');
+    expect(desc).toContain('さくら さま');
+    expect(desc).toContain('ほか 119 人');
+    expect(desc).not.toContain('<@'); // @メンションを使わない
+    // 名前が分からない人（退出など）は「退出した人」
+    expect(giversReply(B, [{ giverId: 'zzz' }], 1, names).embeds![0]!.description).toContain('退出した人 さま');
   });
 
   it('昇格の発表', () => {
