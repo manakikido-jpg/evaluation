@@ -2,6 +2,7 @@ import { EVALUATION_START_LABEL } from '../../domain/ujikoEvaluation.js';
 import type { AdminSession } from '../../db/schema.js';
 import type { EvaluationData, EvaluationFilter } from '../../services/ujikoEvaluation.js';
 import { fmtMinutes } from '../../services/voiceUsage.js';
+import { UJIKO_RATING_ITEMS } from '../../services/ujikoRating.js';
 import { Layout } from './layout.js';
 
 export function evaluationQuery(filter: EvaluationFilter, selectedIds: string[], page?: number): string {
@@ -58,5 +59,11 @@ export function EvaluationPage({ session, data, filter, page }: {
         {current < pages && <> <a href={'/evaluation?' + evaluationQuery(filter, data.selectedIds, current + 1)}>次へ</a></>}
       </p></nav>
     </section>
+    {session.level === 'guji' && <section class="card">
+      <h2>氏子を5段階で評価するシート（宮司だけ）</h2>
+      <p>今いる氏子の一覧をエクセル（.xlsx）で取り出せます。項目ごとに ★1〜5（1〜5の数）を書き込むと、<strong>平均が自動で出ます</strong>。この順位表とは別の、手で付ける評価用です。</p>
+      <p class="note">はじめの項目は「{UJIKO_RATING_ITEMS.join('・')}」です。エクセルで列の名前を変えたり、増やし・減らししてかまいません（平均の列はF〜J列の平均を出しています）。名前・IDは参考です。この一覧は宮司だけがダウンロードできます。</p>
+      <p><a href="/evaluation/rating-sheet.xlsx">氏子の評価シートをエクセルで保存</a></p>
+    </section>}
   </div></Layout>;
 }

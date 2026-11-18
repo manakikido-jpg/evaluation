@@ -90,6 +90,26 @@ it('過去控除は宮司・評価権限・CSRFを要求し、保存後に一覧
  expect(await db.select().from(voiceUsage)).toEqual(original);expect(await db.select().from(evaluationTimeDeductions)).toHaveLength(1);expect((await db.select().from(auditLogs)).filter(r=>r.action==='evaluation.time_deduction')).toHaveLength(1);
  const html=await(await app.request('/evaluation',{headers:headers(limited)})).text();expect(html).not.toContain('/evaluation/corrections?member=');
 });
+it('氏子の評価シート(.xlsx)は宮司だけが取り出せ、監査に残す。リンクも宮司だけに出す', async () => {
+  const { auditLogs } = await import('../src/db/schema.js');
+  await db.insert(members).values({ id: '860000000000000001', username: 'uj', displayName: '氏子テスト', roleIds: [ROLE.ujiko] });
+  const allowed = await createSession(db, user, { level: 'shinshoku', pages: ['evaluation'] }, now);
+  expect((await app.request('/evaluation/rating-sheet.xlsx')).status).toBe(302); // 未ログイン
+  expect((await app.request('/evaluation/rating-sheet.xlsx', { headers: headers(allowed) })).status).toBe(403); // 評価は見られても宮司でない
+  const res = await app.request('/evaluation/rating-sheet.xlsx', { headers: headers() });
+  expect(res.status).toBe(200);
+  expect(res.headers.get('content-type')).toContain('spreadsheetml');
+  expect(res.headers.get('content-disposition')).toContain('attachment');
+  expect(res.headers.get('cache-control')).toContain('no-store');
+  const buf = Buffer.from(await res.arrayBuffer());
+  expect(buf.subarray(0, 4).toString('hex')).toBe('504b0304'); // .xlsx（ZIP）
+  expect(buf.toString('utf8')).toContain('氏子テスト'); // 対象の氏子が入る
+  expect((await db.select().from(auditLogs)).some(r => r.action === 'ujiko.rating_sheet')).toBe(true);
+  const guji = await (await app.request('/evaluation', { headers: headers() })).text();
+  expect(guji).toContain('/evaluation/rating-sheet.xlsx');
+  const limited = await (await app.request('/evaluation', { headers: headers(allowed) })).text();
+  expect(limited).not.toContain('/evaluation/rating-sheet.xlsx');
+});
 it('控除フォームは不正な日付/分数/参拝者以外/評価閲覧権限なしを拒否する',async()=>{
  const {findSession}=await import('../src/web/sessions.js');const csrf=(await findSession(db,token,now))!.csrfToken;
  for(const change of [{minutes:'101'},{minutes:''},{minutes:'1.5'},{date:'2026-02-30'},{reason:' '},{member:ID}]){

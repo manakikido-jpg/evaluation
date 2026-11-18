@@ -3,6 +3,8 @@ import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import type { AdminSession } from '../db/schema.js';
 import { evaluationCsv, EvaluationSelectionError, ujikoEvaluation, type EvaluationFilter } from '../services/ujikoEvaluation.js';
+import { ujikoRatingRows, ujikoRatingXlsx } from '../services/ujikoRating.js';
+import { audit } from '../services/audit.js';
 import { evaluationDeductionPage,saveEvaluationDeduction,EvaluationDeductionError } from '../services/evaluationDeductions.js';
 import { EvaluationDeductionsPage } from './views/evaluationDeductions.js';
 import { EvaluationPage } from './views/evaluation.js';
@@ -48,4 +50,16 @@ export function mountEvaluation(app: Hono<Env>, db: Db, cfg: () => GuildConfig, 
   });
   app.get('/evaluation', c => read(c, false));
   app.get('/evaluation/export.csv', c => read(c, true));
+  // 🍃 今いる氏子を 5 段階で評価するシート（エクセル）。宮司だけが取り出せる
+  app.get('/evaluation/rating-sheet.xlsx', async (c) => {
+    c.header('Cache-Control', 'private, no-store');
+    if (c.get('session').level !== 'guji') return c.text('氏子の評価シートは宮司だけが取り出せます。', 403);
+    const rows = await ujikoRatingRows(db, cfg());
+    await audit(db, { actorId: c.get('session').userId, action: 'ujiko.rating_sheet', detail: { count: rows.length }, via: 'web' });
+    return c.body(new Uint8Array(ujikoRatingXlsx(rows)), 200, {
+      'content-type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'content-disposition': 'attachment; filename="ujiko-rating.xlsx"',
+      'x-content-type-options': 'nosniff',
+    });
+  });
 }
