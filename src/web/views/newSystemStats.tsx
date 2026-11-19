@@ -1,5 +1,5 @@
 import type { AdminSession } from '../../db/schema.js';
-import type { NewSystemStats, RankSplit } from '../../services/newSystemStats.js';
+import type { Bucket, NewSystemStats, RankSplit } from '../../services/newSystemStats.js';
 import { Layout } from './layout.js';
 
 /**
@@ -14,6 +14,23 @@ const hrs = (min: number) => (min / 60).toLocaleString('ja-JP', { maximumFractio
 const md = (d: string) => d.slice(5).replace('-', '/');
 const DAY_OPTIONS = [7, 14, 30, 90] as const;
 const PCTS = [5, 10, 15, 20] as const;
+
+function BucketTable(props: { caption: string; head: string; rows: Bucket[] }) {
+  const total = props.rows.reduce((a, b) => a + b.count, 0);
+  return (
+    <div class="admin-table-scroll" tabIndex={0} role="region" aria-label={props.caption}>
+      <table>
+        <caption>{props.caption}</caption>
+        <thead><tr><th scope="col">{props.head}</th><th scope="col">人数</th><th scope="col">割合</th></tr></thead>
+        <tbody>
+          {props.rows.map((r) => (
+            <tr><th scope="row">{r.label}</th><td>{n(r.count)}</td><td>{total ? one((r.count / total) * 100) : '0'}%</td></tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 function avgSplit(rows: { active: RankSplit }[]): RankSplit {
   if (!rows.length) return { sanpaisha: 0, ujikoPlus: 0 };
@@ -164,6 +181,27 @@ export function NewSystemStatsPage(props: { session: AdminSession; d: NewSystemS
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section class="card">
+        <h2>⬆️ 昇格の割合が現実的か（参拝者化から14日以内）</h2>
+        <p class="note">⚠️ <strong>全VC・ミュート込み</strong>。期間内に参拝者になった <strong>{n(d.promoteReality.sample)}人</strong>が、最初の14日で顔を合わせた<strong>氏子以上</strong>の人数。平均 <strong>{one(d.promoteReality.avgPartners)}人</strong>。「絵馬5枚で昇格」が現実的かの目安（14日以内に会える氏子以上の数）。</p>
+        <BucketTable caption="14日以内に顔を合わせた氏子以上の人数（参拝者ごと）" head="会った氏子以上" rows={d.promoteReality.metPartners} />
+        <BucketTable caption="相手1人ごとの同席時間（参拝者×氏子以上の組）" head="同席の合計時間" rows={d.promoteReality.pairMinutes} />
+        <BucketTable caption="相手1人ごとの同席日数（参拝者×氏子以上の組）" head="違う日の数" rows={d.promoteReality.pairDays} />
+      </section>
+
+      <section class="card">
+        <h2>🔁 維持の割合が現実的か（氏子が会う参拝者）</h2>
+        <p class="note">⚠️ <strong>全VC・ミュート込み</strong>。期間に、氏子ちょうど <strong>{n(d.keepReality.sample)}人</strong>が同席した<strong>参拝者</strong>の人数。平均 <strong>{one(d.keepReality.avgPartners)}人</strong>。維持（絵馬3枚）が現実的かの目安。</p>
+        <BucketTable caption="同席した参拝者の人数（氏子ごと）" head="同席した参拝者" rows={d.keepReality.metSanpaisha} />
+        <BucketTable caption="相手1人ごとの同席時間（氏子×参拝者の組）" head="同席の合計時間" rows={d.keepReality.pairMinutes} />
+      </section>
+
+      <section class="card">
+        <h2>⏳ 評価期間の延長の上限（参拝者→氏子までの日数）</h2>
+        <p class="note">これまでに氏子になった <strong>{n(d.promoteDays.sample)}人</strong>が、参拝者になってから氏子になるまでにかかった日数（お参り期間の記録）。中央値 <strong>{n(d.promoteDays.median)}日</strong>／9割の人が <strong>{n(d.promoteDays.p90)}日</strong>以内／最長 <strong>{n(d.promoteDays.max)}日</strong>。延長の上限を決める目安にどうぞ。</p>
+        <BucketTable caption="参拝者→氏子までの日数" head="かかった日数" rows={d.promoteDays.buckets} />
       </section>
     </Layout>
   );

@@ -1,7 +1,7 @@
 import { EVALUATION_START_AT } from '../domain/ujikoEvaluation.js';
 import { and, desc, eq, gte, inArray, isNotNull, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
-import { coinTx, tempVoice, voiceChannels, voicePairs, voiceUsage } from '../db/schema.js';
+import { coinTx, engawaPairs, tempVoice, voiceChannels, voicePairs, voiceUsage } from '../db/schema.js';
 import { jstDate } from './activity.js';
 
 /**
@@ -56,20 +56,35 @@ export async function recordPresence(db: Db, channels: PresenceChannel[], now = 
       return c.memberIds.map((memberId) => {
         const visitor = now.getTime() >= EVALUATION_START_AT && isEngawaName(c.name) && sanpaisha.has(memberId);
         const checked = visitor && c.evaluationEligibleMemberIds !== undefined;
-        return { memberId, date, channelId: c.id, minutes: 1, rankRecordedMinutes: c.sanpaishaMemberIds === undefined ? 0 : 1, sanpaishaMinutes: visitor ? 1 : 0, evaluationRecordedMinutes: checked ? 1 : 0, evaluationEligibleMinutes: checked && eligible.has(memberId) ? 1 : 0 };
+        // 🍃 縁側で非ミュートと確認できた分（役職を問わない・新制度の検証用）
+        const engawaUnmute = isEngawaName(c.name) && eligible.has(memberId) ? 1 : 0;
+        return { memberId, date, channelId: c.id, minutes: 1, rankRecordedMinutes: c.sanpaishaMemberIds === undefined ? 0 : 1, sanpaishaMinutes: visitor ? 1 : 0, evaluationRecordedMinutes: checked ? 1 : 0, evaluationEligibleMinutes: checked && eligible.has(memberId) ? 1 : 0, engawaUnmuteMinutes: engawaUnmute };
       });
     }))
-    .onConflictDoUpdate({ target: [voiceUsage.memberId, voiceUsage.date, voiceUsage.channelId], set: { minutes: sql`${voiceUsage.minutes} + 1`, rankRecordedMinutes: sql`${voiceUsage.rankRecordedMinutes} + excluded.rank_recorded_minutes`, sanpaishaMinutes: sql`${voiceUsage.sanpaishaMinutes} + excluded.sanpaisha_minutes`, evaluationRecordedMinutes: sql`${voiceUsage.evaluationRecordedMinutes} + excluded.evaluation_recorded_minutes`, evaluationEligibleMinutes: sql`${voiceUsage.evaluationEligibleMinutes} + excluded.evaluation_eligible_minutes` } });
+    .onConflictDoUpdate({ target: [voiceUsage.memberId, voiceUsage.date, voiceUsage.channelId], set: { minutes: sql`${voiceUsage.minutes} + 1`, rankRecordedMinutes: sql`${voiceUsage.rankRecordedMinutes} + excluded.rank_recorded_minutes`, sanpaishaMinutes: sql`${voiceUsage.sanpaishaMinutes} + excluded.sanpaisha_minutes`, evaluationRecordedMinutes: sql`${voiceUsage.evaluationRecordedMinutes} + excluded.evaluation_recorded_minutes`, evaluationEligibleMinutes: sql`${voiceUsage.evaluationEligibleMinutes} + excluded.evaluation_eligible_minutes`, engawaUnmuteMinutes: sql`${voiceUsage.engawaUnmuteMinutes} + excluded.engawa_unmute_minutes` } });
   const pairs: { memberA: string; memberB: string; date: string; minutes: number }[] = [];
+  // 🍃 縁側で、2人ともミュートでなかった同席（新制度の絵馬の条件の検証用）
+  const engawa: { memberA: string; memberB: string; date: string; minutes: number }[] = [];
   for (const c of active) {
     const ids = [...c.memberIds].sort().slice(0, PAIR_MAX_MEMBERS);
     for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) pairs.push({ memberA: ids[i]!, memberB: ids[j]!, date, minutes: 1 });
+    if (isEngawaName(c.name) && c.evaluationEligibleMemberIds !== undefined) {
+      const eligible = new Set(c.evaluationEligibleMemberIds);
+      const un = ids.filter((id) => eligible.has(id));
+      for (let i = 0; i < un.length; i++) for (let j = i + 1; j < un.length; j++) engawa.push({ memberA: un[i]!, memberB: un[j]!, date, minutes: 1 });
+    }
   }
   if (pairs.length) {
     await db
       .insert(voicePairs)
       .values(pairs)
       .onConflictDoUpdate({ target: [voicePairs.memberA, voicePairs.memberB, voicePairs.date], set: { minutes: sql`${voicePairs.minutes} + 1` } });
+  }
+  if (engawa.length) {
+    await db
+      .insert(engawaPairs)
+      .values(engawa)
+      .onConflictDoUpdate({ target: [engawaPairs.memberA, engawaPairs.memberB, engawaPairs.date], set: { minutes: sql`${engawaPairs.minutes} + 1` } });
   }
 }
 

@@ -431,6 +431,8 @@ export const activityHourly = pgTable(
     hour: integer('hour').notNull(),
     messages: integer('messages').notNull().default(0),
     vcMinutes: integer('vc_minutes').notNull().default(0),
+    /** そのうち縁側にいた分（時間帯×縁側の検証用。2026-11-19〜） */
+    engawaMinutes: integer('engawa_minutes').notNull().default(0),
   },
   (t) => [primaryKey({ columns: [t.memberId, t.date, t.hour] }), index('activity_hourly_date_idx').on(t.date)],
 );
@@ -1215,8 +1217,10 @@ export const voiceUsage = pgTable(
     evaluationRecordedMinutes: integer('evaluation_recorded_minutes').notNull().default(0),
     /** そのうちマイク/スピーカーの非ミュートを確認できた分 */
     evaluationEligibleMinutes: integer('evaluation_eligible_minutes').notNull().default(0),
+    /** 縁側で、マイク/スピーカーの非ミュートを確認できた分（役職を問わない・新制度の検証用。2026-11-19〜） */
+    engawaUnmuteMinutes: integer('engawa_unmute_minutes').notNull().default(0),
   },
-  (t) => [primaryKey({ columns: [t.memberId, t.date, t.channelId] }), index('voice_usage_date_idx').on(t.date), check('voice_usage_rank_minutes', sql`${t.sanpaishaMinutes} >= 0 and ${t.sanpaishaMinutes} <= ${t.rankRecordedMinutes} and ${t.rankRecordedMinutes} <= ${t.minutes}`), check('voice_usage_evaluation_minutes', sql`${t.evaluationEligibleMinutes} >= 0 and ${t.evaluationEligibleMinutes} <= ${t.evaluationRecordedMinutes} and ${t.evaluationRecordedMinutes} <= ${t.sanpaishaMinutes}`)],
+  (t) => [primaryKey({ columns: [t.memberId, t.date, t.channelId] }), index('voice_usage_date_idx').on(t.date), check('voice_usage_rank_minutes', sql`${t.sanpaishaMinutes} >= 0 and ${t.sanpaishaMinutes} <= ${t.rankRecordedMinutes} and ${t.rankRecordedMinutes} <= ${t.minutes}`), check('voice_usage_evaluation_minutes', sql`${t.evaluationEligibleMinutes} >= 0 and ${t.evaluationEligibleMinutes} <= ${t.evaluationRecordedMinutes} and ${t.evaluationRecordedMinutes} <= ${t.sanpaishaMinutes}`), check('voice_usage_engawa_unmute', sql`${t.engawaUnmuteMinutes} >= 0 and ${t.engawaUnmuteMinutes} <= ${t.minutes}`)],
 );
 
 /** 根拠が確認できた過去分の控除。原本は残し、同じ日/部屋の値を更新する。 */
@@ -1240,6 +1244,18 @@ export const voicePairs = pgTable(
     minutes: integer('minutes').notNull().default(0),
   },
   (t) => [primaryKey({ columns: [t.memberA, t.memberB, t.date] }), index('voice_pairs_b_idx').on(t.memberB), index('voice_pairs_date_idx').on(t.date)],
+);
+
+/** 🍃 縁側で、2人ともミュートでなかった同席時間（新制度の絵馬の条件の検証用。2026-11-19〜。member_a < member_b） */
+export const engawaPairs = pgTable(
+  'engawa_pairs',
+  {
+    memberA: text('member_a').notNull(),
+    memberB: text('member_b').notNull(),
+    date: text('date').notNull(),
+    minutes: integer('minutes').notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.memberA, t.memberB, t.date] }), index('engawa_pairs_b_idx').on(t.memberB), index('engawa_pairs_date_idx').on(t.date)],
 );
 
 /** 通話チャンネルの記録（名前・カテゴリ。自分の通話部屋は、消えたあとも作った人・種類が分かるように） */

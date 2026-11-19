@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import type { Db } from '../src/db/client.js';
-import { activityHourly, members, voiceChannels, voicePairs, voiceUsage } from '../src/db/schema.js';
+import { activityHourly, members, omairi, voiceChannels, voicePairs, voiceUsage } from '../src/db/schema.js';
 import { newSystemStats } from '../src/services/newSystemStats.js';
 import { cfg, makeDb, ROLE } from './helpers.js';
 
@@ -75,6 +75,41 @@ it('お守りの目安: 縁側の浮上率・◯時間以上の人数・ラン�
   expect(d.surfaceHours.find((r) => r.hours === 3)!.people).toBe(1); // U(200分>=180)
   expect(d.surfaceTop.map((t) => t.memberId)).toEqual([U, S]); // 多い順
   expect(d.surfaceTop[0]).toMatchObject({ name: '氏子ユー', minutes: 200 });
+});
+
+it('昇格の現実性: 参拝者化後14日以内に顔を合わせた氏子以上を数える', async () => {
+  // S は 2026-11-10 に参拝者化。14日以内（〜11-24）に U(氏子)と同席、W(世話役)とも同席
+  await db.insert(omairi).values({ memberId: S, startedAt: new Date('2026-11-10T00:00:00Z'), endsAt: new Date('2026-11-24T00:00:00Z'), status: 'ongoing' });
+  const pair = (x: string, y: string, date: string, minutes: number) => {
+    const [a, b] = x < y ? [x, y] : [y, x];
+    return db.insert(voicePairs).values({ memberA: a, memberB: b, date, minutes });
+  };
+  await pair(S, U, '2026-11-12', 120);
+  await pair(S, U, '2026-11-13', 120);
+  await pair(S, W, '2026-11-14', 60);
+  await pair(S, U, '2026-11-30', 200); // 14日より後 → 数えない
+  const d = await newSystemStats(db, cfg, { now, days: 30 });
+  expect(d.promoteReality.sample).toBe(1);
+  // 14日以内に会った氏子以上は U と W の 2人
+  expect(d.promoteReality.metPartners.find((b) => b.label === '2人')!.count).toBe(1);
+  expect(d.promoteReality.avgPartners).toBe(2);
+});
+
+it('維持の現実性: 氏子が同席した参拝者の人数。評価期間: 参拝者→氏子までの日数', async () => {
+  const pair = (x: string, y: string, date: string, minutes: number) => {
+    const [a, b] = x < y ? [x, y] : [y, x];
+    return db.insert(voicePairs).values({ memberA: a, memberB: b, date, minutes });
+  };
+  // 氏子 U が参拝者 S と同席
+  await pair(U, S, '2026-11-12', 90);
+  // 評価期間: U は参拝者化から氏子化まで 10日
+  await db.insert(omairi).values({ memberId: U, startedAt: new Date('2026-11-01T00:00:00Z'), endsAt: new Date('2026-11-15T00:00:00Z'), status: 'promoted', decidedAt: new Date('2026-11-11T00:00:00Z') });
+  const d = await newSystemStats(db, cfg, { now, days: 30 });
+  expect(d.keepReality.sample).toBe(1); // 氏子ちょうどは U のみ
+  expect(d.keepReality.metSanpaisha.find((b) => b.label === '1人')!.count).toBe(1);
+  expect(d.promoteDays.sample).toBe(1);
+  expect(d.promoteDays.median).toBe(10);
+  expect(d.promoteDays.buckets.find((b) => b.label === '8〜14日')!.count).toBe(1);
 });
 
 it('縁側の記録がなければ空で返す（落ちない）', async () => {

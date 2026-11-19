@@ -7,6 +7,9 @@
 - 追加依頼（同日）：新制度の数字を実データで決める「検証ページ」を社務所に。全項目を期間で絞れる・ミュート除外。確認の結果、今のデータの限界（時間帯×縁側・縁側だけの同席・ミュート除外は不可）を本人に説明し合意：「今あるデータで作る＋これから正確化」「縁側の浮上は参拝者＝ミュート除外・氏子以上＝全時間」。3回に分割（Push A/B/C）。
 - 検証ページ Push A 実装：`/stats/new-system`（推移タブに追加）。`src/services/newSystemStats.ts`＋`src/web/views/newSystemStats.tsx`。縁側アクティブ人数（週・月・役職別・分しきい値・母数×%目安）・時間帯（全VC）・絵馬条件のペア分布・お守りの浮上率/◯時間以上/ランキング。限界はラベル明示。test/newSystemStats.test.ts（5）＋test/newSystemStatsWeb.test.ts（1）。changelog(2026-11-19-new-system-stats・none)・admin.md・設計書8節を更新。
 - 検証ページ 次：Push B（昇格/維持の現実性・評価期間までの日数＝omairi）、Push C（記録を足して縁側だけの同席・ミュート除外・時間帯×縁側を正確化）。
+- Push B 実装：検証ページに昇格の現実性（参拝者化後14日以内に会った氏子以上・相手ごとの時間/日数）・維持の現実性（氏子あたりの参拝者同席数/時間）・評価期間（参拝者→氏子までの日数＝omairi startedAt→decidedAt）を追加。newSystemStats.ts に promoteReality/keepReality/promoteDays。test/newSystemStats.test.ts を7件に拡張。
+- Push C 実装（収集開始）：schema に engawa_pairs（縁側・両非ミュートの同席）・voice_usage.engawa_unmute_minutes（役職問わず縁側非ミュート）・activity_hourly.engawa_minutes（時間帯×縁側）。移行0166。recordPresence（voiceUsage.ts）と addHourlyActivity（activity.ts・app.ts の呼び出しで縁側メンバー集合を渡す）で収集。test/newSystemCollect.test.ts（3）。過去にさかのぼれない＝数週間後に検証ページを正確版へ切替（未実装の小変更）。changelog 2件・admin.md・設計書8節を更新。
+- 全体の現在地：絵馬の土台①＋検証ページABC が本番。絵馬の②入口・Web表示③以降（昇格差し替え・結び・リセット・カジノ宿・招待補填・割引倍率）はこれから。数字は検証ページの実データを見て最終決定する流れ。
 
 ## 2026年11月18日：氏子を5段階で評価するシート（エクセル・宮司だけ／本番へ反映済み・Claude）
 - 依頼「いまいる氏子を5段階評価したい、評価シートを別で用意」「エクセルでもいい」。確認済みの決定：項目ごとに★1〜5で平均も出す／宮司だけ／ダウンロードできる表。
