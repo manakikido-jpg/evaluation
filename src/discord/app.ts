@@ -297,7 +297,11 @@ export class ShuinApp {
       return { id: message.id };
     } }, now).catch(err => logger.warn({ err }, 'long voice bonus notices failed'));
     // 浮上の時間帯（1 時間ごと）: この 1 分の発言と、通話にいる人
-    await addHourlyActivity(this.db, counts, new Set(presence.flatMap((c) => c.memberIds)), now, new Set(presence.filter((c) => isEngawaName(c.name)).flatMap((c) => c.memberIds))).catch((err) => logger.warn({ err }, 'hourly activity failed'));
+    const engawaPresence = presence.filter((c) => isEngawaName(c.name));
+    await addHourlyActivity(this.db, counts, new Set(presence.flatMap((c) => c.memberIds)), now,
+      new Set(engawaPresence.flatMap((c) => c.memberIds)),
+      new Set(engawaPresence.flatMap((c) => c.evaluationEligibleMemberIds ?? [])),
+    ).catch((err) => logger.warn({ err }, 'hourly activity failed'));
     // 議事録の「参加した人」を、いま通話にいる人から入れられるように
     await saveVoiceNow(this.db, presence.map((c) => ({ id: c.id, name: c.name, memberIds: c.memberIds })), now).catch((err) => logger.warn({ err }, 'voice now save failed'));
 

@@ -1,0 +1,1 @@
+ALTER TABLE "activity_hourly" ADD COLUMN "engawa_unmute_minutes" integer DEFAULT 0 NOT NULL;

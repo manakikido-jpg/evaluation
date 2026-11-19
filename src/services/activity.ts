@@ -30,21 +30,23 @@ export const jstHour = (now: Date): number => new Date(now.getTime() + 9 * 3_600
 /**
  * 1 時間ごとの浮上を足す（1 分ごと）。counts: この 1 分の発言数 / inVoice: いま通話にいる人（AFK・BOT をのぞく。1 人でも数える）
  */
-export async function addHourlyActivity(db: Db, counts: Map<string, number>, inVoice: Iterable<string>, now: Date, inEngawa: Iterable<string> = []): Promise<void> {
+export async function addHourlyActivity(db: Db, counts: Map<string, number>, inVoice: Iterable<string>, now: Date, inEngawa: Iterable<string> = [], inEngawaUnmute: Iterable<string> = []): Promise<void> {
   const date = jstDate(now);
   const hour = jstHour(now);
-  const rows = new Map<string, { messages: number; vcMinutes: number; engawaMinutes: number }>();
-  for (const [id, n] of counts) rows.set(id, { messages: n, vcMinutes: 0, engawaMinutes: 0 });
-  for (const id of inVoice) rows.set(id, { messages: rows.get(id)?.messages ?? 0, vcMinutes: 1, engawaMinutes: rows.get(id)?.engawaMinutes ?? 0 });
-  const engawa = new Set(inEngawa);
-  for (const id of engawa) rows.set(id, { messages: rows.get(id)?.messages ?? 0, vcMinutes: 1, engawaMinutes: 1 }); // 縁側にいる人は通話にもいる
+  type Row = { messages: number; vcMinutes: number; engawaMinutes: number; engawaUnmuteMinutes: number };
+  const rows = new Map<string, Row>();
+  const upd = (id: string, patch: Partial<Row>) => rows.set(id, { messages: 0, vcMinutes: 0, engawaMinutes: 0, engawaUnmuteMinutes: 0, ...rows.get(id), ...patch });
+  for (const [id, n] of counts) upd(id, { messages: n });
+  for (const id of inVoice) upd(id, { vcMinutes: 1 });
+  for (const id of new Set(inEngawa)) upd(id, { vcMinutes: 1, engawaMinutes: 1 }); // 縁側にいる人は通話にもいる
+  for (const id of new Set(inEngawaUnmute)) upd(id, { vcMinutes: 1, engawaMinutes: 1, engawaUnmuteMinutes: 1 });
   if (!rows.size) return;
   await db
     .insert(activityHourly)
     .values([...rows].map(([memberId, r]) => ({ memberId, date, hour, ...r })))
     .onConflictDoUpdate({
       target: [activityHourly.memberId, activityHourly.date, activityHourly.hour],
-      set: { messages: sql`${activityHourly.messages} + excluded.messages`, vcMinutes: sql`${activityHourly.vcMinutes} + excluded.vc_minutes`, engawaMinutes: sql`${activityHourly.engawaMinutes} + excluded.engawa_minutes` },
+      set: { messages: sql`${activityHourly.messages} + excluded.messages`, vcMinutes: sql`${activityHourly.vcMinutes} + excluded.vc_minutes`, engawaMinutes: sql`${activityHourly.engawaMinutes} + excluded.engawa_minutes`, engawaUnmuteMinutes: sql`${activityHourly.engawaUnmuteMinutes} + excluded.engawa_unmute_minutes` },
     });
 }
 

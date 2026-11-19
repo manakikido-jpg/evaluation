@@ -1,21 +1,19 @@
-import { and, countDistinct, eq, gte, inArray, or, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, or, sql } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
-import { activityHourly, memberAlts, members, omairi, voicePairs, voiceUsage } from '../db/schema.js';
+import { activityHourly, engawaPairs, memberAlts, members, omairi, voicePairs, voiceUsage } from '../db/schema.js';
 import { highestRank } from '../domain/ranks.js';
 import { staffAlts } from './staffAlts.js';
 import { engawaChannelIds } from './ujikoEvaluation.js';
 import { jstDate } from './activity.js';
 
 /**
- * 📐 新制度の数字を実データで検証するための集計（社務所Web・読むだけ）。
- * docs/new-system-design.md の数字（絵馬の必要数・条件・昇格/維持・お守り）を決めるための肌感。
+ * 📐 新制度の数字を実データで検証する集計（社務所Web・読むだけ）。docs/new-system-design.md。
  *
- * ⚠️ 今あるデータの限界（ラベルで明示する）:
- * - 縁側の浮上時間は、参拝者＝非ミュート（evaluationEligibleMinutes）、氏子以上＝全時間（minutes）。
- * - 2人の同席（ペア）は voice_pairs。全VC・ミュート込み（縁側だけ・ミュート除外にはできない）。
- * - 時間帯の絞りは activity_hourly。全VC（縁側だけにできない）。
- * これから正確化するデータ収集は別途（Push C）。
+ * ⚠️ 今あるデータの限界（ラベルで明示）:
+ * - 縁側の浮上は、参拝者＝非ミュート（evaluationEligibleMinutes）、氏子以上＝全時間（minutes）。
+ * - 2人の同席は、全VC・ミュート込み（voice_pairs。今すぐ見られる）か、縁側だけ・ミュート除外（engawa_pairs。2026-11-19〜・これからたまる）。
+ * - 時間帯×縁側×ミュート除外は activity_hourly.engawaUnmuteMinutes（2026-11-19〜）。
  */
 
 export type RankSplit = { sanpaisha: number; ujikoPlus: number };
@@ -24,66 +22,66 @@ const DAY = 86_400_000;
 
 export type NewSystemStatsOptions = {
   now?: Date;
-  /** 期間（直近◯日。はじめ30・365まで） */
   days?: number;
-  /** 縁側アクティブ人数の「◯分以上」 */
   activeMin?: number;
-  /** 時間帯の絞り（JST 0〜23）。hourTo は「その時」を含まない（0〜24）。コアタイム22〜0時なら from=22,to=24 */
   hourFrom?: number;
   hourTo?: number;
 };
 
-export type NewSystemStats = {
-  now: Date;
-  days: number;
-  from: string;
-  today: string;
-  activeMin: number;
-  hourFrom: number;
-  hourTo: number;
-  /** 在籍（参拝者・氏子以上） */
-  baseCount: RankSplit;
-  /** 縁側に activeMin 分以上いた人数（週ごと・月ごと） */
-  engawaWeekly: { bucket: string; active: RankSplit }[];
-  engawaMonthly: { bucket: string; active: RankSplit }[];
-  /** 時間帯（全VC）に activeMin 分以上いた人数（期間計・ラベル: 全VC） */
-  hourActive: RankSplit;
-  /** 絵馬条件: 合計◯分以上いっしょの「組」と「人」。違う日3日以上も満たす組も出す（全VC・ミュート込み） */
-  pairByMins: { mins: number; pairs: number; pairsWith3days: number; people: number }[];
-  /** 違う日◯日以上いっしょの組（合計180分以上のもの） */
-  pairByDays: { days: number; pairs: number }[];
-  /** 縁側浮上率（週ごと）: 縁側に出た人数 ÷ 在籍 */
-  surfaceWeekly: { bucket: string; active: number; rate: number }[];
-  /** 縁側の浮上時間ランキング（期間計・上位20） */
-  surfaceTop: { memberId: string; name: string; minutes: number }[];
-  /** ◯時間以上、縁側にいた人数（期間計） */
-  surfaceHours: { hours: number; people: number }[];
-  /** 昇格の現実性：参拝者化後14日以内に顔を合わせた氏子以上（全VC・ミュート込み） */
-  promoteReality: { sample: number; avgPartners: number; metPartners: Bucket[]; pairMinutes: Bucket[]; pairDays: Bucket[] };
-  /** 維持の現実性：氏子1人あたりが同席した参拝者（期間・全VC・ミュート込み） */
-  keepReality: { sample: number; avgPartners: number; metSanpaisha: Bucket[]; pairMinutes: Bucket[] };
-  /** 評価期間の延長の上限：参拝者→氏子までの日数（omairi） */
-  promoteDays: { sample: number; median: number; p90: number; max: number; buckets: Bucket[] };
-};
-
-const MIN_THRESHOLDS = [60, 120, 180, 240, 300];
-const DAY_THRESHOLDS = [1, 2, 3, 5];
+/** 絵馬の条件の表: 1日に◯分以上いた日が、◯日以上ある組の数 */
+export const EMA_MIN_THRESHOLDS = [30, 60, 120, 180];
+export const EMA_DAY_THRESHOLDS = [2, 3, 4, 5];
 const HOUR_THRESHOLDS = [1, 3, 5, 10, 20];
 
+export type NewSystemStats = {
+  now: Date; days: number; from: string; today: string; activeMin: number; hourFrom: number; hourTo: number;
+  baseCount: RankSplit;
+  /** 縁側アクティブ人数（週・月／◯分以上）。参拝者=ミュート除外・氏子以上=全時間 */
+  engawaWeekly: { bucket: string; active: RankSplit }[];
+  engawaMonthly: { bucket: string; active: RankSplit }[];
+  /** 時間帯×縁側×ミュート除外に◯分以上いた人（2026-11-19〜・たまり中） */
+  hourActive: RankSplit;
+  /** 絵馬の条件: 氏子以上×参拝者の組ごと、1日◯分以上いた日が◯日以上ある組の数。[分][日数] */
+  emaGridVc: number[][]; // 全VC・ミュート込み（今すぐ）
+  emaGridEngawa: number[][]; // 縁側・ミュート除外（2026-11-19〜）
+  /** 昇格の現実性（期間内に参拝者化し14日経過した人の、14日以内に会った氏子以上） */
+  promoteReality: { sample: number; avgPartners: number; metPartners: Bucket[]; pairMinutes: Bucket[]; pairDays: Bucket[] };
+  /** 維持の現実性（月ごと・氏子1人あたりが同席した参拝者） */
+  keepMonthly: { month: string; sample: number; avgPartners: number; metSanpaisha: Bucket[] }[];
+  keepPairMinutes: Bucket[];
+  keepPairDays: Bucket[];
+  /** 評価期間（期間内に氏子になった人の、参拝者→氏子までの日数） */
+  promoteDays: { sample: number; median: number; p90: number; max: number; buckets: Bucket[] };
+  /** お守り: 週ごと（月〜日）に何日縁側へ来たか */
+  surfaceWeekly: { bucket: string; came: number; avgDays: number }[];
+  surfaceDaysCame: Bucket[];
+  surfaceTop: { memberId: string; name: string; minutes: number }[];
+  surfaceHours: { hours: number; people: number }[];
+};
+
+const avg1 = (xs: number[]): number => (xs.length ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10 : 0);
 function weekStart(date: string): string {
   const d = new Date(date + 'T00:00:00Z');
-  const dow = (d.getUTCDay() + 6) % 7; // 月曜=0
-  d.setUTCDate(d.getUTCDate() - dow);
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
   return d.toISOString().slice(0, 10);
 }
 const monthStart = (date: string): string => date.slice(0, 7) + '-01';
-const avg1 = (xs: number[]): number => (xs.length ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10 : 0);
-
+function monthsBetween(from: string, today: string): string[] {
+  const out: string[] = [];
+  let y = +from.slice(0, 4), m = +from.slice(5, 7);
+  const end = today.slice(0, 7);
+  for (let i = 0; i < 24; i++) {
+    const s = `${y}-${String(m).padStart(2, '0')}`;
+    out.push(s);
+    if (s >= end) break;
+    if (++m > 12) { m = 1; y++; }
+  }
+  return out;
+}
 function partnerHistogram(counts: number[]): Bucket[] {
   const labels = ['0人', '1人', '2人', '3人', '4人', '5人', '6〜9人', '10人以上'];
-  const idx = (c: number) => (c <= 5 ? c : c <= 9 ? 6 : 7);
   const out = labels.map((label) => ({ label, count: 0 }));
-  for (const c of counts) out[idx(c)]!.count++;
+  for (const c of counts) out[c <= 5 ? c : c <= 9 ? 6 : 7]!.count++;
   return out;
 }
 function minutesHistogram(mins: number[]): Bucket[] {
@@ -91,14 +89,30 @@ function minutesHistogram(mins: number[]): Bucket[] {
   return defs.map(([label, f]) => ({ label, count: mins.filter(f).length }));
 }
 function daysHistogram(days: number[]): Bucket[] {
-  const labels = ['1日', '2日', '3日', '4日', '5日以上'];
+  const labels = ['1日', '2日', '3日', '4日', '5〜6日', '7日'];
   const out = labels.map((label) => ({ label, count: 0 }));
-  for (const d of days) if (d >= 1) out[d >= 5 ? 4 : d - 1]!.count++;
+  for (const d of days) if (d >= 1) out[d >= 7 ? 5 : d >= 5 ? 4 : d - 1]!.count++;
   return out;
 }
 function daysToUjikoHistogram(days: number[]): Bucket[] {
   const defs: [string, (d: number) => boolean][] = [['0〜7日', (d) => d <= 7], ['8〜14日', (d) => d > 7 && d <= 14], ['15〜21日', (d) => d > 14 && d <= 21], ['22〜30日', (d) => d > 21 && d <= 30], ['31〜60日', (d) => d > 30 && d <= 60], ['61日以上', (d) => d > 60]];
   return defs.map(([label, f]) => ({ label, count: days.filter(f).length }));
+}
+
+/** 氏子以上×参拝者の組ごとに、1日◯分以上いた日が◯日以上ある組の数の表 */
+function emaGrid(raw: { a: string; b: string; minutes: number }[], kindOf: Map<string, 'sanpaisha' | 'ujikoPlus'>): number[][] {
+  const perPair = new Map<string, number[]>();
+  for (const r of raw) {
+    const ka = kindOf.get(r.a), kb = kindOf.get(r.b);
+    if (!((ka === 'ujikoPlus' && kb === 'sanpaisha') || (kb === 'ujikoPlus' && ka === 'sanpaisha'))) continue;
+    const key = `${r.a}|${r.b}`;
+    (perPair.get(key) ?? perPair.set(key, []).get(key)!).push(r.minutes);
+  }
+  return EMA_MIN_THRESHOLDS.map((min) => EMA_DAY_THRESHOLDS.map((dayT) => {
+    let c = 0;
+    for (const mins of perPair.values()) if (mins.filter((m) => m >= min).length >= dayT) c++;
+    return c;
+  }));
 }
 
 export async function newSystemStats(db: Db, cfg: GuildConfig, opts: NewSystemStatsOptions = {}): Promise<NewSystemStats> {
@@ -109,19 +123,20 @@ export async function newSystemStats(db: Db, cfg: GuildConfig, opts: NewSystemSt
   const hourTo = Math.min(24, Math.max(1, Math.floor(opts.hourTo ?? 24)));
   const today = jstDate(now);
   const from = jstDate(new Date(now.getTime() - (days - 1) * DAY));
+  const cutoff14 = jstDate(new Date(now.getTime() - 14 * DAY));
 
-  // ── 在籍と役職（現在の役職で分ける・近似）
-  const [people, alts, altRows, engawaIds] = await Promise.all([
+  const [people, alts, altRows, engawaIds, omairiRows] = await Promise.all([
     db.select({ id: members.id, name: members.displayName, roleIds: members.roleIds, isBot: members.isBot, leftAt: members.leftAt }).from(members),
     staffAlts(db),
     db.select({ id: memberAlts.altId }).from(memberAlts).where(eq(memberAlts.status, 'approved')),
     engawaChannelIds(db, today),
+    db.select({ id: omairi.memberId, startedAt: omairi.startedAt, status: omairi.status, decidedAt: omairi.decidedAt }).from(omairi),
   ]);
   const hidden = new Set([...alts.map((a) => a.id), ...altRows.map((a) => a.id)]);
   const ujikoWeight = cfg.ranks.find((r) => r.key === 'ujiko')?.weight ?? 2;
   const visible = people.filter((p) => !p.isBot && !p.leftAt && !hidden.has(p.id));
   const kindOf = new Map<string, 'sanpaisha' | 'ujikoPlus'>();
-  const keyOf = new Map<string, string>(); // 正確な役職キー（維持の対象=氏子ちょうど を分けるため）
+  const keyOf = new Map<string, string>();
   const nameOf = new Map<string, string>();
   const baseCount: RankSplit = { sanpaisha: 0, ujikoPlus: 0 };
   for (const p of visible) {
@@ -135,40 +150,22 @@ export async function newSystemStats(db: Db, cfg: GuildConfig, opts: NewSystemSt
     baseCount[k]++;
   }
   const visibleIds = new Set(kindOf.keys());
-  const emptyStats = (): NewSystemStats => ({
-    now, days, from, today, activeMin, hourFrom, hourTo, baseCount,
-    engawaWeekly: [], engawaMonthly: [], hourActive: { sanpaisha: 0, ujikoPlus: 0 },
-    pairByMins: MIN_THRESHOLDS.map((mins) => ({ mins, pairs: 0, pairsWith3days: 0, people: 0 })),
-    pairByDays: DAY_THRESHOLDS.map((d) => ({ days: d, pairs: 0 })),
-    surfaceWeekly: [], surfaceTop: [], surfaceHours: HOUR_THRESHOLDS.map((hours) => ({ hours, people: 0 })),
-    promoteReality: { sample: 0, avgPartners: 0, metPartners: partnerHistogram([]), pairMinutes: minutesHistogram([]), pairDays: daysHistogram([]) },
-    keepReality: { sample: 0, avgPartners: 0, metSanpaisha: partnerHistogram([]), pairMinutes: minutesHistogram([]) },
-    promoteDays: { sample: 0, median: 0, p90: 0, max: 0, buckets: daysToUjikoHistogram([]) },
-  });
-  if (!engawaIds.length) return emptyStats();
+  const ujikoIds = [...keyOf].filter(([, k]) => k === 'ujiko').map(([id]) => id);
 
   // ── 縁側の浮上（日ごと・人ごと。参拝者=非ミュート、氏子以上=全時間）
-  const vcRows = await db
-    .select({
-      id: voiceUsage.memberId,
-      date: voiceUsage.date,
-      raw: sql<number>`sum(${voiceUsage.minutes})::int`,
-      elig: sql<number>`sum(${voiceUsage.evaluationEligibleMinutes})::int`,
-    })
-    .from(voiceUsage)
-    .where(and(inArray(voiceUsage.channelId, engawaIds), gte(voiceUsage.date, from)))
-    .groupBy(voiceUsage.memberId, voiceUsage.date);
+  const vcRows = engawaIds.length
+    ? await db.select({ id: voiceUsage.memberId, date: voiceUsage.date, raw: sql<number>`sum(${voiceUsage.minutes})::int`, elig: sql<number>`sum(${voiceUsage.evaluationEligibleMinutes})::int` })
+        .from(voiceUsage).where(and(inArray(voiceUsage.channelId, engawaIds), gte(voiceUsage.date, from))).groupBy(voiceUsage.memberId, voiceUsage.date)
+    : [];
   const minuteOf = (id: string, raw: number, elig: number): number => (kindOf.get(id) === 'sanpaisha' ? elig : raw);
 
-  // 週・月・期間計の、人ごとの縁側分
   const byBucket = (pick: (date: string) => string) => {
-    const map = new Map<string, Map<string, number>>(); // bucket -> (member -> minutes)
+    const map = new Map<string, Map<string, number>>();
     for (const r of vcRows) {
       if (!visibleIds.has(r.id)) continue;
       const b = pick(r.date);
-      const m = map.get(b) ?? new Map<string, number>();
+      const m = map.get(b) ?? map.set(b, new Map()).get(b)!;
       m.set(r.id, (m.get(r.id) ?? 0) + minuteOf(r.id, r.raw, r.elig));
-      map.set(b, m);
     }
     return map;
   };
@@ -182,79 +179,78 @@ export async function newSystemStats(db: Db, cfg: GuildConfig, opts: NewSystemSt
   const engawaWeekly = [...weeks.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([bucket, m]) => ({ bucket, active: activeSplit(m, activeMin) }));
   const engawaMonthly = [...monthsM.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([bucket, m]) => ({ bucket, active: activeSplit(m, activeMin) }));
 
-  // 期間計の縁側分（ランキング・◯時間以上）
+  // ── お守り: 週ごとに何日来たか（縁側）
+  const weekDays = new Map<string, Map<string, Set<string>>>(); // week -> member -> dates
   const totalMin = new Map<string, number>();
   for (const r of vcRows) {
     if (!visibleIds.has(r.id)) continue;
-    totalMin.set(r.id, (totalMin.get(r.id) ?? 0) + minuteOf(r.id, r.raw, r.elig));
+    const min = minuteOf(r.id, r.raw, r.elig);
+    totalMin.set(r.id, (totalMin.get(r.id) ?? 0) + min);
+    if (min > 0) {
+      const wk = weekStart(r.date);
+      const m = weekDays.get(wk) ?? weekDays.set(wk, new Map()).get(wk)!;
+      (m.get(r.id) ?? m.set(r.id, new Set()).get(r.id)!).add(r.date);
+    }
   }
-  const surfaceTop = [...totalMin.entries()]
-    .filter(([, min]) => min > 0)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 20)
-    .map(([id, minutes]) => ({ memberId: id, name: nameOf.get(id) ?? id, minutes }));
-  const surfaceHours = HOUR_THRESHOLDS.map((hours) => ({ hours, people: [...totalMin.values()].filter((m) => m >= hours * 60).length }));
-  const surfaceWeekly = engawaWeekly.map((w) => {
-    const active = (weeks.get(w.bucket) ?? new Map()).size === 0 ? 0 : [...(weeks.get(w.bucket) ?? new Map()).values()].filter((m) => (m as number) > 0).length;
-    const baseTotal = baseCount.sanpaisha + baseCount.ujikoPlus;
-    return { bucket: w.bucket, active, rate: baseTotal ? Math.round((active / baseTotal) * 1000) / 10 : 0 };
+  const surfaceWeekly = [...weekDays.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([bucket, m]) => {
+    const dayCounts = [...m.values()].map((s) => s.size);
+    return { bucket, came: dayCounts.length, avgDays: avg1(dayCounts) };
   });
+  const surfaceDaysCame = daysHistogram([...weekDays.values()].flatMap((m) => [...m.values()].map((s) => s.size)));
+  const surfaceTop = [...totalMin.entries()].filter(([, min]) => min > 0).sort((a, b) => b[1] - a[1]).slice(0, 20).map(([id, minutes]) => ({ memberId: id, name: nameOf.get(id) ?? id, minutes }));
+  const surfaceHours = HOUR_THRESHOLDS.map((hours) => ({ hours, people: [...totalMin.values()].filter((m) => m >= hours * 60).length }));
 
-  // ── 時間帯（全VC・activity_hourly）に activeMin 分以上いた人（期間計）
+  // ── 時間帯×縁側×ミュート除外（2026-11-19〜）
   const hourCond = hourFrom <= hourTo % 24 || hourTo === 24
     ? and(gte(activityHourly.hour, hourFrom), sql`${activityHourly.hour} < ${hourTo}`)
     : sql`(${activityHourly.hour} >= ${hourFrom} or ${activityHourly.hour} < ${hourTo})`;
-  const hourRows = await db
-    .select({ id: activityHourly.memberId, min: sql<number>`sum(${activityHourly.vcMinutes})::int` })
-    .from(activityHourly)
-    .where(and(gte(activityHourly.date, from), hourCond))
-    .groupBy(activityHourly.memberId);
+  const hourRows = await db.select({ id: activityHourly.memberId, min: sql<number>`sum(${activityHourly.engawaUnmuteMinutes})::int` })
+    .from(activityHourly).where(and(gte(activityHourly.date, from), hourCond)).groupBy(activityHourly.memberId);
   const hourActive: RankSplit = { sanpaisha: 0, ujikoPlus: 0 };
-  for (const r of hourRows) {
-    const k = kindOf.get(r.id);
-    if (k && r.min >= activeMin) hourActive[k]++;
-  }
+  for (const r of hourRows) { const k = kindOf.get(r.id); if (k && r.min >= activeMin) hourActive[k]++; }
 
-  // ── 絵馬条件: 2人の同席（全VC・ミュート込み）
-  const pairRows = await db
-    .select({ a: voicePairs.memberA, b: voicePairs.memberB, mins: sql<number>`sum(${voicePairs.minutes})::int`, days: countDistinct(voicePairs.date) })
-    .from(voicePairs)
-    .where(gte(voicePairs.date, from))
-    .groupBy(voicePairs.memberA, voicePairs.memberB);
-  const pairs = pairRows.filter((p) => visibleIds.has(p.a) && visibleIds.has(p.b));
-  const pairByMins = MIN_THRESHOLDS.map((mins) => {
-    const meet = pairs.filter((p) => p.mins >= mins);
-    const with3 = meet.filter((p) => Number(p.days) >= 3);
-    const ppl = new Set<string>();
-    for (const p of meet) { ppl.add(p.a); ppl.add(p.b); }
-    return { mins, pairs: meet.length, pairsWith3days: with3.length, people: ppl.size };
-  });
-  const pairByDays = DAY_THRESHOLDS.map((d) => ({ days: d, pairs: pairs.filter((p) => Number(p.days) >= d && p.mins >= 180).length }));
+  // ── 2人の同席（全VC・ミュート込み / 縁側・ミュート除外）
+  const [rawVc, rawEngawa] = await Promise.all([
+    db.select({ a: voicePairs.memberA, b: voicePairs.memberB, date: voicePairs.date, minutes: voicePairs.minutes }).from(voicePairs).where(gte(voicePairs.date, from)),
+    db.select({ a: engawaPairs.memberA, b: engawaPairs.memberB, date: engawaPairs.date, minutes: engawaPairs.minutes }).from(engawaPairs).where(gte(engawaPairs.date, from)),
+  ]);
+  const vcPairs = rawVc.filter((p) => visibleIds.has(p.a) && visibleIds.has(p.b));
+  const emaGridVc = emaGrid(vcPairs, kindOf);
+  const emaGridEngawa = emaGrid(rawEngawa.filter((p) => visibleIds.has(p.a) && visibleIds.has(p.b)), kindOf);
 
-  // ── 維持の現実性: 氏子ちょうど1人あたりが、期間に同席した参拝者（全VC・ミュート込み）
-  const keepMap = new Map<string, Set<string>>(); // 氏子 -> 参拝者の集合
-  const keepPairMins: number[] = [];
-  for (const p of pairs) {
-    const ka = keyOf.get(p.a), kb = keyOf.get(p.b);
-    const uj = ka === 'ujiko' && kb === 'sanpaisha' ? p.a : kb === 'ujiko' && ka === 'sanpaisha' ? p.b : undefined;
-    const sp = uj === p.a ? p.b : uj === p.b ? p.a : undefined;
+  // ── 維持の現実性（月ごと・氏子×参拝者。全VC・ミュート込み）
+  const byMonth = new Map<string, Map<string, Set<string>>>();
+  const keepPairTotals = new Map<string, { mins: number; days: Set<string> }>();
+  for (const r of vcPairs) {
+    const ka = keyOf.get(r.a), kb = keyOf.get(r.b);
+    const uj = ka === 'ujiko' && kb === 'sanpaisha' ? r.a : kb === 'ujiko' && ka === 'sanpaisha' ? r.b : undefined;
+    const sp = uj === r.a ? r.b : uj === r.b ? r.a : undefined;
     if (!uj || !sp) continue;
-    (keepMap.get(uj) ?? keepMap.set(uj, new Set()).get(uj)!).add(sp);
-    keepPairMins.push(p.mins);
+    const mo = r.date.slice(0, 7);
+    const mm = byMonth.get(mo) ?? byMonth.set(mo, new Map()).get(mo)!;
+    (mm.get(uj) ?? mm.set(uj, new Set()).get(uj)!).add(sp);
+    const t = keepPairTotals.get(`${uj}|${sp}`) ?? keepPairTotals.set(`${uj}|${sp}`, { mins: 0, days: new Set() }).get(`${uj}|${sp}`)!;
+    t.mins += r.minutes; t.days.add(r.date);
   }
-  const ujikoIds = [...keyOf].filter(([, k]) => k === 'ujiko').map(([id]) => id);
-  const keepCounts = ujikoIds.map((id) => keepMap.get(id)?.size ?? 0);
-  const keepReality = { sample: ujikoIds.length, avgPartners: avg1(keepCounts), metSanpaisha: partnerHistogram(keepCounts), pairMinutes: minutesHistogram(keepPairMins) };
+  const keepMonthly = monthsBetween(from, today).map((month) => {
+    const mm = byMonth.get(month) ?? new Map<string, Set<string>>();
+    const counts = ujikoIds.map((id) => mm.get(id)?.size ?? 0);
+    return { month, sample: ujikoIds.length, avgPartners: avg1(counts), metSanpaisha: partnerHistogram(counts) };
+  });
+  const keepPairMinutes = minutesHistogram([...keepPairTotals.values()].map((t) => t.mins));
+  const keepPairDays = daysHistogram([...keepPairTotals.values()].map((t) => t.days.size));
 
-  // ── 昇格の現実性: 参拝者化後14日以内に顔を合わせた氏子以上（全VC・ミュート込み）
-  const omairiRows = await db.select({ id: omairi.memberId, startedAt: omairi.startedAt, status: omairi.status, decidedAt: omairi.decidedAt }).from(omairi);
+  // ── 昇格の現実性（期間内に参拝者化し14日経過。14日以内に会った氏子以上。全VC・ミュート込み）
   const startedMap = new Map(omairiRows.map((o) => [o.id, o.startedAt]));
-  const participants = visible.filter((p) => kindOf.get(p.id) === 'sanpaisha' && startedMap.has(p.id) && jstDate(startedMap.get(p.id)!) >= from);
+  const participants = visible.filter((p) => {
+    if (kindOf.get(p.id) !== 'sanpaisha' || !startedMap.has(p.id)) return false;
+    const s = jstDate(startedMap.get(p.id)!);
+    return s >= from && s <= cutoff14;
+  });
   const windowOf = new Map<string, { s: string; e: string }>();
   for (const p of participants) {
     const s = startedMap.get(p.id)!;
-    const end = jstDate(new Date(s.getTime() + 14 * DAY));
-    windowOf.set(p.id, { s: jstDate(s), e: end < today ? end : today });
+    windowOf.set(p.id, { s: jstDate(s), e: jstDate(new Date(s.getTime() + 14 * DAY)) });
   }
   const targetIds = participants.map((p) => p.id);
   const promoRaw = targetIds.length
@@ -281,9 +277,9 @@ export async function newSystemStats(db: Db, cfg: GuildConfig, opts: NewSystemSt
   }
   const promoteReality = { sample: participants.length, avgPartners: avg1(promoCounts), metPartners: partnerHistogram(promoCounts), pairMinutes: minutesHistogram(promoPairMins), pairDays: daysHistogram(promoPairDays) };
 
-  // ── 評価期間の延長の上限: 参拝者→氏子までの日数（omairi の startedAt→decidedAt・promoted）
+  // ── 評価期間（期間内に氏子になった人の、参拝者→氏子までの日数）
   const promotedDays = omairiRows
-    .filter((o) => o.status === 'promoted' && o.decidedAt)
+    .filter((o) => o.status === 'promoted' && o.decidedAt && jstDate(o.decidedAt) >= from)
     .map((o) => Math.round((o.decidedAt!.getTime() - o.startedAt.getTime()) / DAY))
     .filter((d) => d >= 0)
     .sort((a, b) => a - b);
@@ -292,7 +288,8 @@ export async function newSystemStats(db: Db, cfg: GuildConfig, opts: NewSystemSt
 
   return {
     now, days, from, today, activeMin, hourFrom, hourTo, baseCount,
-    engawaWeekly, engawaMonthly, hourActive, pairByMins, pairByDays, surfaceWeekly, surfaceTop, surfaceHours,
-    promoteReality, keepReality, promoteDays,
+    engawaWeekly, engawaMonthly, hourActive, emaGridVc, emaGridEngawa,
+    promoteReality, keepMonthly, keepPairMinutes, keepPairDays, promoteDays,
+    surfaceWeekly, surfaceDaysCame, surfaceTop, surfaceHours,
   };
 }

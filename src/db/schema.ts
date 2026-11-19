@@ -433,6 +433,8 @@ export const activityHourly = pgTable(
     vcMinutes: integer('vc_minutes').notNull().default(0),
     /** そのうち縁側にいた分（時間帯×縁側の検証用。2026-11-19〜） */
     engawaMinutes: integer('engawa_minutes').notNull().default(0),
+    /** そのうち縁側で非ミュートだった分（時間帯×縁側×ミュート除外の検証用。2026-11-19〜） */
+    engawaUnmuteMinutes: integer('engawa_unmute_minutes').notNull().default(0),
   },
   (t) => [primaryKey({ columns: [t.memberId, t.date, t.hour] }), index('activity_hourly_date_idx').on(t.date)],
 );
