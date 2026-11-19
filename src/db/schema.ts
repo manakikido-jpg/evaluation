@@ -32,6 +32,32 @@ export const shuin = pgTable(
 export type Shuin = typeof shuin.$inferSelect;
 
 /**
+ * 🎐 絵馬（評価の票・2026年11月の新制度）。氏子以上が、いいと思った相手に贈る。
+ * - tier: どの階級の票か（いまは 'ujiko' = 氏子の票だけ）。
+ * - 氏子の票は created_at から 30 日で失効。贈り直すと created_at を新しくする。
+ * - message: 一言（匿名で本人のプロフィールに飾る）。giver_id は記録するが本人には見せない。
+ * - 同じ (giver, receiver, tier) は 1 枚。取り消しは revoked_at。
+ */
+export const ema = pgTable(
+  'ema',
+  {
+    giverId: text('giver_id').notNull(),
+    receiverId: text('receiver_id').notNull(),
+    tier: text('tier').notNull(),
+    message: text('message').notNull().default(''),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.giverId, t.receiverId, t.tier] }),
+    index('ema_receiver_idx').on(t.receiverId, t.tier),
+    check('ema_not_self', sql`${t.giverId} <> ${t.receiverId}`),
+  ],
+);
+
+export type Ema = typeof ema.$inferSelect;
+
+/**
  * ✨ 特別ご縁（宮司が社務所Web から振る）。朱印のご縁に足して数える。
  * 取り消しは revoked_at を入れる（役職は下げない）。nonce で二度押しを 1 回にする。
  * checked_at は、BOT が昇格を確かめたら入れる（社務所Web からは Discord のロールを変えないため）。
