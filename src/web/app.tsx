@@ -196,6 +196,8 @@ const RECHECK_GRACE_MS = 30 * 60_000;
 import { isStatsView, StatsPage } from './views/stats.js';
 import { ServerReportPage } from './views/serverReport.js';
 import { serverReportData } from '../services/serverReport.js';
+import { NewSystemStatsPage } from './views/newSystemStats.js';
+import { newSystemStats } from '../services/newSystemStats.js';
 import { RecentUpdates, UpdatesPage } from './views/updates.js';
 import { Layout, type SessionView } from './views/layout.js';
 import { createMemberSession } from './memberSessions.js';
@@ -1981,6 +1983,11 @@ export function createWebApp(deps: WebDeps) {
     const days = Number(c.req.query('days'));
     const d = await serverReportData(db, cfg, { now: now(), days: [7, 30, 90].includes(days) ? days : 30 });
     return c.html(<ServerReportPage session={c.get('session')} d={d} coinName={cfg.economy.currencyName} />);
+  });
+  app.get('/stats/new-system', async (c) => {
+    const num = (name: string) => { const v = Number(c.req.query(name)); return Number.isFinite(v) ? v : undefined; };
+    const d = await newSystemStats(db, cfg, { now: now(), days: num('days'), activeMin: num('min'), hourFrom: num('hourFrom'), hourTo: num('hourTo') });
+    return c.html(<NewSystemStatsPage session={c.get('session')} d={d} />);
   });
 
   app.get('/stats', async (c) => {

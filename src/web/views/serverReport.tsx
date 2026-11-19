@@ -73,6 +73,7 @@ export function ServerReportPage(props: { session: AdminSession; d: ServerReport
         <a href="/stats/report" class="on" aria-current="page">
           📋 レポート
         </a>
+        <a href="/stats/new-system">📐 新制度の検証</a>
       </nav>
       <nav class="tabs" aria-label="期間">
         {DAY_OPTIONS.map((n) => (
