@@ -46,13 +46,17 @@ it('絵馬の条件: 氏子以上×参拝者の組だけ、1日◯分以上い�
   await pair(U, S, '2026-11-12', 60);
   // U×W は 氏子×世話役（どちらも氏子以上）なので対象外
   await pair(U, W, '2026-11-10', 200);
-  const d = await newSystemStats(db, cfg, { now, days: 30 });
+  const d = await newSystemStats(db, cfg, { now, days: 30 }); // 既定は全VC
   const c60x3 = gi(60, 3);
-  expect(d.emaGridVc[c60x3.i]![c60x3.j]).toBe(1); // U×S の1組
+  expect(d.emaGrid[c60x3.i]![c60x3.j]).toBe(1); // U×S の1組
   const c120x3 = gi(120, 3);
-  expect(d.emaGridVc[c120x3.i]![c120x3.j]).toBe(0); // 1日120分以上の日はない
+  expect(d.emaGrid[c120x3.i]![c120x3.j]).toBe(0); // 1日120分以上の日はない
   const c60x4 = gi(60, 4);
-  expect(d.emaGridVc[c60x4.i]![c60x4.j]).toBe(0); // 4日はない
+  expect(d.emaGrid[c60x4.i]![c60x4.j]).toBe(0); // 4日はない
+  // 縁側・ミュート除外に切り替えると、engawa_pairs は空なので0
+  const de = await newSystemStats(db, cfg, { now, days: 30, src: 'engawa' });
+  expect(de.src).toBe('engawa');
+  expect(de.emaGrid[c60x3.i]![c60x3.j]).toBe(0);
 });
 
 it('昇格の現実性: 14日たった参拝者の、14日以内に会った氏子以上', async () => {
@@ -88,13 +92,13 @@ it('お守り: 週に何日来たか・◯時間以上・ランキング', async
   const wk = d.surfaceWeekly.find((w) => w.bucket === '2026-11-09')!;
   expect(wk.came).toBe(2); // U と S
   expect(wk.avgDays).toBe(1.5); // U=2日, S=1日 → 平均1.5
+  expect(wk.top.map((t) => t.memberId)).toEqual([U, S]); // その週のランキング（U=300分, S=40分）
   expect(d.surfaceDaysCame.find((b) => b.label === '2日')!.count).toBe(1); // U
-  expect(d.surfaceTop.map((t) => t.memberId)).toEqual([U, S]); // U=300分, S=40分
   expect(d.surfaceHours.find((r) => r.hours === 5)!.people).toBe(1); // U=300分=5時間
 });
 
 it('縁側の記録がなくても落ちない', async () => {
   const d = await newSystemStats(db, cfg, { now, days: 7 });
   expect(d.engawaWeekly).toEqual([]);
-  expect(d.emaGridVc.flat().every((x) => x === 0)).toBe(true);
+  expect(d.emaGrid.flat().every((x) => x === 0)).toBe(true);
 });

@@ -1986,7 +1986,7 @@ export function createWebApp(deps: WebDeps) {
   });
   app.get('/stats/new-system', async (c) => {
     const num = (name: string) => { const v = Number(c.req.query(name)); return Number.isFinite(v) ? v : undefined; };
-    const d = await newSystemStats(db, cfg, { now: now(), days: num('days'), activeMin: num('min'), hourFrom: num('hourFrom'), hourTo: num('hourTo') });
+    const d = await newSystemStats(db, cfg, { now: now(), days: num('days'), activeMin: num('min'), hourFrom: num('hourFrom'), hourTo: num('hourTo'), src: c.req.query('src') === 'engawa' ? 'engawa' : 'vc' });
     return c.html(<NewSystemStatsPage session={c.get('session')} d={d} />);
   });
 

@@ -13,8 +13,10 @@ const HUB = '960000000000000001', ROOM = '960000000000000002', OWNER = '96000000
 const NOW = new Date('2099-01-01T00:00:00Z'), DUE = new Date(NOW.getTime() + STAY_MS);
 const cfg = { ...base, rooms: { ...base.rooms, stayPrice: 3000 }, tempVoice: { hubs: [{ channelId: HUB, name: '宿坊', plan: 'once' as const }] } };
 let db: Db, close: () => Promise<void>;
-beforeEach(async () => { ({ db, close } = await makeDb()); });
-afterEach(async () => { await close(); });
+// 宿の延長はコアタイム（既定で金・土21-23時JST）に料金が3倍になる。実時間に依存して落ちないよう、
+// 実行時の時計を固定の NOW（コアタイムでない）に固定する（本体は変えない・テストだけ）。
+beforeEach(async () => { ({ db, close } = await makeDb()); vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(NOW); });
+afterEach(async () => { vi.useRealTimers(); await close(); });
 async function seed(overrides: Partial<typeof tempVoice.$inferInsert> = {}, balance = 9000) {
   await db.insert(tempVoice).values({ channelId: ROOM, ownerId: OWNER, hubId: HUB, createdAt: new Date(NOW.getTime() - STAY_MS), keepUntil: DUE, kind: 'secret', invited: ['friend'], ...overrides });
   await addCoins(db, OWNER, balance, 'adjust');

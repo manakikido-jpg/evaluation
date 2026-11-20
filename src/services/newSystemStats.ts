@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, or, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, sql } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { activityHourly, engawaPairs, memberAlts, members, omairi, voicePairs, voiceUsage } from '../db/schema.js';
@@ -26,15 +26,21 @@ export type NewSystemStatsOptions = {
   activeMin?: number;
   hourFrom?: number;
   hourTo?: number;
+  /** 同席のデータ源: 'vc'=全VC・ミュート込み（今すぐ） / 'engawa'=縁側・ミュート除外（2026-11-19〜） */
+  src?: 'vc' | 'engawa';
 };
+export type PairSrc = 'vc' | 'engawa';
 
 /** 絵馬の条件の表: 1日に◯分以上いた日が、◯日以上ある組の数 */
 export const EMA_MIN_THRESHOLDS = [30, 60, 120, 180];
 export const EMA_DAY_THRESHOLDS = [2, 3, 4, 5];
 const HOUR_THRESHOLDS = [1, 3, 5, 10, 20];
 
+export type Ranked = { memberId: string; name: string; minutes: number };
 export type NewSystemStats = {
   now: Date; days: number; from: string; today: string; activeMin: number; hourFrom: number; hourTo: number;
+  /** 同席（絵馬の条件・昇格・維持）に使ったデータ源 */
+  src: PairSrc;
   baseCount: RankSplit;
   /** 縁側アクティブ人数（週・月／◯分以上）。参拝者=ミュート除外・氏子以上=全時間 */
   engawaWeekly: { bucket: string; active: RankSplit }[];
@@ -42,8 +48,7 @@ export type NewSystemStats = {
   /** 時間帯×縁側×ミュート除外に◯分以上いた人（2026-11-19〜・たまり中） */
   hourActive: RankSplit;
   /** 絵馬の条件: 氏子以上×参拝者の組ごと、1日◯分以上いた日が◯日以上ある組の数。[分][日数] */
-  emaGridVc: number[][]; // 全VC・ミュート込み（今すぐ）
-  emaGridEngawa: number[][]; // 縁側・ミュート除外（2026-11-19〜）
+  emaGrid: number[][];
   /** 昇格の現実性（期間内に参拝者化し14日経過した人の、14日以内に会った氏子以上） */
   promoteReality: { sample: number; avgPartners: number; metPartners: Bucket[]; pairMinutes: Bucket[]; pairDays: Bucket[] };
   /** 維持の現実性（月ごと・氏子1人あたりが同席した参拝者） */
@@ -52,10 +57,9 @@ export type NewSystemStats = {
   keepPairDays: Bucket[];
   /** 評価期間（期間内に氏子になった人の、参拝者→氏子までの日数） */
   promoteDays: { sample: number; median: number; p90: number; max: number; buckets: Bucket[] };
-  /** お守り: 週ごと（月〜日）に何日縁側へ来たか */
-  surfaceWeekly: { bucket: string; came: number; avgDays: number }[];
+  /** お守り: 週ごと（月〜日）に何日縁側へ来たか＋その週の浮上時間ランキング（上位10） */
+  surfaceWeekly: { bucket: string; came: number; avgDays: number; top: Ranked[] }[];
   surfaceDaysCame: Bucket[];
-  surfaceTop: { memberId: string; name: string; minutes: number }[];
   surfaceHours: { hours: number; people: number }[];
 };
 
@@ -121,6 +125,7 @@ export async function newSystemStats(db: Db, cfg: GuildConfig, opts: NewSystemSt
   const activeMin = Math.min(1440, Math.max(1, Math.floor(opts.activeMin ?? 30)));
   const hourFrom = Math.min(23, Math.max(0, Math.floor(opts.hourFrom ?? 0)));
   const hourTo = Math.min(24, Math.max(1, Math.floor(opts.hourTo ?? 24)));
+  const src: PairSrc = opts.src === 'engawa' ? 'engawa' : 'vc';
   const today = jstDate(now);
   const from = jstDate(new Date(now.getTime() - (days - 1) * DAY));
   const cutoff14 = jstDate(new Date(now.getTime() - 14 * DAY));
@@ -192,12 +197,12 @@ export async function newSystemStats(db: Db, cfg: GuildConfig, opts: NewSystemSt
       (m.get(r.id) ?? m.set(r.id, new Set()).get(r.id)!).add(r.date);
     }
   }
+  const topOf = (m: Map<string, number>): Ranked[] => [...m.entries()].filter(([, min]) => min > 0).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([id, minutes]) => ({ memberId: id, name: nameOf.get(id) ?? id, minutes }));
   const surfaceWeekly = [...weekDays.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([bucket, m]) => {
     const dayCounts = [...m.values()].map((s) => s.size);
-    return { bucket, came: dayCounts.length, avgDays: avg1(dayCounts) };
+    return { bucket, came: dayCounts.length, avgDays: avg1(dayCounts), top: topOf(weeks.get(bucket) ?? new Map()) };
   });
   const surfaceDaysCame = daysHistogram([...weekDays.values()].flatMap((m) => [...m.values()].map((s) => s.size)));
-  const surfaceTop = [...totalMin.entries()].filter(([, min]) => min > 0).sort((a, b) => b[1] - a[1]).slice(0, 20).map(([id, minutes]) => ({ memberId: id, name: nameOf.get(id) ?? id, minutes }));
   const surfaceHours = HOUR_THRESHOLDS.map((hours) => ({ hours, people: [...totalMin.values()].filter((m) => m >= hours * 60).length }));
 
   // ── 時間帯×縁側×ミュート除外（2026-11-19〜）
@@ -215,13 +220,14 @@ export async function newSystemStats(db: Db, cfg: GuildConfig, opts: NewSystemSt
     db.select({ a: engawaPairs.memberA, b: engawaPairs.memberB, date: engawaPairs.date, minutes: engawaPairs.minutes }).from(engawaPairs).where(gte(engawaPairs.date, from)),
   ]);
   const vcPairs = rawVc.filter((p) => visibleIds.has(p.a) && visibleIds.has(p.b));
-  const emaGridVc = emaGrid(vcPairs, kindOf);
-  const emaGridEngawa = emaGrid(rawEngawa.filter((p) => visibleIds.has(p.a) && visibleIds.has(p.b)), kindOf);
+  const engPairs = rawEngawa.filter((p) => visibleIds.has(p.a) && visibleIds.has(p.b));
+  const pairs = src === 'engawa' ? engPairs : vcPairs;
+  const emaGridOut = emaGrid(pairs, kindOf);
 
-  // ── 維持の現実性（月ごと・氏子×参拝者。全VC・ミュート込み）
+  // ── 維持の現実性（月ごと・氏子×参拝者。データ源は src）
   const byMonth = new Map<string, Map<string, Set<string>>>();
   const keepPairTotals = new Map<string, { mins: number; days: Set<string> }>();
-  for (const r of vcPairs) {
+  for (const r of pairs) {
     const ka = keyOf.get(r.a), kb = keyOf.get(r.b);
     const uj = ka === 'ujiko' && kb === 'sanpaisha' ? r.a : kb === 'ujiko' && ka === 'sanpaisha' ? r.b : undefined;
     const sp = uj === r.a ? r.b : uj === r.b ? r.a : undefined;
@@ -240,7 +246,7 @@ export async function newSystemStats(db: Db, cfg: GuildConfig, opts: NewSystemSt
   const keepPairMinutes = minutesHistogram([...keepPairTotals.values()].map((t) => t.mins));
   const keepPairDays = daysHistogram([...keepPairTotals.values()].map((t) => t.days.size));
 
-  // ── 昇格の現実性（期間内に参拝者化し14日経過。14日以内に会った氏子以上。全VC・ミュート込み）
+  // ── 昇格の現実性（期間内に参拝者化し14日経過。14日以内に会った氏子以上。データ源は src）
   const startedMap = new Map(omairiRows.map((o) => [o.id, o.startedAt]));
   const participants = visible.filter((p) => {
     if (kindOf.get(p.id) !== 'sanpaisha' || !startedMap.has(p.id)) return false;
@@ -252,11 +258,8 @@ export async function newSystemStats(db: Db, cfg: GuildConfig, opts: NewSystemSt
     const s = startedMap.get(p.id)!;
     windowOf.set(p.id, { s: jstDate(s), e: jstDate(new Date(s.getTime() + 14 * DAY)) });
   }
-  const targetIds = participants.map((p) => p.id);
-  const promoRaw = targetIds.length
-    ? await db.select({ a: voicePairs.memberA, b: voicePairs.memberB, date: voicePairs.date, minutes: voicePairs.minutes }).from(voicePairs)
-        .where(and(gte(voicePairs.date, from), or(inArray(voicePairs.memberA, targetIds), inArray(voicePairs.memberB, targetIds))))
-    : [];
+  const targetSet = new Set(participants.map((p) => p.id));
+  const promoRaw = (src === 'engawa' ? rawEngawa : rawVc).filter((r) => targetSet.has(r.a) || targetSet.has(r.b));
   const promoPartners = new Map<string, Map<string, { mins: number; days: Set<string> }>>();
   const addPromo = (pid: string, partner: string, date: string, minutes: number) => {
     const w = windowOf.get(pid);
@@ -287,9 +290,9 @@ export async function newSystemStats(db: Db, cfg: GuildConfig, opts: NewSystemSt
   const promoteDays = { sample: promotedDays.length, median: pick(0.5), p90: pick(0.9), max: promotedDays.at(-1) ?? 0, buckets: daysToUjikoHistogram(promotedDays) };
 
   return {
-    now, days, from, today, activeMin, hourFrom, hourTo, baseCount,
-    engawaWeekly, engawaMonthly, hourActive, emaGridVc, emaGridEngawa,
+    now, days, from, today, activeMin, hourFrom, hourTo, src, baseCount,
+    engawaWeekly, engawaMonthly, hourActive, emaGrid: emaGridOut,
     promoteReality, keepMonthly, keepPairMinutes, keepPairDays, promoteDays,
-    surfaceWeekly, surfaceDaysCame, surfaceTop, surfaceHours,
+    surfaceWeekly, surfaceDaysCame, surfaceHours,
   };
 }

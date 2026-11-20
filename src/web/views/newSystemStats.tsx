@@ -54,6 +54,7 @@ export function NewSystemStatsPage(props: { session: AdminSession; d: NewSystemS
   const d = props.d;
   const avgW = avgSplit(d.engawaWeekly);
   const avgM = avgSplit(d.engawaMonthly);
+  const srcLabel = d.src === 'engawa' ? '縁側・ミュート除外（2026-11-19〜）' : '全VC・ミュート込み（今すぐ）';
   return (
     <Layout title="新制度の検証" session={props.session} nav="stats">
       <h1>📐 新制度の検証</h1>
@@ -66,11 +67,17 @@ export function NewSystemStatsPage(props: { session: AdminSession; d: NewSystemS
       </nav>
       <p class="note">{d.from.replaceAll('-', '/')}〜{d.today.replaceAll('-', '/')}（{d.days} 日）。開くたびに今の数字で作り直します。役職は<strong>今の役職</strong>で分けます（近似）。</p>
       <p class="notice">
-        ⚠️ データの限界：縁側の浮上は<strong>参拝者＝ミュート除外・氏子以上＝全時間</strong>。2人の同席は、<strong>全VC・ミュート込み（今すぐ）</strong>と<strong>縁側・ミュート除外（2026-11-19から記録・これからたまる）</strong>の両方を出します。時間帯×縁側×ミュート除外も2026-11-19から。
+        ⚠️ データの限界：縁側の浮上は<strong>参拝者＝ミュート除外・氏子以上＝全時間</strong>。2人の同席（絵馬の条件・昇格・維持）は、下の「同席のデータ源」で<strong>全VC・ミュート込み（今すぐ見られる）</strong>か<strong>縁側・ミュート除外（2026-11-19から記録・これからたまる）</strong>を選べます。
       </p>
 
       <form method="get" action="/stats/new-system" class="filters">
         <label>期間<select name="days">{DAY_OPTIONS.map((x) => <option value={x} selected={x === d.days}>{x} 日</option>)}</select></label>
+        <label>同席のデータ源
+          <select name="src">
+            <option value="vc" selected={d.src === 'vc'}>全VC・ミュート込み（今すぐ）</option>
+            <option value="engawa" selected={d.src === 'engawa'}>縁側・ミュート除外（たまり中）</option>
+          </select>
+        </label>
         <label>縁側に「◯分以上」<input type="number" name="min" value={d.activeMin} min={1} max={1440} /></label>
         <label>時間帯（開始・JST）<input type="number" name="hourFrom" value={d.hourFrom} min={0} max={23} /></label>
         <label>時間帯（終わり・0時は24）<input type="number" name="hourTo" value={d.hourTo} min={1} max={24} /></label>
@@ -110,15 +117,14 @@ export function NewSystemStatsPage(props: { session: AdminSession; d: NewSystemS
 
       <section class="card">
         <h2>🤝 絵馬を贈れる条件（氏子以上×参拝者の組）</h2>
-        <p class="note">同じ組が「1日に◯分以上いた日」を◯日以上もつ組の数。たたき台は「1日◯分以上が3日以上」など。</p>
-        <EmaGrid caption="① 全VC・ミュート込み（今すぐ見られる）" grid={d.emaGridVc} />
-        <p class="note">⚠️ ②は縁側だけ・2人ともミュートでない同席（2026-11-19から記録・これからたまる）。今は数字が少なめです。</p>
-        <EmaGrid caption="② 縁側・ミュート除外（2026-11-19〜）" grid={d.emaGridEngawa} />
+        <p class="note">同じ組が「1日に◯分以上いた日」を◯日以上もつ組の数。たたき台は「1日◯分以上が3日以上」など。データ源：<strong>{srcLabel}</strong>。</p>
+        {d.src === 'engawa' && <p class="note">⚠️ 縁側・ミュート除外は2026-11-19から記録。今は数字が少なめで、これからたまります。</p>}
+        <EmaGrid caption={`1日◯分以上いた日が◯日以上ある組の数（${srcLabel}）`} grid={d.emaGrid} />
       </section>
 
       <section class="card">
         <h2>⬆️ 昇格の割合が現実的か（参拝者化から14日以内）</h2>
-        <p class="note">⚠️ <strong>全VC・ミュート込み</strong>。期間内に参拝者になり14日たった <strong>{n(d.promoteReality.sample)}人</strong>が、最初の14日で顔を合わせた氏子以上。平均 <strong>{one(d.promoteReality.avgPartners)}人</strong>。</p>
+        <p class="note">データ源：<strong>{srcLabel}</strong>。期間内に参拝者になり14日たった <strong>{n(d.promoteReality.sample)}人</strong>が、最初の14日で顔を合わせた氏子以上。平均 <strong>{one(d.promoteReality.avgPartners)}人</strong>。</p>
         <BucketTable caption="14日以内に顔を合わせた氏子以上の人数（参拝者ごと）" head="会った氏子以上" rows={d.promoteReality.metPartners} />
         <BucketTable caption="相手1人ごとの同席時間（参拝者×氏子以上の組）" head="同席の合計時間" rows={d.promoteReality.pairMinutes} />
         <BucketTable caption="相手1人ごとの同席日数（参拝者×氏子以上の組）" head="違う日の数" rows={d.promoteReality.pairDays} />
@@ -126,7 +132,7 @@ export function NewSystemStatsPage(props: { session: AdminSession; d: NewSystemS
 
       <section class="card">
         <h2>🔁 維持の割合が現実的か（月ごと・氏子が会う参拝者）</h2>
-        <p class="note">⚠️ <strong>全VC・ミュート込み</strong>。各月、氏子ちょうど1人あたりが同席した参拝者の人数。</p>
+        <p class="note">データ源：<strong>{srcLabel}</strong>。各月、氏子ちょうど1人あたりが同席した参拝者の人数。</p>
         {d.keepMonthly.map((mo) => (
           <>
             <p><strong>{mo.month.replace('-', '/')}</strong>：対象の氏子 {n(mo.sample)}人・平均 {one(mo.avgPartners)}人の参拝者と同席</p>
@@ -158,12 +164,18 @@ export function NewSystemStatsPage(props: { session: AdminSession; d: NewSystemS
             <tbody>{d.surfaceHours.map((r) => <tr><th scope="row">{n(r.hours)}時間以上</th><td>{n(r.people)}人</td></tr>)}</tbody>
           </table>
         </div>
-        <div class="admin-table-scroll" tabIndex={0} role="region" aria-label="縁側の浮上時間ランキング">
-          <table><caption>縁側の浮上時間ランキング（期間計・上位20）</caption>
-            <thead><tr><th scope="col">順位</th><th scope="col">名前</th><th scope="col">縁側の合計</th></tr></thead>
-            <tbody>{d.surfaceTop.length ? d.surfaceTop.map((r, i) => <tr><td>{i + 1}位</td><th scope="row"><a href={'/members/' + r.memberId}>{r.name}</a></th><td>{hrs(r.minutes)}時間（{n(r.minutes)}分）</td></tr>) : <tr><td colSpan={3}>記録がありません。</td></tr>}</tbody>
-          </table>
-        </div>
+        <h3>週ごとの縁側の浮上時間ランキング（上位10）</h3>
+        {d.surfaceWeekly.length ? [...d.surfaceWeekly].reverse().map((w) => (
+          <details>
+            <summary>{md(w.bucket)}〜 の週（{n(w.came)}人）</summary>
+            <div class="admin-table-scroll" tabIndex={0} role="region" aria-label={`${md(w.bucket)}の浮上ランキング`}>
+              <table>
+                <thead><tr><th scope="col">順位</th><th scope="col">名前</th><th scope="col">縁側の合計</th></tr></thead>
+                <tbody>{w.top.length ? w.top.map((r, i) => <tr><td>{i + 1}位</td><th scope="row"><a href={'/members/' + r.memberId}>{r.name}</a></th><td>{hrs(r.minutes)}時間（{n(r.minutes)}分）</td></tr>) : <tr><td colSpan={3}>記録がありません。</td></tr>}</tbody>
+              </table>
+            </div>
+          </details>
+        )) : <p class="note">記録がありません。</p>}
       </section>
     </Layout>
   );

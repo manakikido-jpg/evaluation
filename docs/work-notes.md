@@ -10,6 +10,7 @@
 - Push B 実装：検証ページに昇格の現実性（参拝者化後14日以内に会った氏子以上・相手ごとの時間/日数）・維持の現実性（氏子あたりの参拝者同席数/時間）・評価期間（参拝者→氏子までの日数＝omairi startedAt→decidedAt）を追加。newSystemStats.ts に promoteReality/keepReality/promoteDays。test/newSystemStats.test.ts を7件に拡張。
 - Push C 実装（収集開始）：schema に engawa_pairs（縁側・両非ミュートの同席）・voice_usage.engawa_unmute_minutes（役職問わず縁側非ミュート）・activity_hourly.engawa_minutes（時間帯×縁側）。移行0166。recordPresence（voiceUsage.ts）と addHourlyActivity（activity.ts・app.ts の呼び出しで縁側メンバー集合を渡す）で収集。test/newSystemCollect.test.ts（3）。過去にさかのぼれない＝数週間後に検証ページを正確版へ切替（未実装の小変更）。changelog 2件・admin.md・設計書8節を更新。
 - 全体の現在地：絵馬の土台①＋検証ページABC が本番。絵馬の②入口・Web表示③以降（昇格差し替え・結び・リセット・カジノ宿・招待補填・割引倍率）はこれから。数字は検証ページの実データを見て最終決定する流れ。
+- 検証ページ 追い修正（同じ仕様の再確認を受けて）：同席のデータ源トグル（src=vc|engawa）を追加し、絵馬条件・昇格・維持をまとめて切替（全VC・ミュート込み↔縁側・ミュート除外）。お守りのランキングを期間計→週ごと上位10に修正。newSystemStats は emaGrid 単一＋surfaceWeekly.top。既定 vc（過去分あり）。engawa は11/19〜で今は空に近い。changelog(2026-11-20)・admin.md 更新。
 - 検証ページ 仕様修正（本人の詳細指定）：絵馬条件を「氏子以上×参拝者の組ごと・1日◯分以上いた日が◯日以上ある組の数」の表（分×日数）に。全VC・ミュート込み（今すぐ）＋縁側・ミュート除外（engawa_pairs・11/19〜）の2表。維持を月ごと、評価期間を期間内に氏子化、昇格を14日経過者のみ、お守り浮上率を「週に何日来たか」に。時間帯×縁側×ミュート除外の記録 activity_hourly.engawa_unmute_minutes を追加（移行0167・addHourlyActivity に inEngawaUnmute）。newSystemStats.ts 全面書き換え。test 6+3+1=10。縁側/ミュート除外の正確版は11/19から＝今は空に近い（過去さかのぼれない）、全VC近似は今すぐ見られる。changelog・admin.md 更新。
 
 ## 2026年11月18日：氏子を5段階で評価するシート（エクセル・宮司だけ／本番へ反映済み・Claude）
