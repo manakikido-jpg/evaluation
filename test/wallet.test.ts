@@ -116,8 +116,11 @@ describe('📒 銭の通帳', () => {
       expect(text).toContain('－200枚');
       expect(text).toContain('＋880枚');
       expect(text).toContain('通話（2回）');
-      expect(v.components[0]!.components[0]).toMatchObject({ custom_id: 'wallet:book:0:30', disabled: true });
-      expect(v.components[0]!.components[1]).toMatchObject({ custom_id: 'wallet:book:1:30', disabled: false });
+      expect(v.components[0]!.components[0]).toMatchObject({ custom_id: 'wallet:book:0:30:p', disabled: true });
+      expect(v.components[0]!.components[1]).toMatchObject({ custom_id: 'wallet:book:1:30:n', disabled: false });
+      // 1ページ目でも「前へ」が「30日の合計」ボタン（wallet:book:0:30）と重ならない（Discord が拒否しない）
+      const ids = v.components[0]!.components.map((c: any) => c.custom_id);
+      expect(new Set(ids).size).toBe(ids.length);
     } finally { await close(); }
   });
 });

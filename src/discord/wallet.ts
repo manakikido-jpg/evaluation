@@ -84,9 +84,12 @@ export function walletView(
 const PAGE = 10;
 const PERIODS = [7, 30] as const;
 const button = (custom_id: string, label: string, disabled = false, style = 2) => ({ type: 2, style, custom_id, label, disabled });
+// 前へ/次への customId に :p/:n を付けて、同じ行の「◯日の合計」ボタン（wallet:book:0:日数）と
+// 重ならないようにする（1 ページ目だと前へが wallet:book:0:日数 と同じになり、Discord がメッセージ全体を拒否する）。
+// ハンドラはページ(parts[2])と日数(parts[3])だけを読むので、末尾の :p/:n は無視される。
 const bookRow = (page: number, days: number, hasNext = true) => ({ type: 1, components: [
-  button(`wallet:book:${Math.max(0, page - 1)}:${days}`, '◀ 新しい方へ', page <= 0),
-  button(`wallet:book:${page + 1}:${days}`, '古い方へ ▶', !hasNext),
+  button(`wallet:book:${Math.max(0, page - 1)}:${days}:p`, '◀ 新しい方へ', page <= 0),
+  button(`wallet:book:${page + 1}:${days}:n`, '古い方へ ▶', !hasNext),
   ...PERIODS.map(d => button(`wallet:book:0:${d}`, `${d}日の合計`, false, d === days ? 1 : 2)),
 ] });
 

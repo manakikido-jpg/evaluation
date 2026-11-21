@@ -50,6 +50,9 @@ export function parseCount(raw: string): number {
   return /^\d+$/.test(t) ? Number(t) : NaN;
 }
 
+/** 支払いが通らなかったとき（残高不足）。トランザクションを巻き戻すために投げる */
+class OtoshidamaInsufficient extends Error {}
+
 /**
  * 袋を置く（入れる量と手数料を払って、袋を作る）。投稿は呼び出し側。置くのは氏子以上
  * （受け取りは経済の見守りの「やり取りが多い組」で見る）
@@ -68,12 +71,16 @@ export async function putBag(
     return { status: 'bad_amount' };
   }
   const need = total + input.fee;
-  return db.transaction(async (tx) => {
+  try {
+    return await db.transaction(async (tx) => {
     await lock(tx, `shop:${input.ownerId}`);
     const balance = (await walletOf(tx, input.ownerId)).balance;
     if (balance < need) return { status: 'insufficient' as const, need, balance };
-    await spendWithin(tx, input.ownerId, total, 'otoshidama_put', { channelId: input.channelId, count });
-    if (input.fee > 0) await spendWithin(tx, input.ownerId, input.fee, 'shop', { itemId: input.itemId, name: input.itemName });
+    // spendWithin は残高が足りなければ何も引かず false を返す。:73 の読み取り後に、別の操作
+    // （カジノ・物御籤など shop ロックの外）で残高が減ることがあるので、必ず結果を確認し、
+    // 足りなければ袋を作らずに巻き戻す（throw）。無視すると、払っていないのに袋が配られる。
+    if (!(await spendWithin(tx, input.ownerId, total, 'otoshidama_put', { channelId: input.channelId, count }))) throw new OtoshidamaInsufficient();
+    if (input.fee > 0 && !(await spendWithin(tx, input.ownerId, input.fee, 'shop', { itemId: input.itemId, name: input.itemName }))) throw new OtoshidamaInsufficient();
     const [bag] = await tx
       .insert(otoshidamaBags)
       .values({
@@ -88,7 +95,11 @@ export async function putBag(
       })
       .returning();
     return { status: 'ok' as const, bag: bag!, balance: (await walletOf(tx, input.ownerId)).balance };
-  });
+    });
+  } catch (e) {
+    if (e instanceof OtoshidamaInsufficient) return { status: 'insufficient' as const, need, balance: (await walletOf(db, input.ownerId)).balance };
+    throw e;
+  }
 }
 
 /**
@@ -107,7 +118,9 @@ export async function putStaffBag(
   return db.transaction(async (tx) => {
     // 運営から出して、そのまま袋に入れる（記録上は「運営から」→「お年玉袋を置いた」。財布は差し引き 0）
     await addCoins(tx, input.by, total, 'admin_grant', { note: '🧧 運営のお年玉袋', by: input.by });
-    await spendWithin(tx, input.by, total, 'otoshidama_put', { channelId: input.channelId, count, staff: true });
+    // 念のため、引き落としが通ったことを確認する（制限アカウントなどで addCoins が入らず引けないと、
+    // タダで袋が作られてしまうため）。通らなければ巻き戻す。
+    if (!(await spendWithin(tx, input.by, total, 'otoshidama_put', { channelId: input.channelId, count, staff: true }))) throw new OtoshidamaInsufficient();
     const [bag] = await tx
       .insert(otoshidamaBags)
       .values({
