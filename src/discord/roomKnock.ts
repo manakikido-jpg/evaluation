@@ -128,7 +128,13 @@ export class RoomKnockApp {
     }
     const components: (ActionRowBuilder<StringSelectMenuBuilder> | ActionRowBuilder<ButtonBuilder>)[] = [];
     if (options.length) components.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(new StringSelectMenuBuilder().setCustomId('rkn:select').setPlaceholder('部屋を選ぶ').addOptions(options)));
-    components.push(row(button(`rkn:list:${Math.max(0, page - 1)}`, '前へ').setDisabled(page === 0), button(`rkn:list:${Math.min(max, page + 1)}`, '次へ').setDisabled(page === max), button(`rkn:list:${page}`, '🔄 更新')));
+    // 3 つのボタンの customId は、同じページ番号になっても重ならないよう役割（prev/next/refresh）を付ける。
+    // （1 ページだけなら前へ=次へ、1 ページ目なら前へ=更新、最終ページなら次へ=更新 が同じ番号になり、重複すると Discord がメッセージ全体を拒否する）
+    components.push(row(
+      button(`rkn:list:${Math.max(0, page - 1)}:prev`, '前へ').setDisabled(page === 0),
+      button(`rkn:list:${Math.min(max, page + 1)}:next`, '次へ').setDisabled(page === max),
+      button(`rkn:list:${page}:refresh`, '🔄 更新'),
+    ));
     return { content: `**🌸 お部屋一覧（${page + 1}/${max + 1}）**\n${options.length ? '部屋を選ぶと、受付の状態と操作が表示されます。' : '利用できる宿のお部屋はありません。'}`, components, allowedMentions: noPing };
   }
   async onInteraction(i: Interaction) {

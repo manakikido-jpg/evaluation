@@ -54,6 +54,17 @@ describe('宿のお部屋案内パネル', () => {
     await f.act(`rkn:reply:${ROOM}:${p.id}:yes`, IN);
     expect(f.client.users.send).not.toHaveBeenCalled();
   });
+  it('部屋一覧パネルのボタンの customId が重複しない（Discord がメッセージを拒否しない）', async () => {
+    const f = fixture();
+    const i = await f.act('rkn:list:0');
+    const body: any = (i.editReply as any).mock.calls[0][0];
+    const ids: string[] = body.components.flatMap((r: any) => r.toJSON().components).map((c: any) => c.custom_id);
+    expect(new Set(ids).size).toBe(ids.length); // 1ページでも前へ=次へ=更新の重複がない
+    expect(ids).toContain('rkn:list:0:refresh');
+    // ページ番号は parts[2] で読むので、役割を付けても routing は壊れない
+    const back = await f.act('rkn:list:0:next');
+    expect((back.editReply as any)).toHaveBeenCalled();
+  });
   it('入室不可の宿や対象外VCのボタンを直接押しても通知しない', async () => {
     const f = fixture(); await setRoomKnockMode(db, ROOM, 'knock');
     f.room.connectable = false;
