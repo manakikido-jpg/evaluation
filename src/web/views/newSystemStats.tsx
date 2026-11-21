@@ -117,7 +117,7 @@ export function NewSystemStatsPage(props: { session: AdminSession; d: NewSystemS
 
       <section class="card">
         <h2>🤝 絵馬を贈れる条件（氏子以上×参拝者の組）</h2>
-        <p class="note">同じ組が「1日に◯分以上いた日」を◯日以上もつ組の数。たたき台は「1日◯分以上が3日以上」など。データ源：<strong>{srcLabel}</strong>。</p>
+        <p class="note">同じ組が「1日に◯分以上いた日」を◯日以上もつ組の数。たたき台は「1日◯分以上が3日以上」など。データ源：<strong>{srcLabel}</strong>。{d.days > 92 && <>（同席の集計は<strong>最大92日分</strong>です）</>}</p>
         {d.src === 'engawa' && <p class="note">⚠️ 縁側・ミュート除外は2026-11-19から記録。今は数字が少なめで、これからたまります。</p>}
         <EmaGrid caption={`1日◯分以上いた日が◯日以上ある組の数（${srcLabel}）`} grid={d.emaGrid} />
       </section>

@@ -129,6 +129,10 @@ export async function newSystemStats(db: Db, cfg: GuildConfig, opts: NewSystemSt
   const today = jstDate(now);
   const from = jstDate(new Date(now.getTime() - (days - 1) * DAY));
   const cutoff14 = jstDate(new Date(now.getTime() - 14 * DAY));
+  // 2人の同席（voice_pairs / engawa_pairs）は行数が多いので、取り込む期間を最大 92 日に抑える
+  // （絵馬の条件・昇格・維持の集計用。活発なサーバーで長期間を選んでもメモリを使いすぎないように）。
+  const PAIR_MAX_DAYS = 92;
+  const pairFrom = days <= PAIR_MAX_DAYS ? from : jstDate(new Date(now.getTime() - (PAIR_MAX_DAYS - 1) * DAY));
 
   const [people, alts, altRows, engawaIds, omairiRows] = await Promise.all([
     db.select({ id: members.id, name: members.displayName, roleIds: members.roleIds, isBot: members.isBot, leftAt: members.leftAt }).from(members),
@@ -216,8 +220,8 @@ export async function newSystemStats(db: Db, cfg: GuildConfig, opts: NewSystemSt
 
   // ── 2人の同席（全VC・ミュート込み / 縁側・ミュート除外）
   const [rawVc, rawEngawa] = await Promise.all([
-    db.select({ a: voicePairs.memberA, b: voicePairs.memberB, date: voicePairs.date, minutes: voicePairs.minutes }).from(voicePairs).where(gte(voicePairs.date, from)),
-    db.select({ a: engawaPairs.memberA, b: engawaPairs.memberB, date: engawaPairs.date, minutes: engawaPairs.minutes }).from(engawaPairs).where(gte(engawaPairs.date, from)),
+    db.select({ a: voicePairs.memberA, b: voicePairs.memberB, date: voicePairs.date, minutes: voicePairs.minutes }).from(voicePairs).where(gte(voicePairs.date, pairFrom)),
+    db.select({ a: engawaPairs.memberA, b: engawaPairs.memberB, date: engawaPairs.date, minutes: engawaPairs.minutes }).from(engawaPairs).where(gte(engawaPairs.date, pairFrom)),
   ]);
   const vcPairs = rawVc.filter((p) => visibleIds.has(p.a) && visibleIds.has(p.b));
   const engPairs = rawEngawa.filter((p) => visibleIds.has(p.a) && visibleIds.has(p.b));
@@ -238,7 +242,7 @@ export async function newSystemStats(db: Db, cfg: GuildConfig, opts: NewSystemSt
     const t = keepPairTotals.get(`${uj}|${sp}`) ?? keepPairTotals.set(`${uj}|${sp}`, { mins: 0, days: new Set() }).get(`${uj}|${sp}`)!;
     t.mins += r.minutes; t.days.add(r.date);
   }
-  const keepMonthly = monthsBetween(from, today).map((month) => {
+  const keepMonthly = monthsBetween(pairFrom, today).map((month) => {
     const mm = byMonth.get(month) ?? new Map<string, Set<string>>();
     const counts = ujikoIds.map((id) => mm.get(id)?.size ?? 0);
     return { month, sample: ujikoIds.length, avgPartners: avg1(counts), metSanpaisha: partnerHistogram(counts) };
@@ -251,7 +255,7 @@ export async function newSystemStats(db: Db, cfg: GuildConfig, opts: NewSystemSt
   const participants = visible.filter((p) => {
     if (kindOf.get(p.id) !== 'sanpaisha' || !startedMap.has(p.id)) return false;
     const s = jstDate(startedMap.get(p.id)!);
-    return s >= from && s <= cutoff14;
+    return s >= pairFrom && s <= cutoff14;
   });
   const windowOf = new Map<string, { s: string; e: string }>();
   for (const p of participants) {
