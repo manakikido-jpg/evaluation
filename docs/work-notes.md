@@ -99,7 +99,8 @@
 ### 統合版の検証完了・レビュー用保存
 - c3e8a3fb統合版で型チェック・ビルド・全292ファイル3,076件成功（652.01秒、4並列）。ログ/tmp/server-review-integrated-{types,build,all}.log。ソースはこの検証後に変更していない。
 - 保存前fetchでも本番4653f266を確認。今回の独自変更と重複なし。最新baseとの結合CIはPRで別途確認する。
-- codex/server-performance-reviewをpushして本番担当向けDraft PRに保存する。本番未反映、実データ操作なし。実VPS負荷・実Discordの動作は未測定。PR番号・CI状態は保存後に確認し会話で伝える。
+- codex/server-performance-reviewをpushし、Draft PR #178 https://github.com/manakikido-jpg/evaluation/pull/178 に保存済み。保存確認時head96cc4b11、OPEN/MERGEABLE。GitHub CIは実行中/待機中で、成功とは数えない。この追記は記録のみで検証済みソースに変更なし。
+- 本番未反映、実データ操作なし。実VPS負荷・実Discordの動作は未測定。次はPRのCIと本番担当レビュー、合流・公開は別途指示待ち。
 
 ## 2026年11月19日：新制度の作り替え（段階的・Claude）
 - 依頼「まとまった新制度に合わせてシステムも変更」。本人と土台を確認し合意：結び＝ご縁（特典・コレクション用）、絵馬＝評価（昇格用）。詳細は user-decisions.md と docs/new-system-design.md。
