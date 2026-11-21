@@ -5,12 +5,18 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { VISIT_BADGE_ART, visitBadgeImage } from '../services/visitBadgeArt.js';
 import { isArtKey } from '../services/casino/slotArt.js';
+import { lazyStaticAsset, StaticAssetCache } from './staticAssetCache.js';
 
 /**
  * 画面で使う CSS・JS。URL に中身から作った印（?v=…）を付けるので、
  * 更新したらブラウザが古いものを使い続けない（前の CSS のままだとグラフが真っ黒になる）。
  */
 const here = path.dirname(fileURLToPath(import.meta.url));
+// カード・動画などを起動時に全部保持せず、使う分だけ最大16MiBまで覚える。
+const binaryCache = new StaticAssetCache(16 * 1024 * 1024);
+const fileAsset = (file: string, type: string) => ({
+  load: () => new Uint8Array(readFileSync(file)), type,
+});
 const bingoShrine = new Uint8Array(readFileSync(path.join(here, '../../assets/visit/background-paper.jpg')));
 const bingoShrineVersion = createHash('sha256').update(bingoShrine).digest('hex').slice(0, 10);
 const readText = (p: string) => readFileSync(p, 'utf8');
@@ -68,7 +74,7 @@ const SHINPU_DIR = path.join(here, 'public/shinpu');
 const SHINPU_CATALOG_DIR = path.join(here, 'public/shinpu-catalog');
 const catalogImages = ['cards', 'thumbnails'].flatMap(size =>
   readdirSync(path.join(SHINPU_CATALOG_DIR, size)).filter(f => /^SK-\d{3}\.webp$/.test(f)).map(file => [
-    `shinpu-catalog-${size}-${file}`, { body: new Uint8Array(readFileSync(path.join(SHINPU_CATALOG_DIR, size, file))), type: 'image/webp' },
+    `shinpu-catalog-${size}-${file}`, fileAsset(path.join(SHINPU_CATALOG_DIR, size, file), 'image/webp'),
   ] as const));
 const shinpuFiles = readdirSync(SHINPU_DIR).filter(f => /^[a-z][a-z0-9-]*\.webp$/.test(f));
 const shinpuCss = () => readText(path.join(here, 'public/shinpu.css')).replace(/\/static\/(shinpu-([a-z][a-z0-9-]*)\.webp)/g, (_url, name: string, key: string) => {
@@ -86,17 +92,17 @@ const roomCss = (name='casino-rooms.css') => readText(path.join(here,'public',na
 /** 新台の独自生成素材。実在するファイルだけを固定の配信名へ登録する。 */
 const gaisenMedia = Object.fromEntries(readdirSync(path.join(here,'public/gaisen-media'))
   .filter(f=>/^[a-z][a-z0-9-]*\.(webp|mp3)$/.test(f)).map(file=>[
-    'gaisen-media-'+file,{body:new Uint8Array(readFileSync(path.join(here,'public/gaisen-media',file))),type:file.endsWith('.mp3')?'audio/mpeg':'image/webp'},
+    'gaisen-media-'+file,fileAsset(path.join(here,'public/gaisen-media',file),file.endsWith('.mp3')?'audio/mpeg':'image/webp'),
   ]));
 
 const kisekiMedia = Object.fromEntries(readdirSync(path.join(here,'public/kiseki-media'))
   .filter(f=>/^[a-z][a-z0-9-]*\.(webp|mp3|mp4)$/.test(f)).map(file=>[
-    'kiseki-media-'+file,{body:new Uint8Array(readFileSync(path.join(here,'public/kiseki-media',file))),type:file.endsWith('.mp4')?'video/mp4':file.endsWith('.mp3')?'audio/mpeg':'image/webp'},
+    'kiseki-media-'+file,fileAsset(path.join(here,'public/kiseki-media',file),file.endsWith('.mp4')?'video/mp4':file.endsWith('.mp3')?'audio/mpeg':'image/webp'),
   ]));
 
 export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; type: string; version: string }> = Object.fromEntries(
   Object.entries({
-    ...Object.fromEntries(Object.keys(VISIT_BADGE_ART).map(id => ['visit-badge-' + id + '.png', { body: new Uint8Array(visitBadgeImage(id)!), type: 'image/png' }])),
+    ...Object.fromEntries(Object.keys(VISIT_BADGE_ART).map(id => ['visit-badge-' + id + '.png', { load: () => new Uint8Array(visitBadgeImage(id)!), type: 'image/png' }])),
     ...roomArt,
     ...gaisenMedia,
     ...kisekiMedia,
@@ -197,7 +203,9 @@ export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; ty
     'atslot.js': { body: readText(path.join(here, 'public/atslot.js')), type: 'text/javascript; charset=utf-8' },
     'popup.js': { body: readText(path.join(here, 'public/popup.js')), type: 'text/javascript; charset=utf-8' },
     'htmx.min.js': { body: readText(path.join(here, '../../node_modules/htmx.org/dist/htmx.min.js')), type: 'text/javascript; charset=utf-8' },
-  }).map(([name, f]) => [name, { ...f, version: createHash('sha256').update(f.body).digest('hex').slice(0, 10) }]),
+  }).map(([name, f]) => [name, 'load' in f
+    ? lazyStaticAsset(binaryCache, name, f.type, f.load as () => Uint8Array<ArrayBuffer>)
+    : { ...f, version: createHash('sha256').update(f.body).digest('hex').slice(0, 10) }]),
 );
 
 export const assetUrl = (name: keyof typeof STATIC & string) => `/static/${name}?v=${STATIC[name]?.version ?? ''}`;

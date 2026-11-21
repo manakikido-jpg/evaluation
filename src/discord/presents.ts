@@ -137,8 +137,14 @@ export class PresentApp {
       if (interaction.isButton() && id.startsWith('items:ok:')) return void (await interaction.update({ content: '手数料の表示を確かめるため、もう一度 `/持ち物` から開いてください。', embeds: [], components: [] }));
     } catch (err) {
       logger.error({ err }, 'present failed');
-      if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
-        await interaction.reply({ content: 'うまくいきませんでした。時間をおいてもう一度お試しください。', ...EPHEMERAL }).catch(() => undefined);
+      if (interaction.isRepliable() && !interaction.replied) {
+        const content = 'うまくいきませんでした。時間をおいてもう一度お試しください。';
+        if (interaction.deferred) {
+          // 読み取り専用の一覧だけを案内する。送付確定後の通信失敗と混同しない。
+          const inventory = (interaction.isChatInputCommand() && interaction.commandName === 'items')
+            || (interaction.isButton() && interaction.customId === 'items:back');
+          if (inventory) await interaction.editReply({ content, embeds: [], components: [] }).catch(() => undefined);
+        } else await interaction.reply({ content, ...EPHEMERAL }).catch(() => undefined);
       }
     }
   }
@@ -231,9 +237,11 @@ export class PresentApp {
   }
 
   private async items(i: ChatInputCommandInteraction<'cached'> | ButtonInteraction<'cached'>): Promise<void> {
+    // DB を待つ前に受け付ける（Discord の初回応答は3秒以内）。
+    if (i.isButton()) await i.deferUpdate();
+    else await i.deferReply(EPHEMERAL);
     const view = itemsView(await presentChoices(this.db, i.user.id));
-    if (i.isButton()) return void (await i.update(view as never));
-    await i.reply({ ...view, ...EPHEMERAL } as never);
+    await i.editReply(view as never);
   }
 
   private async itemPick(i: StringSelectMenuInteraction<'cached'>, value: string): Promise<void> {

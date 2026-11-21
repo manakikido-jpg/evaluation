@@ -5,7 +5,7 @@ import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { settings } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
-import { roomKnockConfig, roomKnockState, ROOM_MODES, type RoomMode } from '../services/roomKnock.js';
+import { roomKnockConfig, roomKnockStatesFor, ROOM_MODES, type RoomMode } from '../services/roomKnock.js';
 import { listRooms } from '../services/rooms.js';
 
 /**
@@ -43,7 +43,8 @@ const hashOf = (card: unknown) => createHash('sha1').update(JSON.stringify(card)
 export class RoomBoardApp {
   private guild?: Guild;
   private timer?: NodeJS.Timeout;
-  private queue: Promise<unknown> = Promise.resolve();
+  private refreshing?: Promise<void>;
+  private refreshRequested = false;
 
   constructor(
     private readonly db: Db,
@@ -66,9 +67,19 @@ export class RoomBoardApp {
 
   /** 毎分の確認・起動したとき。同時に 2 つは動かさない */
   refreshNow(): Promise<void> {
-    const run = this.queue.then(() => this.refresh()).catch((err: unknown) => logger.warn({ err }, 'room board refresh failed'));
-    this.queue = run;
-    return run as Promise<void>;
+    this.refreshRequested = true;
+    if (!this.refreshing) {
+      this.refreshing = Promise.resolve().then(async () => {
+        try {
+          // 更新中に何度呼ばれても、次は最新状態を1回だけ読み直す。
+          while (this.refreshRequested) {
+            this.refreshRequested = false;
+            await this.refresh().catch((err: unknown) => logger.warn({ err }, 'room board refresh failed'));
+          }
+        } finally { this.refreshing = undefined; }
+      });
+    }
+    return this.refreshing;
   }
 
   private async loadState(): Promise<BoardState> {
@@ -108,10 +119,11 @@ export class RoomBoardApp {
       if (await this.eligible(ch)) active.push(ch);
     }
     active.sort((a, b) => a.rawPosition - b.rawPosition);
+    const states = await roomKnockStatesFor(this.db, active.map(ch => ch.id));
 
     const next: BoardState['items'] = {};
     for (const ch of active) {
-      const row = rows.get(ch.id), s = await roomKnockState(this.db, ch.id);
+      const row = rows.get(ch.id), s = states.get(ch.id)!;
       const card = roomBoardCard({
         vcId: ch.id, guildId: guild.id, name: ch.name, count: ch.members.filter((m) => !m.user.bot).size, mode: s.mode,
         invite: row?.kind === 'invite', topic: s.topic?.text, ownerId: row?.ownerId, knockEnabled: conf.enabled,
