@@ -30,6 +30,27 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    id: '2026-11-21-server-resource-review', date: '2026-11-21', kind: 'improve', where: ['Discord', '社務所Web', '運用'],
+    title: 'Webの素材読み込みと宿の掲示板更新を軽くした',
+    items: ['カード画像や動画は使うときに読み込み、遅延読み込みした素材の保持は16MiBまでにしました。', '宿の掲示板は、部屋の受付状態をまとめて読み込みます。更新中に何度も依頼された場合は、最新状態をまとめて反映します。', '静的素材の内容が同じ場合はETagで確認し、本体の再送を省きます。', 'エラーログ内のDiscord応答用URLのトークンや認証情報を伏せ、原因調査に必要なコード・場所を残します。'],
+    announcement: {
+      priority: 'none', audience: '運営', steps: [], postText: '', imagePrompt: '不要（内部の軽量化）',
+      notes: '計測と検証範囲はdocs/server-performance-review.md。キャッシュの上限は遅延読み込みした素材の保持分で、プロセス全体のメモリ上限ではありません。',
+    },
+  },
+  {
+    id: '2026-11-21-command-early-acknowledgement', date: '2026-11-21', kind: 'fix', where: ['Discord'],
+    title: '持ち物・カジノは読み込みの前に受付を返すようにした',
+    items: ['持ち物やカジノの入口で、読み込みが長引くとDiscordの初回応答期限を超えることがあるため、先に本人だけへ受付を返してから結果を表示します。', '持ち物の読み込みに失敗した場合も、受付中のままにせず案内を表示します。'],
+    announcement: {
+      priority: 'optional', audience: '持ち物・カジノを使うメンバー',
+      steps: ['Discordで /持ち物 または /カジノ を開く'],
+      postText: '持ち物・カジノは、読み込みの前に受付を返すようにしました。読み込みに時間がかかる場合も、受付後に結果を表示します。',
+      imagePrompt: '不要（文章のみ）',
+      notes: 'DB処理前の初期応答を追加する修正です。Discordアプリ側の送信不調など、ほかの原因の解消を保証するものではありません。',
+    },
+  },
   { id: '2026-11-21-audit-fixes-1', date: '2026-11-21', kind: 'fix', where: ['Discord'], title: '🔧 システム点検：通帳の表示不具合と、お年玉袋の支払いの安全対策', items: ['💰 残高の「📒 通帳」が、ボタンの目印の重複で開けない・更新できないことがあったのを直しました（宿のこんこんと同じ種類の不具合。「◀ 新しい方へ」と「◯日の合計」のボタンが重なっていました）。', '🧧 お年玉袋を置くとき、残高を確認したあとに別の操作（カジノ・物御籤など）で銭が減っていると、払えていないのに袋が作られることがある作りでした。支払いが通ったことを必ず確認し、通らなければ袋を作らないようにしました（増殖・二重払いの防止）。'], announcement: { priority: 'optional', audience: '全員', steps: ['💰 残高 →「📒 通帳」を開き直す'], postText: '🔧 「📒 通帳」が開けない・更新できないことがあったのを直しました。開き直すと直っています。あわせて、お年玉袋まわりの銭の安全対策も入れました。', imagePrompt: '不要（文章だけで周知）', notes: 'システム点検（高速化・バグチェック）の第1弾。通帳は wallet.ts のボタンID重複、お年玉袋は otoshidama.ts で spendWithin の結果を無視していたのを修正（残高読み取り後に別サブシステムで減る/制限アカウントのときの増殖を防ぐ）。回帰テスト追加。' } },
   { id: '2026-11-21-roomknock-list-duplicate-id', date: '2026-11-21', kind: 'fix', where: ['Discord'], title: '🚪 宿の「こんこん（部屋一覧）」が表示・更新に失敗していたのを直した', items: ['宿のこんこんの「部屋一覧」で、ページを送るボタンの中に同じ目印（customId）が重なっているものがあり、Discord が一覧メッセージ全体を受け付けず、表示や「🔄 更新」が失敗することがありました。', '「前へ」「次へ」「🔄 更新」の目印が重ならないようにしました（1ページだけのとき・最初や最後のページのときに重なっていました）。'], announcement: { priority: 'optional', audience: '宿のこんこんを使う人', steps: ['宿の「部屋一覧」を開き直す'], postText: '🚪 宿の「こんこん（部屋一覧）」がうまく開けない・更新できないことがあったのを直しました。開き直すと直っています。', imagePrompt: '不要（文章だけで周知）', notes: 'Discord の制約：1つのメッセージ内でボタンの customId は重複できない。前へ/次へ/更新に prev/next/refresh を付けて一意にした（src/discord/roomKnock.ts）。routing は parts[2] のページ番号で読むため影響なし。' } },
   { id: '2026-11-20-new-system-stats-src-toggle', date: '2026-11-20', kind: 'improve', where: ['社務所Web'], title: '📐 新制度の検証：同席のデータ源を切り替え＋浮上ランキングを週ごとに', items: ['絵馬の条件・昇格・維持の「2人の同席」を、上の「同席のデータ源」で切り替えられるようにしました：全VC・ミュート込み（今すぐ見られる）か、縁側・ミュート除外（2026-11-19から記録・これからたまる）。', 'お守りの「縁側の浮上時間ランキング」を、期間計から週ごと（上位10）に直しました（週ごとに開けます）。'], announcement: { priority: 'none', audience: '運営', steps: [], postText: '', imagePrompt: '不要（運営の画面だけ）', notes: 'src=vc|engawa。既定は vc（全VC・ミュート込み・過去分あり）。engawa は engawa_pairs（11/19〜）なので今は空に近い。設計は docs/new-system-design.md。' } },

@@ -475,7 +475,13 @@ export function createWebApp(deps: WebDeps) {
     if (!f) return c.notFound();
     // 印（?v=）が今の中身と同じなら長く覚えてよい。印なし・古い印は短く
     const cache = c.req.query('v') === f.version ? 'public, max-age=31536000, immutable' : 'public, max-age=300';
-    return c.body(f.body, 200, { 'content-type': f.type, 'cache-control': cache });
+    // 圧縮配信とも照合できる弱いETag。変更がなければ素材本体を送らない。
+    const etag = `W/"${f.version}"`;
+    const headers = { 'content-type': f.type, 'cache-control': cache, etag };
+    const matches = c.req.header('if-none-match')?.split(',')
+      .some(value => value.trim() === '*' || value.trim().replace(/^W\//, '') === `"${f.version}"`);
+    if (matches) return c.body(null, 304, headers);
+    return c.body(f.body, 200, headers);
   });
 
   // 🦊 AT 機の絵（運営が入れたもの）。印（?v=）が今の絵と同じなら長く覚えてよい

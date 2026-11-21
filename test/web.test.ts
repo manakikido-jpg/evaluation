@@ -1564,6 +1564,26 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
 });
 
 describe('管理画面の守り', () => {
+  it('静的素材はETagが同じなら304を返し、内容を再送しない', async () => {
+    const first = await app.request('/static/style.css');
+    const etag = first.headers.get('etag');
+    expect(first.status).toBe(200);
+    expect(etag).toMatch(/^W\/"[a-f0-9]{10}"$/);
+    const content = await first.text();
+    expect(content.length).toBeGreaterThan(0);
+    for (const tag of [etag!, etag!.slice(2), `"old", ${etag}`, '*']) {
+      const response = await app.request('/static/style.css', { headers: { 'if-none-match': tag } });
+      expect(response.status).toBe(304);
+      expect(await response.text()).toBe('');
+      expect(response.headers.get('etag')).toBe(etag);
+      expect(response.headers.get('cache-control')).toBe(first.headers.get('cache-control'));
+    }
+    const changed = await app.request('/static/style.css', { headers: { 'if-none-match': '"other-version"' } });
+    expect(changed.status).toBe(200);
+    expect(await changed.text()).toBe(content);
+    const missing = await app.request('/static/not-a-real-asset', { headers: { 'if-none-match': '*' } });
+    expect(missing.status).toBe(404);
+  });
   it('ログイン後のページはブラウザに残さない（Cache-Control: no-store）', async () => {
     const s = await login(STAFF);
     const res = await get('/members', s);
