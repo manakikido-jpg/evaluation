@@ -307,8 +307,25 @@ export async function drawGacha(
       // 🍀 運気アップの札: 残っていれば、この 1 回は大吉が 2 倍出やすい
       const lucky = !pity && !guaranteed && rates.daikichi > 0 && (await takeLuck(tx, memberId));
       const tier = pity ? 'daikichi' : guaranteed ? pickTier({ rates: top }, rand) : pickTier({ rates: lucky ? { ...rates, daikichi: rates.daikichi * 2 } : rates }, rand);
+      const sinceTopBefore = sinceTop;
       sinceTop = tier === 'daikichi' ? 0 : sinceTop + 1;
-      const p = pickWeighted(choicesOf(prizes, tier, ctx), rand);
+      // 配れる景品を 1 つ選ぶ。特別な賞品（special）は残りを 1 つ確保する。確保できなければ
+      // 同じ等級の別の景品を選び直す（運・天井はこの 1 回ぶんだけ消費する。選び直しで二重に進めない）。
+      let p = pickWeighted(choicesOf(prizes, tier, ctx), rand);
+      let soldOut = false;
+      while (p.kind === 'special' && p.stock !== null) {
+        const [left] = await tx
+          .update(gachaPrizes)
+          .set({ stock: sql`${gachaPrizes.stock} - 1` })
+          .where(and(eq(gachaPrizes.id, p.id), gt(gachaPrizes.stock, 0)))
+          .returning({ stock: gachaPrizes.stock });
+        if (left) { p.stock = left.stock; break; }
+        p.stock = 0; // 在庫切れ → この等級の在庫のある景品から選び直す（choicesOf が除外する）
+        const rest = choicesOf(prizes, tier, ctx);
+        if (!rest.length) { soldOut = true; break; } // この等級に配れる景品がない（例: 超大当たりに在庫のある景品が残っていない）
+        p = pickWeighted(rest, rand);
+      }
+      if (soldOut) { sinceTop = sinceTopBefore; n--; continue; } // 等級ごと振り直す（天井は戻す）
       const pull: GachaPull = { tier, pity, prizeId: p.id, kind: p.kind, count: 0, coins: 0, ...(lucky ? { lucky: true } : {}), ...(guaranteed ? { guaranteed: true } : {}) };
       if (p.kind === 'role') {
         pull.roleId = p.roleId!;
@@ -318,20 +335,7 @@ export async function drawGacha(
         pull.count = p.amount;
         await addTickets(tx, memberId, p.ticket!, p.amount);
       } else if (p.kind === 'special') {
-        // 運営が渡す特別な賞品: 残りを 1 つ減らして、当たりを記録（同時に当たっても残りより多くは出さない）
-        if (p.stock !== null) {
-          const [left] = await tx
-            .update(gachaPrizes)
-            .set({ stock: sql`${gachaPrizes.stock} - 1` })
-            .where(and(eq(gachaPrizes.id, p.id), gt(gachaPrizes.stock, 0)))
-            .returning({ stock: gachaPrizes.stock });
-          if (!left) {
-            p.stock = 0;
-            n--;
-            continue;
-          }
-          p.stock = left.stock;
-        }
+        // 残りの確保は上の while で済んでいる（同時に当たっても残りより多くは出さない）。ここでは当たりを記録するだけ。
         const [claim] = await tx.insert(gachaClaims).values({ memberId, prizeId: p.id, label: p.label ?? '特別な賞品' }).returning();
         pull.special = { label: claim!.label, claimId: claim!.id };
       } else if (p.kind === 'zodiac') {

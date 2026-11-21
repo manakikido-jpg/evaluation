@@ -118,6 +118,20 @@ describe('引く', () => {
     expect(await gachaStateOf(db, U)).toEqual({ sinceTop: 3, total: 3 });
   });
 
+  it('限定の特別賞品は在庫の数だけ出て、以降は同じ運勢の別の中身に。天井は二重に進まない', async () => {
+    const { gachaClaims, gachaPrizes } = await import('../src/db/schema.js');
+    await addCoins(db, U, 5000, 'adjust');
+    await createPrize(db, { tier: 'kichi', kind: 'special', label: '限定の宝', stock: 2, amount: 1, weight: 100, fallback: false });
+    const r = await drawGacha(db, g, U, 10, [], () => 0.99); // 全部 吉
+    if (r.status !== 'ok') throw new Error(r.status);
+    expect(r.pulls.every((p) => p.tier === 'kichi')).toBe(true);
+    expect(r.pulls.filter((p) => p.kind === 'special')).toHaveLength(2); // 在庫 2 の分だけ（増えない）
+    expect(r.pulls.filter((p) => p.kind === 'ticket' && p.ticket === 'ema_pin')).toHaveLength(8); // 残りは代わりの中身
+    expect(await gachaStateOf(db, U)).toEqual({ sinceTop: 10, total: 10 }); // 10 回ぶんだけ進む（選び直しで二重に進まない）
+    expect(await db.select().from(gachaClaims)).toHaveLength(2);
+    expect((await db.select().from(gachaPrizes)).find((p) => p.label === '限定の宝')?.stock).toBe(0);
+  });
+
   it('大吉: まだ持っていない限定ロール。全部持っていたら部屋代無料券 ×3', async () => {
     await addCoins(db, U, 1500, 'adjust');
     const a = await drawGacha(db, g, U, 1, [R1], () => 0);
