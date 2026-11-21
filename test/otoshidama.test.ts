@@ -28,6 +28,20 @@ afterEach(async () => {
 const base = { ownerId: OWNER, roleIds: [ROLE.ujiko], channelId: CH, note: 'あけおめ', fee: 50, itemId: 1, itemName: 'お年玉袋' };
 
 describe('🧧 お年玉袋', () => {
+  it('引き落としが通らなければ袋を作らず、銭も減らさない（残高の読み取り後に減った場合の増殖を防ぐ）', async () => {
+    const economy = await import('../src/services/economy.js');
+    const { otoshidamaBags } = await import('../src/db/schema.js');
+    await addCoins(db, OWNER, 1000, 'adjust');
+    // 残高の確認（1000 >= 350）は通るが、その後の支払いが通らない状況を再現する
+    const spy = vi.spyOn(economy, 'spendWithin').mockResolvedValue(false);
+    try {
+      const r = await putBag(db, cfg, { ...base, fee: 50, total: 300, count: 3 }, T0);
+      expect(r.status).toBe('insufficient');
+    } finally { spy.mockRestore(); }
+    expect((await walletOf(db, OWNER)).balance).toBe(1000); // 1 円も減っていない
+    expect(await db.select().from(otoshidamaBags)).toHaveLength(0); // 袋も作られていない
+  });
+
   it('🤫 シクレの宿にいる人は受け取れない（ほかの宿・ふつうの通話なら受け取れる）', async () => {
     const { tempVoice } = await import('../src/db/schema.js');
     const SECRET = '910000000000000101', INVITE = '910000000000000102';
