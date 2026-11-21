@@ -1222,7 +1222,7 @@ export const voiceUsage = pgTable(
     /** 縁側で、マイク/スピーカーの非ミュートを確認できた分（役職を問わない・新制度の検証用。2026-11-19〜） */
     engawaUnmuteMinutes: integer('engawa_unmute_minutes').notNull().default(0),
   },
-  (t) => [primaryKey({ columns: [t.memberId, t.date, t.channelId] }), index('voice_usage_date_idx').on(t.date), check('voice_usage_rank_minutes', sql`${t.sanpaishaMinutes} >= 0 and ${t.sanpaishaMinutes} <= ${t.rankRecordedMinutes} and ${t.rankRecordedMinutes} <= ${t.minutes}`), check('voice_usage_evaluation_minutes', sql`${t.evaluationEligibleMinutes} >= 0 and ${t.evaluationEligibleMinutes} <= ${t.evaluationRecordedMinutes} and ${t.evaluationRecordedMinutes} <= ${t.sanpaishaMinutes}`), check('voice_usage_engawa_unmute', sql`${t.engawaUnmuteMinutes} >= 0 and ${t.engawaUnmuteMinutes} <= ${t.minutes}`)],
+  (t) => [primaryKey({ columns: [t.memberId, t.date, t.channelId] }), index('voice_usage_date_idx').on(t.date), index('voice_usage_channel_idx').on(t.channelId, t.date), index('voice_usage_engawa_idx').on(t.channelId).where(sql`${t.sanpaishaMinutes} > 0`), check('voice_usage_rank_minutes', sql`${t.sanpaishaMinutes} >= 0 and ${t.sanpaishaMinutes} <= ${t.rankRecordedMinutes} and ${t.rankRecordedMinutes} <= ${t.minutes}`), check('voice_usage_evaluation_minutes', sql`${t.evaluationEligibleMinutes} >= 0 and ${t.evaluationEligibleMinutes} <= ${t.evaluationRecordedMinutes} and ${t.evaluationRecordedMinutes} <= ${t.sanpaishaMinutes}`), check('voice_usage_engawa_unmute', sql`${t.engawaUnmuteMinutes} >= 0 and ${t.engawaUnmuteMinutes} <= ${t.minutes}`)],
 );
 
 /** 根拠が確認できた過去分の控除。原本は残し、同じ日/部屋の値を更新する。 */

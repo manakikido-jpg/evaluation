@@ -561,8 +561,8 @@ export class ShuinApp {
     }
   }
 
-  private async ensurePromotion(member: GuildMember, now = new Date()): Promise<void> {
-    await this.promoteIfNeeded(member, await goenOf(this.db, member.id), now);
+  private async ensurePromotion(member: GuildMember, now = new Date(), alreadyMet = false): Promise<void> {
+    await this.promoteIfNeeded(member, await goenOf(this.db, member.id), now, alreadyMet);
   }
 
   private checkingEvaluationPromotions = false;
@@ -575,7 +575,9 @@ export class ShuinApp {
       for (const row of data.rows) {
         const member = await guild.members.fetch(row.memberId).catch(() => undefined);
         if (!member || member.user.bot) continue;
-        await this.lock.run(row.memberId, () => this.ensurePromotion(member, now))
+        // この一覧（status:'met'）に出た時点でご縁40・縁側20時間は満たしているので、
+        // promoteIfNeeded で同じ評価をもう一度全走査しなくてよい（alreadyMet=true）。
+        await this.lock.run(row.memberId, () => this.ensurePromotion(member, now, true))
           .catch(err => logger.warn({ err, memberId: row.memberId }, 'evaluation promotion failed'));
       }
     } finally { this.checkingEvaluationPromotions = false; }
@@ -586,14 +588,15 @@ export class ShuinApp {
    * ロールの付け替えはキャッシュにすぐ反映されないことがあるため、
    * 昇格しそうなときだけ Discord から最新のロールを取り直して確かめる（二重昇格・二重発表を防ぐ）。
    */
-  private async promoteIfNeeded(member: GuildMember, goen: number, now = new Date()): Promise<void> {
+  private async promoteIfNeeded(member: GuildMember, goen: number, now = new Date(), alreadyMet = false): Promise<void> {
     if (!decidePromotion(this.cfg.ranks, member.roles.cache.keys(), goen)) return;
     const fresh = await member.guild.members.fetch({ user: member.id, force: true }).catch(() => undefined);
     if (!fresh) return;
     const promotion = decidePromotion(this.cfg.ranks, fresh.roles.cache.keys(), goen);
     if (!promotion) return;
-    if (promotion.from.key === 'sanpaisha') {
+    if (promotion.from.key === 'sanpaisha' && !alreadyMet) {
       // ご縁40と縁側20時間の両方を、評価と同じ既定の全縁側・控除後の値で確かめる。
+      // 評価一覧（checkEvaluationPromotions）から来た場合は確認済みなので、全走査を繰り返さない。
       const data = await ujikoEvaluation(this.db, this.cfg, { q: fresh.id, status: 'met' }, now);
       if (!data.rows.some(row => row.memberId === fresh.id)) return;
     }

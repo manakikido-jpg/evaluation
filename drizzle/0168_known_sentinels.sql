@@ -1,0 +1,2 @@
+CREATE INDEX "voice_usage_channel_idx" ON "voice_usage" USING btree ("channel_id","date");--> statement-breakpoint
+CREATE INDEX "voice_usage_engawa_idx" ON "voice_usage" USING btree ("channel_id") WHERE "voice_usage"."sanpaisha_minutes" > 0;
