@@ -3,7 +3,7 @@ import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { logger } from '../lib/logger.js';
 import { guideRoleIdsFor, guideRoleMentions, loadGuideConfig } from '../services/guideReception.js';
-import { setScheduleMessage, bookSlot, closeThread, guideThreadConfig, openSlots, openThreads, recordThread, takeDueReminders, threadById, threadOf, validSlot, type GuideThreadConfig } from '../services/guideThreads.js';
+import { setScheduleMessage, bookSlot, closeThread, guideThreadConfig, openSlots, openThreads, recordThread, takeDueReminders, threadById, threadOf, threadsByIds, validSlot, type GuideThreadConfig } from '../services/guideThreads.js';
 import { watchReason } from '../services/inviteGuard.js';
 import { guideRoleOf, scheduleChannelOf } from './guidePending.js';
 
@@ -29,6 +29,7 @@ export function guideThreadMessage(c: GuideThreadConfig, memberId: string, now =
 /** 🧵 入った人の案内スレッド（本人と案内人だけ） */
 export class GuideThreadApp {
   private ticking = false;
+  private nextReconcileAt = 0;
   constructor(private db: Db, private cfg: () => GuildConfig) {}
 
   /** @案内人 のロール（案内の設定のロールと、名前に「案内人」が入るロール。階級などで分かれていれば全部） */
@@ -53,11 +54,11 @@ export class GuideThreadApp {
     if (parent?.type !== ChannelType.GuildText) return void logger.warn({ channelId: c.channelId }, 'guide thread parent is not a text channel');
     // 入りなおした人: 前のスレッドが閉じる前でも、閉じて新しく作る
     const old = await threadOf(this.db, m.id);
-    if (old && !old.closedAt) {
-      await closeThread(this.db, m.id);
+    if (old) {
+      // 失敗した古いスレッドの記録を、新しいIDで上書きしない。
+      await this.archiveThread(m.guild, old.threadId, '入りなおした（新しいスレッドを作る）');
       await this.removeSchedule(m.guild, old.scheduleMessageId);
-      const t = await m.guild.channels.fetch(old.threadId).catch(() => null);
-      if (t?.isThread()) await t.edit({ locked: true, archived: true, reason: '入りなおした（新しいスレッドを作る）' }).catch(() => undefined);
+      await closeThread(this.db, m.id, new Date(), old.threadId);
     }
     // 👁 要注意の人: 本人には同じように見せるが、案内人は入れず、知らせは運営の記録へ
     const watched = Boolean(await watchReason(this.db, m.id));
@@ -141,20 +142,52 @@ export class GuideThreadApp {
     if (ch?.type === ChannelType.GuildText) await ch.messages.delete(messageId).catch(err => logger.warn({ err }, 'guide schedule delete failed'));
   }
 
+  /** 見つからない場合だけ完了とする。通信・権限エラーは次回へ残す。 */
+  private async archiveThread(guild: Guild, id: string, reason: string) {
+    const t = await guild.channels.fetch(id).catch((err: { code?: number }) => {
+      if (err?.code === 10003) return null;
+      throw err;
+    });
+    if (!t) return;
+    if (!t.isThread()) throw new Error('案内の記録先がスレッドではありません');
+    if (t.archived && t.locked) return;
+    // 自動アーカイブ済みのものも、先に開いてから鍵をかける。
+    if (t.archived) await t.edit({ archived: false, reason });
+    await t.edit({ locked: true, archived: true, reason });
+  }
+
   /** 毎分: 10 分前のお知らせと、案内が終わった人・抜けた人のスレッドを閉じる */
   async tick(guild: Guild, now = new Date()) {
     if (this.ticking || guild.id !== this.cfg().guildId) return;
     this.ticking = true;
     try {
       const pending = guideRoleOf(this.cfg(), guild.roles.cache.values());
-      for (const row of pending ? await openThreads(this.db) : []) {
-        const m = guild.members.cache.get(row.memberId);
-        if (m && pending && m.roles.cache.has(pending)) continue;
-        if (!m && !(await guild.members.fetch(row.memberId).then(() => false).catch((err: { code?: number }) => err?.code === 10007))) continue;
-        await closeThread(this.db, row.memberId, now);
-        await this.removeSchedule(guild, row.scheduleMessageId);
-        const t = await guild.channels.fetch(row.threadId).catch(() => null);
-        if (t?.isThread()) await t.edit({ locked: true, archived: true, reason: m ? '案内が終わった' : 'サーバーを抜けた' }).catch(err => logger.warn({ err }, 'guide thread close failed'));
+      const rows = new Map((await openThreads(this.db)).map(row => [row.threadId, row]));
+      // 起動直後と5分ごと。以前DBだけ終了したものを、全履歴の巡回なしで回収する。
+      if (now.getTime() >= this.nextReconcileAt) {
+        try {
+          const active = await guild.channels.fetchActiveThreads();
+          for (const row of await threadsByIds(this.db, [...active.threads.keys()])) rows.set(row.threadId, row);
+          this.nextReconcileAt = now.getTime() + 5 * 60_000;
+        } catch (err) { logger.warn({ err }, 'guide thread reconciliation failed'); }
+      }
+      for (const row of rows.values()) {
+        try {
+          if (!row.closedAt) {
+            // 案内待ちロールを特定できないときは、推測で閉じない。
+            if (!pending) continue;
+            let member = guild.members.cache.get(row.memberId);
+            if (!member) member = await guild.members.fetch(row.memberId).catch((err: { code?: number }) => {
+              if (err?.code === 10007) return undefined;
+              throw err;
+            });
+            if (member?.roles.cache.has(pending)) continue;
+          }
+          await this.archiveThread(guild, row.threadId, '案内が終わった、またはサーバーを抜けた');
+          await this.removeSchedule(guild, row.scheduleMessageId);
+          // Discordが完了してからDBを閉じる。失敗しても次の毎分処理で再試行できる。
+          await closeThread(this.db, row.memberId, now, row.threadId);
+        } catch (err) { logger.warn({ err, threadId: row.threadId }, 'guide thread close failed'); }
       }
       for (const row of await takeDueReminders(this.db, now)) {
         const t = await guild.channels.fetch(row.threadId).catch(() => null);
