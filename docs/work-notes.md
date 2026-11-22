@@ -1,3 +1,11 @@
+## 2026年11月22日：案内スレッドを溜めない（Codex・着手）
+- 本人が「🌸 ○○さんのご案内」が溜まるため対策を依頼。案内完了・退会分を履歴を残してロック/アーカイブし、案内待ち・予約中は維持する。削除や本番データの直接変更はしない。
+- 最新本番956d7cb7からcodex/guide-thread-cleanupを作成。既存実装はDiscordの終了前にDBを閉じており、Discord失敗時に再試行対象から外れる。既存の残存分の復旧と、役職判定・権限/通信失敗・再起動を検証する。
+- 次：処理と対象範囲を確認→修正/回帰テスト→型/ビルド/全テスト→担当者用PR。本番合流は別指示待ち。
+- 実装：Discordのアーカイブ成功後にDBを終了。通信/権限エラーは次の見回りへ残し、メンバーのキャッシュ欠落は取得後に判定。起動直後と5分ごとにアクティブなスレッドとDBを照合して、DBだけ終了した既存分も回収。名前だけの一致や未登録スレッドは対象外。入りなおし時も整理失敗で古いIDを上書きしない。
+- 関連2ファイル19件成功（/tmp/guide-cleanup-focused-final.log）。型チェック・ビルド・全289ファイル3,070件成功（639.42秒、4並列）。ログ/tmp/guide-cleanup-verified-types.log・/tmp/guide-cleanup-build.log・/tmp/guide-cleanup-all.log。ソースは検証開始後に変更していない。
+- 保存前fetchとls-remoteでも本番956d7cb7のままを確認。codex/guide-thread-cleanupへcommit/pushし、担当者向けDraft PRを作成する。本番未反映・実Discordでの確認は未実施。
+
 ## 2026年11月22日：夜伽の部屋が残り続けるバグを直す（Claude・本番反映済み）
 - 依頼「なんか夜伽の部屋めちゃ立ったままだけどばぐ？」。調査の結果、バグと確認。
 - 原因：指名の通話中に BOT が入れ替わる（自動デプロイでの再起動＝15秒ごと取り込み）などで入室の記録が足りないと、終了時に「運営確認（attendance_review）」になる。finishSession / reportNoShow の review 分岐が deleteAt を null のままにしており、部屋の片付け（castTick の cleanup＝deleteAt<=now かつ channelId あり）の対象外になって 🌸 …の間 の部屋が残り続けていた。通報（disputeSession）は deleteAt=endsAt+5分 を入れていて食い違い。

@@ -1,4 +1,4 @@
-import { and, eq, gte, isNull, lte } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull, lte } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../db/client.js';
 import { guideThreads, settings, type GuideThread } from '../db/schema.js';
@@ -92,6 +92,10 @@ export async function bookSlot(db: Db, memberId: string, date: string, time: str
   await db.update(guideThreads).set({ slotAt: slotDate(date, time), slotLabel: slotLabel(date, time), reminded: false }).where(eq(guideThreads.memberId, memberId));
 }
 export const openThreads = (db: Db) => db.select().from(guideThreads).where(isNull(guideThreads.closedAt));
+/** 開いたままのスレッドのうち、BOTが作って記録しているものだけを取り出す。 */
+export const threadsByIds = (db: Db, ids: string[]) => ids.length
+  ? db.select().from(guideThreads).where(inArray(guideThreads.threadId, ids))
+  : Promise.resolve([] as GuideThread[]);
 /** 10 分前のお知らせがまだの予約（1 回だけ取り出す） */
 export async function takeDueReminders(db: Db, now = new Date()): Promise<GuideThread[]> {
   return db.update(guideThreads).set({ reminded: true })
@@ -101,6 +105,6 @@ export async function takeDueReminders(db: Db, now = new Date()): Promise<GuideT
 export async function setScheduleMessage(db: Db, memberId: string, messageId: string | null) {
   await db.update(guideThreads).set({ scheduleMessageId: messageId }).where(eq(guideThreads.memberId, memberId));
 }
-export async function closeThread(db: Db, memberId: string, now = new Date()) {
-  await db.update(guideThreads).set({ closedAt: now }).where(and(eq(guideThreads.memberId, memberId), isNull(guideThreads.closedAt)));
+export async function closeThread(db: Db, memberId: string, now = new Date(), expectedThreadId?: string) {
+  await db.update(guideThreads).set({ closedAt: now }).where(and(eq(guideThreads.memberId, memberId), isNull(guideThreads.closedAt), expectedThreadId ? eq(guideThreads.threadId, expectedThreadId) : undefined));
 }
