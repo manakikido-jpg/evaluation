@@ -35,7 +35,11 @@ it('一度入室してから退出したお客様は欠席にしない。手動�
 });
 it('BOT再起動・観測漏れは欠席と断定せず運営確認。通常の完了に混ぜない',async()=>{
  await observe(0,[CAST],'run1',true);await observe(30,[CAST],'run2');
- const result=await castTick(db,CAST_DEFAULTS,END);expect(result.finished[0]).toMatchObject({status:'disputed',decidedBy:'attendance_review',paid:0,deleteAt:null});
+ const result=await castTick(db,CAST_DEFAULTS,END);expect(result.finished[0]).toMatchObject({status:'disputed',decidedBy:'attendance_review',paid:0});
+ // 🚪 運営確認の部屋も、時間が来たら片付ける（銭は止めたまま。通報と同じ）
+ expect(result.finished[0]?.deleteAt).toEqual(new Date(END.getTime()+5*60000));
+ expect((await castTick(db,CAST_DEFAULTS,END)).cleanup).toEqual([]);
+ expect((await castTick(db,CAST_DEFAULTS,new Date(END.getTime()+5*60000))).cleanup.map(s=>s.id)).toEqual([id]);
  expect((await walletOf(db,CUSTOMER)).balance).toBe(750);expect(await castStats(db,MONTH)).toEqual([]);
  const settled=await resolveSession(db,CAST_DEFAULTS,id,'noshow_customer','staff',at(31));expect(settled).toMatchObject({status:'noshow_customer',paid:113});expect((await castStats(db,MONTH))[0]?.count).toBe(0);
  expect(await resolveSession(db,CAST_DEFAULTS,id,'pay','staff',at(32))).toBeUndefined();
@@ -57,6 +61,8 @@ it('観測できなかった新規VCを未追跡のまま通常完了にせず�
  await observe(15,[CAST]);
  expect((await reportNoShow(db,CAST_DEFAULTS,id,CAST,at(15))).status).toBe('review');
  expect((await getSession(db,id))?.status).toBe('disputed');
+ // 🚪 運営確認でも部屋は片付ける（deleteAt が入る）
+ expect((await getSession(db,id))?.deleteAt).toEqual(new Date(END.getTime()+5*60000));
  expect((await walletOf(db,CAST)).balance).toBe(0);
  expect((await walletOf(db,CUSTOMER)).balance).toBe(750);
 });

@@ -1054,7 +1054,8 @@ export async function reportNoShow(db: Db, c: CastConfig, id: number, by: string
     // 一度来てから抜けた相手を「一度も来なかった」扱いにしない。
     if (castAbsent ? s.attendance?.castJoinedAt : s.attendance?.customerJoinedAt) return { status: 'attended' as const };
     if (s.attendance && attendanceAtFinish(s, now, c.noShowMinutes) === 'review') {
-      const session = await move(tx, id, ['active'], { status: 'disputed', closedAt: null, decidedBy: 'attendance_review', deleteAt: null });
+      // 🚪 部屋は時間が来たら片付ける（銭は運営が決めるまで止めたまま。disputeSession と同じ）
+      const session = await move(tx, id, ['active'], { status: 'disputed', closedAt: null, decidedBy: 'attendance_review', deleteAt: new Date((s.endsAt ?? now).getTime() + 5 * MIN) });
       return session ? { status: 'review' as const, session } : { status: 'not_found' as const };
     }
     const share = castAbsent ? 0 : Math.floor((s.price * c.noShowPercent) / 100);
@@ -1205,7 +1206,8 @@ export async function finishSession(db: Db, c: CastConfig, id: number, by: strin
       return result.status === 'ok' ? result.session : undefined;
     }
     if (presence === 'review') {
-      return move(tx, id, ['active'], { status: 'disputed', closedAt: null, decidedBy: 'attendance_review', deleteAt: null });
+      // 🚪 部屋は時間が来たら片付ける（銭は運営が決めるまで止めたまま。disputeSession と同じ）
+      return move(tx, id, ['active'], { status: 'disputed', closedAt: null, decidedBy: 'attendance_review', deleteAt: new Date((s.endsAt ?? now).getTime() + 5 * MIN) });
     }
     let earned = s.price;
     // 時間フリーは、キャストが終えても全額（時間で割らない）
