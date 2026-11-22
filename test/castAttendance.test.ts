@@ -2,7 +2,7 @@ import { afterEach,beforeEach,expect,it } from 'vitest';
 import type { Db } from '../src/db/client.js';
 import { castSessions } from '../src/db/schema.js';
 import { observeCastAttendance,recordCastVoice,markCastAttendanceUncertain } from '../src/services/castAttendance.js';
-import { CAST_DEFAULTS,castTick,castStats,castStatement,getSession,reportNoShow,resolveSession } from '../src/services/cast.js';
+import { CAST_DEFAULTS,castTick,castStats,castStatement,getSession,reportNoShow,resolveSession,backfillStuckDisputeRooms } from '../src/services/cast.js';
 import { castLeaderboard } from '../src/services/castLeaderboard.js';
 import { castRanking,castTop } from '../src/services/castRank.js';
 import { castBreakdown } from '../src/services/castProfit.js';
@@ -43,6 +43,22 @@ it('BOT再起動・観測漏れは欠席と断定せず運営確認。通常の�
  expect((await walletOf(db,CUSTOMER)).balance).toBe(750);expect(await castStats(db,MONTH)).toEqual([]);
  const settled=await resolveSession(db,CAST_DEFAULTS,id,'noshow_customer','staff',at(31));expect(settled).toMatchObject({status:'noshow_customer',paid:113});expect((await castStats(db,MONTH))[0]?.count).toBe(0);
  expect(await resolveSession(db,CAST_DEFAULTS,id,'pay','staff',at(32))).toBeUndefined();
+});
+it('前の不具合で残っていた運営確認の部屋に、あとから片付けの目印を入れて消せる',async()=>{
+ // 古いデータ：運営確認のまま deleteAt が入っていない（部屋あり）
+ const [old]=await db.insert(castSessions).values({castId:CAST,customerId:CUSTOMER,plan:'30',price:250,minutes:30,startAt:START,startedAt:START,endsAt:END,status:'disputed',decidedBy:'attendance_review',deleteAt:null,channelId:'990000000000000999'}).returning();
+ const LATER=new Date(END.getTime()+10*60000);
+ // 目印がないので、いまは片付けの対象に入らない
+ expect((await castTick(db,CAST_DEFAULTS,LATER)).cleanup.map(s=>s.id)).not.toContain(old!.id);
+ // 一括の片付けで目印が入る（状態・銭はそのまま）
+ expect(await backfillStuckDisputeRooms(db,END)).toBeGreaterThanOrEqual(1);
+ const after=await getSession(db,old!.id);
+ expect(after?.status).toBe('disputed');expect(after?.channelId).toBe('990000000000000999');
+ expect(after?.deleteAt).toEqual(new Date(END.getTime()+5*60000));
+ // 次の片付けで対象になる
+ expect((await castTick(db,CAST_DEFAULTS,LATER)).cleanup.map(s=>s.id)).toContain(old!.id);
+ // もう目印があるので、二度目は何もしない
+ expect(await backfillStuckDisputeRooms(db,END)).toBe(0);
 });
 it('キャストだけが来なかった予約は全額返金する',async()=>{
  await observe(0,[CUSTOMER],'run1',true);await heartbeat([CUSTOMER]);

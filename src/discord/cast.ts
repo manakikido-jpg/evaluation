@@ -77,6 +77,7 @@ import {
   openReservationsWithThread,
   roomMates,
   roomInUse,
+  backfillStuckDisputeRooms,
   CUSTOMER_TOGETHER_MAX,
   proposeSessionTime,
   acceptSessionTime,
@@ -458,6 +459,7 @@ export class CastApp {
   private attendanceEpoch = randomUUID();
   private presencePending: Promise<void> = Promise.resolve();
   private sleepPanelsRefreshed = false;
+  private roomsSwept = false;
 
   constructor(
     private readonly db: Db,
@@ -2278,6 +2280,12 @@ export class CastApp {
         } catch (err) { ready = false; logger.warn({ err, sessionId: s.id }, 'cast sleep panel refresh failed'); }
       }
       this.sleepPanelsRefreshed = ready;
+    }
+    // 🧹 起動して 1 回だけ：前の不具合で残っていた「運営確認」の部屋に片付けの目印を入れる（下の castTick がこのあと消す）
+    if (!this.roomsSwept) {
+      this.roomsSwept = true;
+      const swept = await backfillStuckDisputeRooms(this.db, now).catch((err: unknown) => { this.roomsSwept = false; logger.warn({ err }, 'cast stuck room sweep failed'); return 0; });
+      if (swept > 0) logger.info({ swept }, 'cast stuck dispute rooms queued for cleanup');
     }
     const r = await castTick(this.db, c, now, async (s) => Boolean(await this.openRoom(s).catch((err: unknown) => { logger.warn({ err }, 'cast reserved room failed'); return undefined; })));
     let changed = r.waitingOff > 0;

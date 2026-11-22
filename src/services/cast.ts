@@ -1354,6 +1354,22 @@ export async function roomDeleted(db: Db, id: number): Promise<void> {
   await db.update(castSessions).set({ channelId: null, deleteAt: null }).where(eq(castSessions.id, id));
 }
 
+/**
+ * 🧹 前の不具合で「運営確認（attendance_review）」のまま部屋が残っていた分に、片付けの目印を入れる。
+ * 銭・状態はそのまま（運営が精算を決めるまで止めたまま）。目印を入れるだけで、部屋の削除は castTick が行う。
+ * 入れた件数を返す（目印のない運営確認の部屋だけが対象。もうない場合は 0）。
+ */
+export async function backfillStuckDisputeRooms(db: Db, now = new Date()): Promise<number> {
+  const stuck = await db
+    .select({ id: castSessions.id, endsAt: castSessions.endsAt })
+    .from(castSessions)
+    .where(and(eq(castSessions.status, 'disputed'), eq(castSessions.decidedBy, 'attendance_review'), sql`${castSessions.deleteAt} is null`, sql`${castSessions.channelId} is not null`));
+  for (const s of stuck) {
+    await db.update(castSessions).set({ deleteAt: new Date((s.endsAt ?? now).getTime() + 5 * MIN) }).where(and(eq(castSessions.id, s.id), sql`${castSessions.deleteAt} is null`));
+  }
+  return stuck.length;
+}
+
 // ───────── 見る ─────────
 
 export type CastStat = { castId: string; count: number; earned: number; ratingAvg: number | null; ratings: number };
