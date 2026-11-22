@@ -15,6 +15,8 @@
 - fetch で本番最新(5952f56f)と差分なしを確認し、本番ブランチへ push 済み(76092eda)。自動デプロイ待ち。実Discord/本番データは未操作。
 - 未決：**すでに残っている古い部屋**は今回の前向き修正では自動では消えない（既存の disputed 行は deleteAt=null のまま）。社務所Webのキャスト画面で各「運営確認」を精算すれば resolveSession が deleteAt を入れて片付く。まとめて一括で片付けたい場合は本番データ/Discordの状態を変える操作になるため、依頼があれば別途対応（AGENTS.md 7章）。
 
+- 一括片付け（本人の「まとめて古い部屋かたづけて」で承認）：起動後1回だけ `backfillStuckDisputeRooms`（status=disputed・decidedBy=attendance_review・deleteAt is null・channelId あり に deleteAt=endsAt+5分）を cast の tick で実行。実際の削除は既存 castTick→cleanupSessionRoom。状態・銭は不変・冪等。test/castAttendance.test.ts に2件追加。changelog(2026-11-22-cast-dispute-room-sweep・none)・admin.md 更新。本番最新が PR179(案内スレッド整理・f466428a)で進んでいたので fetch＆merge（changelogの先頭だけ競合→両方残して解消）。型チェック成功・全289ファイル3071件成功。本番へ push 済み(1ea790c8)。デプロイ後、次の cast tick で古い部屋が消える見込み。実Discord/本番データは手動では未操作。
+
 ## 2026年11月19日：新制度の作り替え（段階的・Claude）
 - 依頼「まとまった新制度に合わせてシステムも変更」。本人と土台を確認し合意：結び＝ご縁（特典・コレクション用）、絵馬＝評価（昇格用）。詳細は user-decisions.md と docs/new-system-design.md。
 - 守ること：今の御朱印・ご縁は切替時にリセット（宮司が手で押す。デプロイで勝手に消さない）。自動降格はしない（警告＋手動）。今いる氏子は据え置き。数字はたたき台。既存の競馬・神符合戦などは触らない。
