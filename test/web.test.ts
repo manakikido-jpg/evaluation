@@ -276,6 +276,16 @@ describe('画面', () => {
     expect(html).toContain('参加');
   });
 
+  it('メンバー詳細に、頂いた絵馬（匿名の一言）を飾る', async () => {
+    const { ema } = await import('../src/db/schema.js');
+    await db.insert(ema).values({ giverId: GUJI, receiverId: USER, tier: 'ujiko', message: 'やさしくて話しやすい方です', createdAt: new Date(), revokedAt: null });
+    const s = await login(STAFF);
+    const html = await (await get(`/members/${USER}`, s)).text();
+    expect(html).toContain('🎐 頂いた絵馬');
+    expect(html).toContain('頂いた絵馬の一言');
+    expect(html).toContain('やさしくて話しやすい方です');
+  });
+
   it('いない人・おかしな ID は 404', async () => {
     const s = await login(STAFF);
     expect((await get('/members/700000000000000050', s)).status).toBe(404);

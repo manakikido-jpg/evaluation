@@ -77,10 +77,11 @@ function add(id: string, ...roleIds: string[]) {
   return m;
 }
 
-type Kind = 'button' | 'userMenu' | 'slash' | 'stringSelect';
+type Kind = 'button' | 'userMenu' | 'slash' | 'stringSelect' | 'modal';
 
 function interaction(kind: Kind, user: FakeMember, extra: Record<string, unknown>) {
   const replies: { content?: string; embeds?: { title?: string; description?: string }[]; flags?: unknown }[] = [];
+  const shownModals: { customId?: string }[] = [];
   const i = {
     id: 'i',
     guildId: cfg.guildId,
@@ -95,6 +96,11 @@ function interaction(kind: Kind, user: FakeMember, extra: Record<string, unknown
     isChatInputCommand: () => kind === 'slash',
     isButton: () => kind === 'button',
     isStringSelectMenu: () => kind === 'stringSelect',
+    isModalSubmit: () => kind === 'modal',
+    async showModal(m: { data?: { custom_id?: string }; customId?: string }) {
+      i.replied = true;
+      shownModals.push({ customId: m.customId ?? m.data?.custom_id });
+    },
     isRepliable: () => true,
     async deferReply(opts: unknown) {
       i.deferred = true;
@@ -112,7 +118,7 @@ function interaction(kind: Kind, user: FakeMember, extra: Record<string, unknown
     },
     ...extra,
   };
-  return { i, replies };
+  return { i, replies, shownModals };
 }
 
 const G = '400000000000000001';
@@ -559,5 +565,79 @@ describe('毎分の浮上ボーナス', () => {
     expect((await walletOf(db, m.id)).balance).toBe(300);
     expect(sent).toContainEqual(expect.objectContaining({ channelId: cfg.channels.keiji, content: expect.stringContaining('7時間の浮上ボーナス'), allowedMentions: { parse: [], users: [m.id] } }));
     expect((await db.select().from(voiceUsage)).map(r => r.memberId)).toEqual([m.id]);
+  });
+});
+
+describe('ShuinApp：絵馬を贈る（新制度②）', () => {
+  const GU = '400000000000000011'; // 氏子（贈る人）
+  const SA = '400000000000000019'; // 参拝者（相手）
+  const emaGiveId = (id: string) => `ema:give:${id}`;
+  const emaModalId = (id: string) => `ema:modal:${id}`;
+
+  async function seedMembers() {
+    const { recordJoin } = await import('../src/services/members.js');
+    await recordJoin(db, { id: GU, username: 'ujiko', displayName: '氏子さん', avatarUrl: null, roleIds: [ROLE.ujiko], isBot: false, joinedAt: new Date() });
+    await recordJoin(db, { id: SA, username: 'sanpai', displayName: '参拝者さん', avatarUrl: null, roleIds: [ROLE.sanpaisha], isBot: false, joinedAt: new Date() });
+    add(GU, ROLE.ujiko);
+    add(SA, ROLE.sanpaisha);
+  }
+  async function seedTogether(days: number, minutesEach = 60) {
+    const { voicePairs } = await import('../src/db/schema.js');
+    const [a, b] = GU < SA ? [GU, SA] : [SA, GU];
+    for (let d = 0; d < days; d++) await db.insert(voicePairs).values({ memberA: a, memberB: b, date: `2026-11-0${d + 1}`, minutes: minutesEach });
+  }
+
+  it('氏子は条件を満たした参拝者に絵馬を贈れる（ボタン→モーダル→贈る）', async () => {
+    await seedMembers();
+    await seedTogether(3); // 3日・各60分＝合計180分
+    const giver = members.get(GU)!;
+    const press = interaction('button', giver, { customId: emaGiveId(SA) });
+    await app.onInteraction(press.i as never);
+    expect(press.shownModals.map((m) => m.customId)).toEqual([emaModalId(SA)]);
+
+    const submit = interaction('modal', giver, { customId: emaModalId(SA), fields: { getTextInputValue: () => 'いっしょに過ごせてうれしかったです' } });
+    await app.onInteraction(submit.i as never);
+    expect(submit.replies[0]?.content).toContain('絵馬を');
+    const { validEmaCountOf, emaMessagesOf } = await import('../src/services/ema.js');
+    expect(await validEmaCountOf(db, SA)).toBe(1);
+    expect((await emaMessagesOf(db, SA))[0]?.message).toBe('いっしょに過ごせてうれしかったです');
+  });
+
+  it('参拝者は絵馬を贈れない（モーダルを出さずに理由を出す）', async () => {
+    await seedMembers();
+    await seedTogether(3);
+    // 贈る人を参拝者にする
+    const { recordJoin } = await import('../src/services/members.js');
+    await recordJoin(db, { id: GU, username: 'ujiko', displayName: '氏子さん', avatarUrl: null, roleIds: [ROLE.sanpaisha], isBot: false, joinedAt: new Date() });
+    const giver = members.get(GU)!;
+    const press = interaction('button', giver, { customId: emaGiveId(SA) });
+    await app.onInteraction(press.i as never);
+    expect(press.shownModals).toHaveLength(0);
+    expect(press.replies[0]?.content).toContain('氏子以上');
+  });
+
+  it('いっしょの時間が足りないと贈れない（モーダルを出さずに理由を出す）', async () => {
+    await seedMembers();
+    await seedTogether(2); // 2日しかない＝条件未満
+    const giver = members.get(GU)!;
+    const press = interaction('button', giver, { customId: emaGiveId(SA) });
+    await app.onInteraction(press.i as never);
+    expect(press.shownModals).toHaveLength(0);
+    expect(press.replies[0]?.content).toContain('足りません');
+  });
+
+  it('プロフィール（御朱印帳）に「頂いた絵馬」の欄が出る', async () => {
+    await seedMembers();
+    await seedTogether(3);
+    const { giveEma } = await import('../src/services/ema.js');
+    await giveEma(db, cfg, GU, SA, 'すてきな時間でした');
+    const viewer = members.get(GU)!;
+    const show = interaction('slash', viewer, { commandName: 'goshuin', options: { getUser: () => members.get(SA)!.user, getBoolean: () => null } });
+    await app.onInteraction(show.i as never);
+    const embed = show.replies.at(-1)?.embeds?.[0];
+    const fields = (embed as { fields?: { name: string; value: string }[] } | undefined)?.fields ?? [];
+    const emaField = fields.find((f) => f.name.includes('頂いた絵馬'));
+    expect(emaField?.value).toContain('1 枚');
+    expect(emaField?.value).toContain('すてきな時間でした');
   });
 });

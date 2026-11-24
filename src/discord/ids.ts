@@ -16,6 +16,24 @@ export function parseShuinId(customId: string): { action: ShuinAction; userId: s
   return { action: action as ShuinAction, userId };
 }
 
+/** 🎐 絵馬（評価の票）のボタン・モーダルの customId。形式: ema:<kind>:<相手のユーザー ID> */
+export type EmaIdKind = 'give' | 'modal';
+const EMA_PREFIX = 'ema';
+
+/** プロフィールの「絵馬を贈る」ボタン（押すと一言のモーダルが出る） */
+export function emaGiveId(userId: string): string {
+  return `${EMA_PREFIX}:give:${userId}`;
+}
+/** 一言を入れるモーダル */
+export function emaModalId(userId: string): string {
+  return `${EMA_PREFIX}:modal:${userId}`;
+}
+export function parseEmaId(customId: string): { kind: EmaIdKind; userId: string } | undefined {
+  const [prefix, kind, userId] = customId.split(':');
+  if (prefix !== EMA_PREFIX || (kind !== 'give' && kind !== 'modal') || !userId || !/^\d{17,20}$/.test(userId)) return undefined;
+  return { kind, userId };
+}
+
 /** コマンド名 */
 export const COMMAND = {
   /** 右クリック → アプリ → プロフィール（ここから朱印を押す） */

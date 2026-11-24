@@ -5,15 +5,21 @@ import {
   ButtonBuilder,
   ButtonStyle,
   EmbedBuilder,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
   type APIEmbed,
   type MessageCreateOptions,
   type MessageActionRowComponentBuilder,
+  type ModalActionRowComponentBuilder,
 } from 'discord.js';
 import type { Rank } from '../config.js';
 import { currentAutoRank, highestRank, nextAutoRank, rankLabel, type Promotion } from '../domain/ranks.js';
 import type { GiveDenied, GiveOutcome } from '../services/flows.js';
 import type { RevokeResult, GoshuinchoData } from '../services/shuin.js';
-import { shuinId } from './ids.js';
+import type { GiveEmaResult } from '../services/ema.js';
+import { EMA_DAYS_TOGETHER, EMA_MESSAGE_MAX, EMA_MINUTES_TOGETHER } from '../domain/ema.js';
+import { emaGiveId, emaModalId, shuinId } from './ids.js';
 
 /** 朱色 */
 export const SHU = 0xd7003a;
@@ -36,6 +42,9 @@ const cardButton = (userId: string) =>
   new ButtonBuilder().setCustomId(shuinId('card', userId)).setLabel('プロフィールを見る').setEmoji('📕').setStyle(ButtonStyle.Secondary);
 const listButton = (userId: string) =>
   new ButtonBuilder().setCustomId(shuinId('list', userId)).setLabel('朱印をくれた人').setStyle(ButtonStyle.Secondary);
+/** 🎐 絵馬（評価の票）を贈るボタン。氏子以上だけが贈れる（押したときに確かめる） */
+const emaGiveButton = (userId: string) =>
+  new ButtonBuilder().setCustomId(emaGiveId(userId)).setLabel('絵馬を贈る').setEmoji('🎐').setStyle(ButtonStyle.Secondary);
 
 export type Reply = { content?: string; embeds?: APIEmbed[]; components?: Row[]; allowedMentions?: { parse: never[] } };
 
@@ -79,6 +88,45 @@ export function revokeReply(receiverId: string, result: RevokeResult): Reply {
   };
 }
 
+/** 🎐 絵馬の一言を入れるモーダル（匿名で飾られる） */
+export function emaModal(receiverId: string, receiverName: string): ModalBuilder {
+  return new ModalBuilder()
+    .setCustomId(emaModalId(receiverId))
+    .setTitle(`${receiverName} さまへ絵馬を贈る`.slice(0, 45))
+    .addComponents(
+      new ActionRowBuilder<ModalActionRowComponentBuilder>().addComponents(
+        new TextInputBuilder()
+          .setCustomId('message')
+          .setLabel('ひとこと（匿名で飾られます）')
+          .setStyle(TextInputStyle.Paragraph)
+          .setMaxLength(EMA_MESSAGE_MAX)
+          .setRequired(false)
+          .setPlaceholder('いっしょに過ごしてうれしかったこと など'),
+      ),
+    );
+}
+
+const EMA_HOURS = Math.round((EMA_MINUTES_TOGETHER / 60) * 10) / 10;
+
+/** 絵馬を贈った結果（本人だけに表示） */
+export function emaGiveReply(receiverId: string, result: GiveEmaResult): Reply {
+  if (result.ok) {
+    const verb = result.created ? '贈りました' : '贈り直しました（ひとことと日付を新しくしました）';
+    return { content: `🎐 ${mention(receiverId)} さまに絵馬を${verb}。あなたが贈ったことは匿名で飾られます。いまの票は **${result.count} 枚**です。` };
+  }
+  const reasons: Record<Exclude<GiveEmaResult, { ok: true }>['reason'], string> = {
+    self: 'ご自身には絵馬を贈れません。',
+    no_member: 'その方は咲楽ノ宮にいらっしゃらないようです。',
+    bot: 'BOT には絵馬を贈れません。',
+    left: 'その方はもう咲楽ノ宮にいらっしゃらないようです。',
+    staff_alt: '運営のサブのアカウントには贈れません。',
+    giver_not_ujiko: '絵馬を贈れるのは氏子以上の方です。',
+    receiver_rank: '絵馬を贈れる相手は、参拝者か氏子の方だけです。',
+    not_together: `まだいっしょに過ごした時間が足りません（違う日に ${EMA_DAYS_TOGETHER} 日以上・合計 ${EMA_HOURS} 時間以上、同じ通話にいること）。いまは ${result.days ?? 0} 日・${result.minutes ?? 0} 分です。`,
+  };
+  return { content: reasons[result.reason] };
+}
+
 /** 役職ごとの内訳（格の高い順）。設定から消えた役職キーもそのまま出す */
 export function breakdownLine(ranks: readonly Rank[], byRank: Record<string, number>): string {
   const known = [...ranks].sort((a, b) => b.weight - a.weight);
@@ -118,6 +166,7 @@ export function goshuinchoReply(
   data: GoshuinchoData,
   coins?: { emoji: string; name: string; balance: number },
   profile: ProfileExtra = {},
+  ema?: { count: number; messages: { message: string; createdAt: Date }[] },
 ): Reply {
   const rank = highestRank(ranks, owner.roleIds);
   const auto = currentAutoRank(ranks, owner.roleIds);
@@ -153,13 +202,36 @@ export function goshuinchoReply(
     { name: '最近の朱印', value: recent },
     { name: '押した朱印', value: `${data.givenCount} 人`, inline: true },
   );
+  // 🎐 絵馬（評価の票）。参拝者・氏子にだけ出す（匿名の一言と有効な枚数）
+  const emaRelevant = rank?.key === 'sanpaisha' || rank?.key === 'ujiko';
+  if (ema && emaRelevant) embed.addFields({ name: '🎐 頂いた絵馬', value: emaField(ema) });
   if (coins) embed.addFields({ name: coins.name, value: `${coins.emoji} ${coins.balance}`, inline: true });
   if (profile.tickets) embed.addFields({ name: '🎟 券', value: profile.tickets });
   if (owner.avatarUrl) embed.setThumbnail(owner.avatarUrl);
   if (profile.bannerUrl) embed.setImage(profile.bannerUrl);
 
-  const buttons = [...(profile.self ? [] : [giveButton(owner.id)]), listButton(owner.id)];
+  const buttons = [
+    ...(profile.self ? [] : [giveButton(owner.id)]),
+    ...(profile.self || !emaRelevant ? [] : [emaGiveButton(owner.id)]),
+    listButton(owner.id),
+  ];
   return { embeds: [embed.toJSON()], components: [row(...buttons)] };
+}
+
+/** 🎐 絵馬の欄（有効な枚数＋匿名の一言を新しい順に少しだけ）。1024 字をこえないようにする */
+function emaField(ema: { count: number; messages: { message: string; createdAt: Date }[] }): string {
+  if (!ema.count) return 'まだありません（評価の票）';
+  const withMsg = ema.messages.filter((m) => m.message.trim());
+  const lines: string[] = [`**${ema.count} 枚**（評価の票）`];
+  let shown = 0;
+  for (const m of withMsg) {
+    const text = `> ${m.message.trim().replace(/\n+/g, ' ').slice(0, 80)}`;
+    if (lines.join('\n').length + text.length + 1 > 1000 || shown >= 3) break;
+    lines.push(text);
+    shown++;
+  }
+  if (withMsg.length > shown) lines.push(`-# ほか ${withMsg.length - shown} 件の一言`);
+  return lines.join('\n');
 }
 
 /**

@@ -1,3 +1,15 @@
+## 2026年11月24日：新制度②（絵馬を贈る入口＋表示）を実装（Claude・本番反映予定）
+- 依頼：新制度がどこで止まっているか確認→本人が「A」を選択（たたき台の数字のまま②を作る）。確認で入口＝御朱印帳のボタン、表示＝Discord御朱印帳＋社務所Webの両方に決定。
+- 実装（土台①の giveEma 等を利用）：
+  - services/ema.ts：checkGiveEma を抽出（giveEma が利用。書きこまない事前確認）。GiveEmaResult/EmaCheck/EmaDenyReason を整理。
+  - discord/ids.ts：emaGiveId/emaModalId/parseEmaId（ema:give / ema:modal）。
+  - discord/views.ts：emaGiveButton・emaModal・emaGiveReply、goshuinchoReply に ema 引数（参拝者・氏子のとき「🎐 頂いた絵馬」欄＋ボタン）。
+  - discord/app.ts：emaGive（氏子以上・条件を確認→モーダル、だめなら理由）/emaSubmit（giveEma→返信・#記録にログ）。card で validEmaCountOf/emaMessagesOf を取得して渡す。onInteraction に ema ボタン・モーダルの分岐。
+  - web/views/pages.tsx：MemberPage に ema（枚数の fact＋「頂いた絵馬の一言」セクション・匿名）。web/app.tsx の /members/:id で取得して渡す。public/style.css に .ema-messages。
+- 条件・数字はたたき台（EMA_DAYS_TOGETHER=3・EMA_MINUTES_TOGETHER=180・30日失効）。昇格には未接続（③で差し替え）。
+- テスト：test/app.test.ts に4件（ボタン→モーダル→贈る／参拝者は不可／時間不足は不可／プロフィールに絵馬欄）、harnessに showModal・isModalSubmit を追加。test/web.test.ts に1件（メンバーページに匿名の一言）。test/ema.test.ts（既存5件）も通過。
+- 次：型チェック・全テストを通し、fetch＆mergeして本番へpush。周知は optional。全体ローンチは新制度③以降がそろってから本人と相談。未pushのものは未pushと明記する。
+
 ## 2026年11月22日：案内スレッドを溜めない（Codex・着手）
 - 本人が「🌸 ○○さんのご案内」が溜まるため対策を依頼。案内完了・退会分を履歴を残してロック/アーカイブし、案内待ち・予約中は維持する。削除や本番データの直接変更はしない。
 - 最新本番956d7cb7からcodex/guide-thread-cleanupを作成。既存実装はDiscordの終了前にDBを閉じており、Discord失敗時に再試行対象から外れる。既存の残存分の復旧と、役職判定・権限/通信失敗・再起動を検証する。

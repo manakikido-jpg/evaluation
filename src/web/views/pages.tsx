@@ -537,6 +537,7 @@ export function MemberPage(props: {
   cfg: GuildConfig;
   member: Member;
   card: GoshuinchoData;
+  ema?: { count: number; messages: { message: string; createdAt: Date }[] };
   history: { received: ShuinRow[]; given: ShuinRow[] };
   events: MemberEvent[];
   audits: AuditLog[];
@@ -545,7 +546,7 @@ export function MemberPage(props: {
   flash?: string;
   moderation?: Child;
 }) {
-  const { member: m, card, cfg } = props;
+  const { member: m, card, cfg, ema } = props;
   const auto = currentAutoRank(cfg.ranks, m.roleIds);
   const next = auto ? nextAutoRank(cfg.ranks, card.goen, auto) : undefined;
   const otherRoles = m.roleIds.filter((id) => !cfg.ranks.some((r) => r.roleId === id));
@@ -582,6 +583,14 @@ export function MemberPage(props: {
               <dt>押した朱印</dt>
               <dd>{card.givenCount} 個（{card.givenCount} 人）</dd>
             </div>
+            {ema && (
+              <div>
+                <dt>🎐 頂いた絵馬</dt>
+                <dd>
+                  <strong>{ema.count}</strong> 枚<small>（評価の票・有効なもの）</small>
+                </dd>
+              </div>
+            )}
             <div>
               <dt>参加日</dt>
               <dd>{fmtDate(m.joinedAt)}</dd>
@@ -605,6 +614,27 @@ export function MemberPage(props: {
           </dl>
         </div>
       </section>
+
+      {ema && ema.count > 0 && (
+        <section class="card">
+          <h2>🎐 頂いた絵馬の一言</h2>
+          <p class="muted">評価の票としてもらった一言です。だれが贈ったかは出しません（匿名）。氏子の票は 30 日で失効します。</p>
+          {ema.messages.some((x) => x.message.trim()) ? (
+            <ul class="ema-messages">
+              {ema.messages
+                .filter((x) => x.message.trim())
+                .map((x) => (
+                  <li>
+                    <span class="ema-msg">{x.message.trim()}</span>
+                    <small class="muted">{fmtDate(x.createdAt)}</small>
+                  </li>
+                ))}
+            </ul>
+          ) : (
+            <p class="muted">一言はまだありません（票だけ）。</p>
+          )}
+        </section>
+      )}
 
       {props.moderation}
 

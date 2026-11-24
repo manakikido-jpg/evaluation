@@ -22,6 +22,7 @@ import {
   type MessageCreateOptions,
   type UserContextMenuCommandInteraction,
   type StringSelectMenuInteraction,
+  type ModalSubmitInteraction,
 } from 'discord.js';
 import { channelPosters, posterPage, type Poster } from '../services/posters.js';
 import { SHUIN_PICK_ID } from '../services/notices.js';
@@ -51,9 +52,12 @@ import { activeCoreTime, coreTimeBonus } from '../services/coreTime.js';
 import { setOmairiStatus } from '../services/applications.js';
 import { ActivityTracker, getMember, leaveNotice, namesOf, recordJoin, recordLeave, recordPromotion, syncAllMembers, upsertMember, type MemberSnapshot } from '../services/members.js';
 import { giversOf, goenOf, goshuinchoOf, receivedCountOf, stampedBy } from '../services/shuin.js';
+import { checkGiveEma, giveEma, emaMessagesOf, validEmaCountOf } from '../services/ema.js';
 import { takeUncheckedSpecialGoen } from '../services/specialGoen.js';
-import { COMMAND, parseShuinId } from './ids.js';
+import { COMMAND, parseEmaId, parseShuinId } from './ids.js';
 import {
+  emaGiveReply,
+  emaModal,
   giveLog,
   giveReply,
   giversReply,
@@ -357,6 +361,12 @@ export class ShuinApp {
       } else if (interaction.isStringSelectMenu() && interaction.customId === SHUIN_PICK_ONE_ID) {
         const target = interaction.values[0];
         if (target) return await this.give(interaction, target);
+      } else if (interaction.isButton() && interaction.customId.startsWith('ema:')) {
+        const parsed = parseEmaId(interaction.customId);
+        if (parsed?.kind === 'give') return await this.emaGive(interaction, parsed.userId);
+      } else if (interaction.isModalSubmit() && interaction.customId.startsWith('ema:')) {
+        const parsed = parseEmaId(interaction.customId);
+        if (parsed?.kind === 'modal') return await this.emaSubmit(interaction, parsed.userId);
       } else if (interaction.isButton()) {
         const parsed = parseShuinId(interaction.customId);
         if (!parsed) return;
@@ -470,6 +480,26 @@ export class ShuinApp {
     await interaction.reply({ ...vcList(people, others.length), flags: MessageFlags.Ephemeral, allowedMentions: NO_MENTIONS });
   }
 
+  /** 🎐 「絵馬を贈る」ボタン: 氏子以上・条件を満たしていれば一言のモーダルを出す。だめなら理由を出す */
+  private async emaGive(interaction: ButtonInteraction<'cached'>, receiverId: string): Promise<void> {
+    const check = await checkGiveEma(this.db, this.cfg, interaction.user.id, receiverId);
+    if (!check.ok) {
+      await interaction.reply({ ...emaGiveReply(receiverId, check), flags: MessageFlags.Ephemeral, allowedMentions: NO_MENTIONS });
+      return;
+    }
+    const receiver = await this.fetchMember(interaction, receiverId);
+    await interaction.showModal(emaModal(receiverId, receiver?.displayName ?? 'その方'));
+  }
+
+  /** 🎐 絵馬の一言のモーダルを受けて贈る（匿名・1 人 1 枚・贈り直し可） */
+  private async emaSubmit(interaction: ModalSubmitInteraction<'cached'>, receiverId: string): Promise<void> {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const message = interaction.fields.getTextInputValue('message');
+    const result = await this.lock.run(receiverId, () => giveEma(this.db, this.cfg, interaction.user.id, receiverId, message));
+    if (result.ok) await this.log(`🎐 絵馬 <@${interaction.user.id}> → <@${receiverId}>（${result.created ? '新規' : '贈り直し'}・票 ${result.count}）`);
+    await interaction.editReply({ ...emaGiveReply(receiverId, result), allowedMentions: NO_MENTIONS });
+  }
+
   private async card(interaction: Repliable, ownerId: string, isPublic: boolean): Promise<void> {
     await interaction.deferReply(isPublic ? {} : { flags: MessageFlags.Ephemeral });
     const owner = await this.fetchMember(interaction, ownerId);
@@ -482,10 +512,12 @@ export class ShuinApp {
 
     // 残高は、自分の御朱印帳を自分だけに見えるように開いたときだけ（ほかの人の残高は見せない）
     const showCoins = interaction.user.id === ownerId && !isPublic;
-    const [data, wallet, tickets] = await Promise.all([
+    const [data, wallet, tickets, emaCount, emaMessages] = await Promise.all([
       goshuinchoOf(this.db, ownerId),
       showCoins ? walletOf(this.db, ownerId) : undefined,
       showCoins ? ticketsOf(this.db, ownerId) : undefined,
+      validEmaCountOf(this.db, ownerId),
+      emaMessagesOf(this.db, ownerId),
     ]);
     const ticketText = tickets ? allTicketsLine(tickets, await customHoldingsOf(this.db, ownerId)) : undefined;
     const e = this.cfg.economy;
@@ -502,6 +534,7 @@ export class ShuinApp {
         data,
         wallet ? { emoji: e.currencyEmoji, name: e.currencyName, balance: wallet.balance } : undefined,
         { ...(await this.profileOf(owner, interaction.user.id === ownerId)), ...(ticketText ? { tickets: ticketText } : {}) },
+        { count: emaCount, messages: emaMessages },
       ),
     );
   }

@@ -180,6 +180,7 @@ import { logger } from '../lib/logger.js';
 import { audit, hideGujiAudit, listAudit } from '../services/audit.js';
 import { eventsOf, findMemberByNameOrId, getMember, memberDiff, recentLeaves, homeStats, isMemberSort, listMembers, membersWithRole, namesOf, roleMemberCounts, searchMembersWithoutRole, setMemberRole, shuinHistory, type MemberListQuery } from '../services/members.js';
 import { goenOf, goshuinchoOf } from '../services/shuin.js';
+import { validEmaCountOf, emaMessagesOf } from '../services/ema.js';
 import { jstDate, recentActivity } from '../services/activity.js';
 import { adminGrant, adminTake, currentMemberIds, grantJoinBonusToAll, recentCoinTx, validAdminAmount, walletOf } from '../services/economy.js';
 import { checkTarget, clearYaku, giveYaku, instantBan, isBannedByEvents, kickMember, unbanMember, writeMemo, type Actor, type Denied, type ModCtx } from '../services/moderation.js';
@@ -1049,6 +1050,7 @@ export function createWebApp(deps: WebDeps) {
     ]);
     const audits = await hideGujiAudit(db, cfg, audits0, session.userId);
     const goenRows = await specialGoenHistory(db, id);
+    const [emaCount, emaMessages] = await Promise.all([validEmaCountOf(db, id), emaMessagesOf(db, id)]);
     const names = await namesOf(db, [
       ...goenRows.flatMap((r) => [r.grantedBy, r.revokedBy ?? '']),
       ...history.received.map((r) => r.other),
@@ -1067,6 +1069,7 @@ export function createWebApp(deps: WebDeps) {
         cfg={cfg}
         member={member}
         card={card}
+        ema={{ count: emaCount, messages: emaMessages }}
         history={history}
         events={events}
         audits={audits}

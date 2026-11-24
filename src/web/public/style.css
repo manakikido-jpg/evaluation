@@ -814,6 +814,11 @@ code.secret { font-size: 1.2rem; letter-spacing: .05em; padding: 2px 8px; user-s
 .left-feed { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .left-feed li { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
 .muted { color: var(--muted); }
+/* 🎐 絵馬の一言 */
+.ema-messages { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.ema-messages li { border-left: 3px solid var(--shu); background: var(--card2, rgba(215, 0, 58, .06)); padding: 8px 12px; border-radius: 0 8px 8px 0; display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.ema-messages .ema-msg { white-space: pre-wrap; word-break: break-word; }
+.ema-messages small { flex: none; }
 /* ポップアップ */
 dialog.popup { width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 64px); border: 1px solid var(--line); border-radius: 12px; padding: 12px 18px 18px; background: var(--card); color: inherit; box-shadow: 0 10px 40px rgba(0, 0, 0, .35); }
 dialog.popup::backdrop { background: rgba(0, 0, 0, .45); }

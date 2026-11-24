@@ -45,25 +45,26 @@ export async function emaMessagesOf(db: Db, receiverId: string, now = new Date()
   return rows;
 }
 
+export type EmaDenyReason = 'self' | 'no_member' | 'bot' | 'left' | 'staff_alt' | 'giver_not_ujiko' | 'receiver_rank' | 'not_together';
+
+export type EmaCheck =
+  | { ok: true; days: number; minutes: number }
+  | { ok: false; reason: EmaDenyReason; days?: number; minutes?: number };
+
 export type GiveEmaResult =
   | { ok: true; created: boolean; count: number; days: number; minutes: number }
-  | { ok: false; reason: 'self' | 'no_member' | 'bot' | 'left' | 'staff_alt' | 'giver_not_ujiko' | 'receiver_rank' | 'not_together'; days?: number; minutes?: number };
+  | { ok: false; reason: EmaDenyReason; days?: number; minutes?: number };
 
 /**
- * 絵馬を贈る（氏子の票）。贈れたら created（新規か贈り直しか）と今の有効枚数を返す。
- * - 氏子以上だけが贈れる。相手は参拝者か氏子。自分・BOT・退出者・運営サブには贈れない。
- * - 相手と違う日に EMA_DAYS_TOGETHER 日以上・合計 EMA_MINUTES_TOGETHER 分以上いっしょにいたこと。
- * - 同じ相手への票は 1 枚。贈り直すと一言と期限（created_at）を新しくする。
+ * 絵馬を贈れるか確かめるだけ（書きこまない）。入口のモーダルを出す前の確認に使う。
+ * 条件は giveEma と同じ（氏子以上・相手は参拝者か氏子・いっしょにいた時間）。
  */
-export async function giveEma(
+export async function checkGiveEma(
   db: Db,
   cfg: GuildConfig,
   giverId: string,
   receiverId: string,
-  message: string,
-  now = new Date(),
-  tier: EmaTier = 'ujiko',
-): Promise<GiveEmaResult> {
+): Promise<EmaCheck> {
   if (giverId === receiverId) return { ok: false, reason: 'self' };
   const rows = await db
     .select({ id: members.id, roleIds: members.roleIds, isBot: members.isBot, leftAt: members.leftAt })
@@ -85,6 +86,27 @@ export async function giveEma(
 
   const { days, minutes } = await togetherStats(db, giverId, receiverId);
   if (days < EMA_DAYS_TOGETHER || minutes < EMA_MINUTES_TOGETHER) return { ok: false, reason: 'not_together', days, minutes };
+  return { ok: true, days, minutes };
+}
+
+/**
+ * 絵馬を贈る（氏子の票）。贈れたら created（新規か贈り直しか）と今の有効枚数を返す。
+ * - 氏子以上だけが贈れる。相手は参拝者か氏子。自分・BOT・退出者・運営サブには贈れない。
+ * - 相手と違う日に EMA_DAYS_TOGETHER 日以上・合計 EMA_MINUTES_TOGETHER 分以上いっしょにいたこと。
+ * - 同じ相手への票は 1 枚。贈り直すと一言と期限（created_at）を新しくする。
+ */
+export async function giveEma(
+  db: Db,
+  cfg: GuildConfig,
+  giverId: string,
+  receiverId: string,
+  message: string,
+  now = new Date(),
+  tier: EmaTier = 'ujiko',
+): Promise<GiveEmaResult> {
+  const check = await checkGiveEma(db, cfg, giverId, receiverId);
+  if (!check.ok) return check;
+  const { days, minutes } = check;
 
   const [existing] = await db
     .select({ revokedAt: ema.revokedAt })
