@@ -5,6 +5,7 @@ import type { AdminSession } from '../db/schema.js';
 import { evaluationCsv, EvaluationSelectionError, ujikoEvaluation, type EvaluationFilter } from '../services/ujikoEvaluation.js';
 import { ujikoRatingRows, ujikoRatingXlsx } from '../services/ujikoRating.js';
 import { emaPromotionEnabled, setEmaPromotion, ujikoBelowKeep } from '../services/emaPromotion.js';
+import { resetAllShuin, undoAllShuinReset, lastAllShuinReset } from '../services/shuin.js';
 import { namesOf } from '../services/members.js';
 import { audit } from '../services/audit.js';
 import { evaluationDeductionPage,saveEvaluationDeduction,EvaluationDeductionError } from '../services/evaluationDeductions.js';
@@ -30,7 +31,8 @@ export function mountEvaluation(app: Hono<Env>, db: Db, cfg: () => GuildConfig, 
       // 🎐 維持の注意（有効な絵馬が3枚未満の氏子）は宮司だけに出す
       const keepWarnings = session.level === 'guji' ? await ujikoBelowKeep(db, cfg(), now()) : [];
       const names = keepWarnings.length ? await namesOf(db, keepWarnings.map((w) => w.id)) : new Map<string, string>();
-      return c.html(<EvaluationPage session={session} data={data} filter={filter} page={page} emaPromotion={emaPromotion} keepWarnings={keepWarnings} names={names} saved={c.req.query('ema') ?? undefined}/>);
+      const resetUndoable = session.level === 'guji' ? await lastAllShuinReset(db) : undefined;
+      return c.html(<EvaluationPage session={session} data={data} filter={filter} page={page} emaPromotion={emaPromotion} keepWarnings={keepWarnings} names={names} saved={c.req.query('ema') ?? undefined} resetFlash={c.req.query('reset') ?? undefined} resetUndoable={resetUndoable}/>);
     } catch (error) {
       if (!(error instanceof EvaluationSelectionError)) throw error;
       return c.text(error.message, 400);
@@ -68,6 +70,24 @@ export function mountEvaluation(app: Hono<Env>, db: Db, cfg: () => GuildConfig, 
     await setEmaPromotion(db, on, session.userId);
     await audit(db, { actorId: session.userId, action: 'ema.promotion_mode', detail: { on }, via: 'web' });
     return c.redirect(`/evaluation?ema=${on ? 'on' : 'off'}`, 303);
+  });
+  // 🔄 新制度の切替：全員のご縁（結び）と特別ご縁を 0 に戻す（宮司だけ・確認必須・絵馬での昇格がONのときだけ）
+  app.post('/evaluation/goen-reset', async (c) => {
+    c.header('Cache-Control', 'private, no-store');
+    const session = c.get('session');
+    if (session.level !== 'guji') return c.text('ご縁のリセットは宮司だけが操作できます。', 403);
+    if (!(await emaPromotionEnabled(db))) return c.redirect('/evaluation?reset=need_ema', 303);
+    const body = await c.req.parseBody();
+    if (body.confirm !== 'yes' || body.phrase !== 'リセット') return c.redirect('/evaluation?reset=confirm', 303);
+    const r = await resetAllShuin(db, session.userId, now());
+    return c.redirect(`/evaluation?reset=done&members=${r.members}`, 303);
+  });
+  app.post('/evaluation/goen-reset-undo', async (c) => {
+    c.header('Cache-Control', 'private, no-store');
+    const session = c.get('session');
+    if (session.level !== 'guji') return c.text('ご縁のリセットは宮司だけが操作できます。', 403);
+    const r = await undoAllShuinReset(db, session.userId);
+    return c.redirect(`/evaluation?reset=${r.status === 'ok' ? 'undone' : 'none'}`, 303);
   });
   // 🍃 今いる氏子を 5 段階で評価するシート（エクセル）。宮司だけが取り出せる
   app.get('/evaluation/rating-sheet.xlsx', async (c) => {

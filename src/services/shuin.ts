@@ -160,6 +160,47 @@ export async function resetReceivedShuin(db: Db, receiverId: string, by: string,
   });
 }
 
+/**
+ * 🔄 新制度の切替：全員のご縁（結び＝朱印）と ✨ 特別ご縁をいっせいに 0 に戻す（宮司が手で押す）。
+ * 取り消し（revokedAt）で消すので、直後なら undoAllShuinReset で元に戻せる。
+ * 役職は変えない（自動降格はしない・今いる氏子は据え置き）。
+ */
+export async function resetAllShuin(db: Db, by: string, now = new Date()): Promise<{ members: number; count: number; special: number; at: Date }> {
+  const at = now;
+  return db.transaction(async (tx) => {
+    const rows = await tx.update(shuin).set({ revokedAt: at }).where(isNull(shuin.revokedAt)).returning({ receiverId: shuin.receiverId });
+    const specials = await tx.update(specialGoen).set({ revokedAt: at, revokedBy: by }).where(isNull(specialGoen.revokedAt)).returning({ memberId: specialGoen.memberId });
+    const members = new Set([...rows.map((r) => r.receiverId), ...specials.map((s) => s.memberId)]);
+    const result = { members: members.size, count: rows.length, special: specials.length, at };
+    await audit(tx as Db, { actorId: by, action: 'shuin.reset_all', detail: { at: at.toISOString(), members: result.members, count: result.count, special: result.special }, via: 'web' });
+    return result;
+  });
+}
+
+/** いちばん新しい全員リセット（まだ元に戻せるもの）。取り消したままの朱印・特別ご縁の数を返す */
+export async function lastAllShuinReset(db: Db): Promise<{ at: Date; remaining: number; specialRemaining: number } | undefined> {
+  const [last] = await db.select().from(auditLog).where(inArray(auditLog.action, ['shuin.reset_all', 'shuin.reset_all_undo'])).orderBy(desc(auditLog.id)).limit(1);
+  const at = (last?.detail as { at?: string } | null)?.at;
+  if (!last || last.action !== 'shuin.reset_all' || !at) return undefined;
+  const when = new Date(at);
+  const [s] = await db.select({ n: count() }).from(shuin).where(eq(shuin.revokedAt, when));
+  const [g] = await db.select({ n: count() }).from(specialGoen).where(eq(specialGoen.revokedAt, when));
+  const remaining = Number(s?.n ?? 0), specialRemaining = Number(g?.n ?? 0);
+  return remaining + specialRemaining > 0 ? { at: when, remaining, specialRemaining } : undefined;
+}
+
+/** いちばん新しい全員リセットを元に戻す（そのとき取り消した分だけ。あとで新しく結んだ分はそのまま） */
+export async function undoAllShuinReset(db: Db, by: string): Promise<{ status: 'ok'; count: number; special: number } | { status: 'none' }> {
+  const last = await lastAllShuinReset(db);
+  if (!last) return { status: 'none' };
+  return db.transaction(async (tx) => {
+    const rows = await tx.update(shuin).set({ revokedAt: null }).where(eq(shuin.revokedAt, last.at)).returning({ giverId: shuin.giverId });
+    const specials = await tx.update(specialGoen).set({ revokedAt: null, revokedBy: null }).where(eq(specialGoen.revokedAt, last.at)).returning({ id: specialGoen.id });
+    await audit(tx as Db, { actorId: by, action: 'shuin.reset_all_undo', detail: { at: last.at.toISOString(), count: rows.length, special: specials.length }, via: 'web' });
+    return { status: 'ok' as const, count: rows.length, special: specials.length };
+  });
+}
+
 /** いちばん新しいリセット（元に戻せるもの）。まだ取り消したままの朱印の数も返す */
 export async function lastShuinReset(db: Db, receiverId: string): Promise<{ at: Date; remaining: number; specialRemaining: number } | undefined> {
   const [last] = await db.select().from(auditLog).where(and(eq(auditLog.targetId, receiverId), inArray(auditLog.action, ['shuin.reset_member', 'shuin.reset_member_undo']))).orderBy(desc(auditLog.id)).limit(1);

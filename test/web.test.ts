@@ -390,6 +390,32 @@ describe('厄・BAN・キック・メモ（管理画面）', () => {
     expect(await emaPromotionEnabled(db)).toBe(false);
   });
 
+  it('🔄 ご縁のリセット: 宮司だけ・絵馬昇格ONと合言葉が要る・元に戻せる', async () => {
+    const { goenOf, giveShuin } = await import('../src/services/shuin.js');
+    const { setEmaPromotion } = await import('../src/services/emaPromotion.js');
+    await giveShuin(db, { giverId: GUJI, receiverId: USER, weight: 2, giverRank: 'ujiko' });
+    expect(await goenOf(db, USER)).toBe(2);
+    const g = await login(GUJI);
+    const gcsrf = await csrfOf(g);
+    const s = await login(STAFF);
+    const scsrf = await csrfOf(s);
+    // 神職は403
+    expect((await post('/evaluation/goen-reset', s, { _csrf: scsrf, confirm: 'yes', phrase: 'リセット' })).status).toBe(403);
+    // 絵馬での昇格がOFFだと拒否
+    expect((await post('/evaluation/goen-reset', g, { _csrf: gcsrf, confirm: 'yes', phrase: 'リセット' })).headers.get('location')).toBe('/evaluation?reset=need_ema');
+    expect(await goenOf(db, USER)).toBe(2);
+    await setEmaPromotion(db, true, GUJI);
+    // 合言葉が違うと拒否
+    expect((await post('/evaluation/goen-reset', g, { _csrf: gcsrf, confirm: 'yes', phrase: 'ちがう' })).headers.get('location')).toBe('/evaluation?reset=confirm');
+    expect(await goenOf(db, USER)).toBe(2);
+    // 宮司＋確認でリセット→0
+    expect((await post('/evaluation/goen-reset', g, { _csrf: gcsrf, confirm: 'yes', phrase: 'リセット' })).headers.get('location')).toMatch(/^\/evaluation\?reset=done/);
+    expect(await goenOf(db, USER)).toBe(0);
+    // 元に戻す
+    expect((await post('/evaluation/goen-reset-undo', g, { _csrf: gcsrf })).headers.get('location')).toBe('/evaluation?reset=undone');
+    expect(await goenOf(db, USER)).toBe(2);
+  });
+
   it('CSRF トークンがない操作は拒否', async () => {
     const s = await login(STAFF);
     const res = await post(`/members/${USER}/yaku`, s, { reason: '誹謗中傷' });

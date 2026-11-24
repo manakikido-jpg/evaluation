@@ -21,6 +21,7 @@
   - 切り替えの前の目安に、「維持の注意：有効な絵馬が3枚未満の氏子」の一覧（読み取り専用・少ない順）を出す。ここで絵馬が十分たまっているか確かめてから切り替える。
   - ON のときは、#慶事の昇格の発表とプロフィールの「氏子の条件」も絵馬の表示になる。記録は `ema.promotion_mode`。
   - **ON に切り替える＝新制度の昇格を始める瞬間**。周知のタイミングに注意（絵馬が十分たまってから）。
+- **ご縁のリセット（宮司だけ・④）**：評価ページの「🔄 ご縁のリセット」で、新制度を始めるときに**全員のご縁（結び＝朱印）と ✨ 特別ご縁をいっせいに 0 に戻す**（みんな同じところから結び直す）。役職は変えない（自動降格なし・今いる氏子は据え置き）。「🎐 絵馬での昇格」が ON のときだけ押せる（ご縁を0にしても昇格が止まらないように）。確認のため「リセット」と入力＋チェックが必要。押した直後なら「元に戻す」で戻せる。記録は `shuin.reset_all`・`shuin.reset_all_undo`。サービスは `src/services/shuin.ts` の `resetAllShuin`/`undoAllShuinReset`/`lastAllShuinReset`。
 - 表・サービスは `src/db/schema.ts` の `ema`、`src/services/ema.ts`（`giveEma`/`checkGiveEma`/`validEmaCountOf`/`emaMessagesOf`）、昇格スイッチは `src/services/emaPromotion.ts`（`emaPromotionEnabled`/`setEmaPromotion`/`emaPromotableSanpaisha`/`ujikoBelowKeep`）、数字は `src/domain/ema.ts`。入口は `src/discord/app.ts`・`src/discord/views.ts`・`src/discord/ids.ts`、Web表示は `src/web/views/pages.tsx`、切替は `src/web/evaluation.tsx`・`src/web/views/evaluation.tsx`。
 
 ### 新制度の検証ページ（推移 → 📐 新制度の検証）

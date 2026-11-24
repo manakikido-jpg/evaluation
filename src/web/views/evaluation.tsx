@@ -12,9 +12,10 @@ export function evaluationQuery(filter: EvaluationFilter, selectedIds: string[],
   return query.toString();
 }
 
-export function EvaluationPage({ session, data, filter, page, emaPromotion = false, keepWarnings = [], names, saved }: {
+export function EvaluationPage({ session, data, filter, page, emaPromotion = false, keepWarnings = [], names, saved, resetFlash, resetUndoable }: {
   session: AdminSession; data: EvaluationData; filter: EvaluationFilter; page: number;
   emaPromotion?: boolean; keepWarnings?: { id: string; count: number }[]; names?: Map<string, string>; saved?: string;
+  resetFlash?: string; resetUndoable?: { at: Date; remaining: number; specialRemaining: number };
 }) {
   const pageSize = 100, pages = Math.max(1, Math.ceil(data.rows.length / pageSize));
   const current = Math.min(page, pages), rows = data.rows.slice((current - 1) * pageSize, current * pageSize);
@@ -42,6 +43,27 @@ export function EvaluationPage({ session, data, filter, page, emaPromotion = fal
           ? <ul>{keepWarnings.slice(0, 100).map((w) => <li><a href={'/members/' + w.id}>{nameOf(w.id)}</a> … 絵馬 {w.count} 枚</li>)}{keepWarnings.length > 100 && <li>ほか {keepWarnings.length - 100} 人</li>}</ul>
           : <p>3枚未満の氏子はいません。</p>}
       </details>
+    </section>}
+    {session.level === 'guji' && <section class="card">
+      <h2>🔄 新制度の切替：ご縁のリセット</h2>
+      {resetFlash === 'done' && <p class="flash ok" role="status">全員のご縁（結び）と ✨ 特別ご縁を 0 に戻しました。押した直後なら、下の「元に戻す」で戻せます。</p>}
+      {resetFlash === 'undone' && <p class="flash ok" role="status">直前のリセットを元に戻しました。</p>}
+      {resetFlash === 'none' && <p class="flash warn" role="alert">元に戻せるリセットがありません。</p>}
+      {resetFlash === 'confirm' && <p class="flash warn" role="alert">確認のため「リセット」と入力し、チェックを入れてから押してください。</p>}
+      {resetFlash === 'need_ema' && <p class="flash warn" role="alert">先に上の「🎐 絵馬での昇格」を ON にしてください（ご縁を0にすると、従来のご縁での昇格が止まってしまうため）。</p>}
+      <p>新制度を始めるときに、<strong>全員のご縁（結び＝朱印）と ✨ 特別ご縁をいっせいに 0 に戻します</strong>。みんな同じところから結び直せます。<strong>役職は変えません</strong>（自動降格なし・今いる氏子は据え置き）。</p>
+      <p class="note">※「🎐 絵馬での昇格」が ON のときだけ押せます（ご縁を0にしても昇格が止まらないように）。デプロイでは勝手に消えません。押すのは一度、新制度を始める合図のときだけにしてください。</p>
+      {resetUndoable && <form method="post" action="/evaluation/goen-reset-undo">
+        <input type="hidden" name="_csrf" value={session.csrfToken}/>
+        <p role="status">直前のリセットは、まだ元に戻せます（結び {resetUndoable.remaining} 件・特別ご縁 {resetUndoable.specialRemaining} 件）。</p>
+        <button type="submit">直前のリセットを元に戻す</button>
+      </form>}
+      <form method="post" action="/evaluation/goen-reset" class="goen-reset-form">
+        <input type="hidden" name="_csrf" value={session.csrfToken}/>
+        <label>確認のため「リセット」と入力 <input type="text" name="phrase" autocomplete="off" placeholder="リセット"/></label>
+        <label><input type="checkbox" name="confirm" value="yes"/> 全員のご縁と特別ご縁を 0 に戻してよい</label>
+        <button type="submit">全員のご縁をリセットして新制度を始める</button>
+      </form>
     </section>}
     <section class="card">
       <h2>ご縁40 ＋ 縁側の合計20時間</h2><p><strong>参拝者時間の計測開始：{EVALUATION_START_LABEL}から</strong><br/>ミュート除外に対応した反映後の分は、マイク・スピーカーの両方が非ミュートと確認できた時間だけを加算します。過去分は控除後の合計を使います。</p>

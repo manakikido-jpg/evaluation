@@ -1,3 +1,12 @@
+## 2026年11月24日：新制度④a（ご縁リセットの切替）を実装（Claude・本番反映予定）
+- 依頼「4進めた」。④は大きいので④a(リセット)→④b(コレクション)→④c(呼び名)に分割。まず④a。
+- 決定（確認済み）：呼び名も結びに変える／特別ご縁も一緒にリセット／コレクションは本人向けDiscord。
+- 実装：services/shuin.ts に resetAllShuin（全 shuin＋special_goen を revokedAt で一括取消）・undoAllShuinReset・lastAllShuinReset。web/evaluation.tsx に POST /evaluation/goen-reset（宮司・CSRF・confirm=yes・phrase=リセット・emaPromotionEnabled 必須）/goen-reset-undo、評価ページに読み取りデータを渡す。views/evaluation.tsx に宮司だけのリセット節（合言葉＋チェック・undo・flash）。
+- 役職は変えない（自動降格なし）。絵馬昇格ONのときだけ実行可（ご縁0で従来昇格が止まる footgun 防止）。undo可（直後のみ）。audit shuin.reset_all/_undo。
+- テスト：test/shuin.test.ts に1件（リセット→0→undo→復元→none）、test/web.test.ts に1件（宮司だけ・need_ema・合言葉・done・undo）。
+- 残り：④b コレクション表示（御朱印帳に「まだ結んでいない人」）、④c 呼び名の変更（御朱印→結び・広範囲。全体ローンチに合わせるか要相談）。
+- 次：型チェック・全テストを通し fetch＆merge して本番へpush（④aのみ）。周知none。
+
 ## 2026年11月24日：新制度③（昇格の差し替え・スイッチ付き）を実装（Claude・本番反映予定）
 - 依頼「次は？」→③をスイッチ付きで（本人選択）。絵馬が0枚のため既定OFFで本番に出す（挙動は従来のまま）。
 - 実装：

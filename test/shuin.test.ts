@@ -19,6 +19,28 @@ const A = '200000000000000001';
 const B = '200000000000000002';
 const C = '200000000000000003';
 
+describe('🔄 新制度の切替：全員のご縁リセット', () => {
+  it('全員の結び（朱印）と特別ご縁を0に戻し、直後なら元に戻せる', async () => {
+    const { resetAllShuin, undoAllShuinReset, lastAllShuinReset } = await import('../src/services/shuin.js');
+    const { specialGoen } = await import('../src/db/schema.js');
+    await giveShuin(db, { giverId: A, receiverId: B, weight: 2, giverRank: 'ujiko' });
+    await giveShuin(db, { giverId: C, receiverId: B, weight: 1, giverRank: 'sanpaisha' });
+    await db.insert(specialGoen).values({ memberId: B, amount: 5, reason: 'test', grantedBy: A, nonce: 'n1' });
+    expect(await goenOf(db, B)).toBe(8);
+    const r = await resetAllShuin(db, 'guji');
+    expect(r).toMatchObject({ count: 2, special: 1 });
+    expect(r.members).toBeGreaterThanOrEqual(1);
+    expect(await goenOf(db, B)).toBe(0);
+    // 元に戻せる
+    expect((await lastAllShuinReset(db))?.remaining).toBe(2);
+    expect(await undoAllShuinReset(db, 'guji')).toMatchObject({ status: 'ok', count: 2, special: 1 });
+    expect(await goenOf(db, B)).toBe(8);
+    // もう元に戻せるものはない
+    expect(await lastAllShuinReset(db)).toBeUndefined();
+    expect(await undoAllShuinReset(db, 'guji')).toEqual({ status: 'none' });
+  });
+});
+
 describe('朱印を押す', () => {
   it('押した人の役職の格だけご縁が増える', async () => {
     const r = await giveFlow(db, cfg, member(A, ROLE.sewayaku), member(B, ROLE.sanpaisha));
