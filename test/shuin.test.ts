@@ -19,6 +19,23 @@ const A = '200000000000000001';
 const B = '200000000000000002';
 const C = '200000000000000003';
 
+describe('🧵 結びのコレクション', () => {
+  it('まだ結んでいない人を、最近きた順に出す（自分・結んだ相手はのぞく）', async () => {
+    const { metCollection } = await import('../src/services/shuin.js');
+    const { members } = await import('../src/db/schema.js');
+    await db.insert(members).values([
+      { id: A, username: 'a', displayName: 'エー', roleIds: [] },
+      { id: B, username: 'b', displayName: 'ビー', roleIds: [], lastActiveAt: new Date('2026-11-20') },
+      { id: C, username: 'c', displayName: 'シー', roleIds: [], lastActiveAt: new Date('2026-11-23') },
+    ]);
+    await giveShuin(db, { giverId: A, receiverId: B, weight: 1, giverRank: 'sanpaisha' });
+    const col = await metCollection(db, A);
+    expect(col.total).toBe(2); // B・C（自分Aはのぞく）
+    expect(col.met).toBe(1); // Bと結んだ
+    expect(col.unmet.map((u) => u.id)).toEqual([C]); // まだCだけ
+  });
+});
+
 describe('🔄 新制度の切替：全員のご縁リセット', () => {
   it('全員の結び（朱印）と特別ご縁を0に戻し、直後なら元に戻せる', async () => {
     const { resetAllShuin, undoAllShuinReset, lastAllShuinReset } = await import('../src/services/shuin.js');

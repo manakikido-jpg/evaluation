@@ -53,7 +53,7 @@ import { listPrizes } from '../services/gacha.js';
 import { activeCoreTime, coreTimeBonus } from '../services/coreTime.js';
 import { setOmairiStatus } from '../services/applications.js';
 import { ActivityTracker, getMember, leaveNotice, namesOf, recordJoin, recordLeave, recordPromotion, syncAllMembers, upsertMember, type MemberSnapshot } from '../services/members.js';
-import { giversOf, goenOf, goshuinchoOf, receivedCountOf, stampedBy } from '../services/shuin.js';
+import { giversOf, goenOf, goshuinchoOf, metCollection, receivedCountOf, stampedBy } from '../services/shuin.js';
 import { checkGiveEma, giveEma, emaMessagesOf, validEmaCountOf } from '../services/ema.js';
 import { takeUncheckedSpecialGoen } from '../services/specialGoen.js';
 import { COMMAND, parseEmaId, parseShuinId } from './ids.js';
@@ -383,6 +383,8 @@ export class ShuinApp {
             return await this.list(interaction, parsed.userId);
           case 'vc':
             return await this.vcList(interaction, parsed.userId);
+          case 'unmet':
+            return await this.unmetPick(interaction, parsed.userId);
         }
       }
     } catch (err) {
@@ -507,6 +509,28 @@ export class ShuinApp {
     }
   }
 
+  /** 🧵 まだ結んでいない人（結びのコレクション）: 自分のプロフィールから。選ぶと結べる（SHUIN_PICK_ONE で give） */
+  private async unmetPick(interaction: ButtonInteraction<'cached'>, viewerId: string): Promise<void> {
+    if (interaction.user.id !== viewerId) {
+      await interaction.reply({ content: '🧵 「まだ結んでいない人」は、ご自身のプロフィール（御朱印帳）から見てください。', flags: MessageFlags.Ephemeral });
+      return;
+    }
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const { total, met, unmet } = await metCollection(this.db, viewerId);
+    if (!unmet.length) {
+      await interaction.editReply({ content: `🧵 もうみなさんと結びました（${met} / ${total} 人・コンプリート！）。`, components: [] });
+      return;
+    }
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId(SHUIN_PICK_ONE_ID)
+      .setPlaceholder('結ぶ相手をえらぶ')
+      .addOptions(unmet.map((x) => ({ label: x.name.slice(0, 100) || x.id, value: x.id })));
+    await interaction.editReply({
+      content: `🧵 まだ結んでいない人（いま ${met} / ${total} 人）。最近きた順に ${unmet.length} 人出しています。えらぶと結べます。`,
+      components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu)],
+    });
+  }
+
   private async card(interaction: Repliable, ownerId: string, isPublic: boolean): Promise<void> {
     await interaction.deferReply(isPublic ? {} : { flags: MessageFlags.Ephemeral });
     const owner = await this.fetchMember(interaction, ownerId);
@@ -528,6 +552,8 @@ export class ShuinApp {
       emaPromotionEnabled(this.db),
     ]);
     const ticketText = tickets ? allTicketsLine(tickets, await customHoldingsOf(this.db, ownerId)) : undefined;
+    // 🧵 結びのコレクションは自分のプロフィールだけ
+    const collection = interaction.user.id === ownerId ? await metCollection(this.db, ownerId) : undefined;
     const e = this.cfg.economy;
     await this.reply(
       interaction,
@@ -543,6 +569,7 @@ export class ShuinApp {
         wallet ? { emoji: e.currencyEmoji, name: e.currencyName, balance: wallet.balance } : undefined,
         { ...(await this.profileOf(owner, interaction.user.id === ownerId)), ...(ticketText ? { tickets: ticketText } : {}) },
         { count: emaCount, messages: emaMessages, promoteMode: emaMode },
+        collection ? { total: collection.total, met: collection.met } : undefined,
       ),
     );
   }

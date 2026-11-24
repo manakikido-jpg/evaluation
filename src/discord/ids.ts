@@ -1,9 +1,9 @@
 /** ボタンの customId。形式: shuin:<action>:<相手のユーザー ID> */
-export type ShuinAction = 'give' | 'revoke' | 'card' | 'list' | 'vc';
+export type ShuinAction = 'give' | 'revoke' | 'card' | 'list' | 'vc' | 'unmet';
 
 const PREFIX = 'shuin';
-/** vc: 通話のチャットのボタン（ID は通話のチャンネル ID） */
-const ACTIONS: readonly ShuinAction[] = ['give', 'revoke', 'card', 'list', 'vc'];
+/** vc: 通話のチャットのボタン（ID は通話のチャンネル ID）／unmet: まだ結んでいない人（結びのコレクション） */
+const ACTIONS: readonly ShuinAction[] = ['give', 'revoke', 'card', 'list', 'vc', 'unmet'];
 
 export function shuinId(action: ShuinAction, userId: string): string {
   return `${PREFIX}:${action}:${userId}`;

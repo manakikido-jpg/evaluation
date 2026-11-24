@@ -1,7 +1,7 @@
 import { isRestrictedAccount as isStaffAlt } from './staffAlts.js';
 import { and, count, desc, eq, gte, inArray, isNotNull, isNull, sql, sum } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
-import { auditLogs as auditLog, shuin, specialGoen } from '../db/schema.js';
+import { auditLogs as auditLog, members, shuin, specialGoen } from '../db/schema.js';
 import { audit } from './audit.js';
 import { specialGoenOf } from './specialGoen.js';
 
@@ -158,6 +158,25 @@ export async function resetReceivedShuin(db: Db, receiverId: string, by: string,
     await audit(tx as Db, { actorId: by, targetId: receiverId, action: 'shuin.reset_member', detail: { at: at.toISOString(), count: result.count, goen: result.goen, special: result.special, withSpecial: Boolean(opts.withSpecial) }, via: 'web' });
     return result;
   });
+}
+
+/**
+ * 🧵 結びのコレクション：その人が「まだ結んでいない相手」の一覧（出会った人数のコンプリート用）。
+ * total＝結べる相手（在籍・BOT/退出/自分をのぞく）の数、met＝もう結んだ数、unmet＝まだの相手（最近来た順・limit まで）。
+ */
+export async function metCollection(db: Db, viewerId: string, limit = 24): Promise<{ total: number; met: number; unmet: { id: string; name: string }[] }> {
+  const [people, stampedRows] = await Promise.all([
+    db.select({ id: members.id, name: members.displayName, active: members.lastActiveAt }).from(members).where(and(eq(members.isBot, false), isNull(members.leftAt), sql`${members.id} <> ${viewerId}`)),
+    db.select({ id: shuin.receiverId }).from(shuin).where(and(eq(shuin.giverId, viewerId), isNull(shuin.revokedAt))),
+  ]);
+  const stamped = new Set(stampedRows.map((r) => r.id));
+  const met = people.filter((p) => stamped.has(p.id)).length;
+  const unmet = people
+    .filter((p) => !stamped.has(p.id))
+    .sort((a, b) => (b.active?.getTime() ?? 0) - (a.active?.getTime() ?? 0))
+    .slice(0, limit)
+    .map((p) => ({ id: p.id, name: p.name }));
+  return { total: people.length, met, unmet };
 }
 
 /**

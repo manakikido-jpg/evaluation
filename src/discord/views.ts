@@ -45,6 +45,9 @@ const listButton = (userId: string) =>
 /** 🎐 絵馬（評価の票）を贈るボタン。氏子以上だけが贈れる（押したときに確かめる） */
 const emaGiveButton = (userId: string) =>
   new ButtonBuilder().setCustomId(emaGiveId(userId)).setLabel('絵馬を贈る').setEmoji('🎐').setStyle(ButtonStyle.Secondary);
+/** 🧵 まだ結んでいない人（結びのコレクション）。自分のプロフィールにだけ出す */
+const unmetButton = (userId: string) =>
+  new ButtonBuilder().setCustomId(shuinId('unmet', userId)).setLabel('まだ結んでいない人').setEmoji('🧵').setStyle(ButtonStyle.Secondary);
 
 export type Reply = { content?: string; embeds?: APIEmbed[]; components?: Row[]; allowedMentions?: { parse: never[] } };
 
@@ -167,6 +170,7 @@ export function goshuinchoReply(
   coins?: { emoji: string; name: string; balance: number },
   profile: ProfileExtra = {},
   ema?: { count: number; messages: { message: string; createdAt: Date }[]; promoteMode?: boolean },
+  collection?: { total: number; met: number },
 ): Reply {
   const rank = highestRank(ranks, owner.roleIds);
   const auto = currentAutoRank(ranks, owner.roleIds);
@@ -204,6 +208,8 @@ export function goshuinchoReply(
     { name: '最近の朱印', value: recent },
     { name: '押した朱印', value: `${data.givenCount} 人`, inline: true },
   );
+  // 🧵 結びのコレクション（自分のプロフィールだけ）
+  if (profile.self && collection) embed.addFields({ name: '🧵 結びのコレクション', value: `${collection.met} / ${collection.total} 人${collection.met < collection.total ? '（下の「まだ結んでいない人」から結べます）' : '（コンプリート！）'}`, inline: true });
   // 🎐 絵馬（評価の票）。参拝者・氏子にだけ出す（匿名の一言と有効な枚数）
   const emaRelevant = rank?.key === 'sanpaisha' || rank?.key === 'ujiko';
   if (ema && emaRelevant) embed.addFields({ name: '🎐 頂いた絵馬', value: emaField(ema) });
@@ -215,6 +221,7 @@ export function goshuinchoReply(
   const buttons = [
     ...(profile.self ? [] : [giveButton(owner.id)]),
     ...(profile.self || !emaRelevant ? [] : [emaGiveButton(owner.id)]),
+    ...(profile.self ? [unmetButton(owner.id)] : []),
     listButton(owner.id),
   ];
   return { embeds: [embed.toJSON()], components: [row(...buttons)] };

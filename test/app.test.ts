@@ -670,6 +670,20 @@ describe('ShuinApp：絵馬を贈る（新制度②）', () => {
     expect([...members.get(SA)!.roles.cache.keys()]).not.toContain(ROLE.ujiko);
   });
 
+  it('🧵 自分の御朱印帳に結びのコレクションが出て、まだ結んでいない人を結べる', async () => {
+    await seedMembers();
+    const viewer = members.get(GU)!;
+    const show = interaction('slash', viewer, { commandName: 'goshuin', options: { getUser: () => viewer.user, getBoolean: () => null } });
+    await app.onInteraction(show.i as never);
+    const embed = show.replies.at(-1)?.embeds?.[0];
+    const fields = (embed as { fields?: { name: string; value: string }[] } | undefined)?.fields ?? [];
+    expect(fields.some((f) => f.name.includes('結びのコレクション'))).toBe(true);
+    // 「まだ結んでいない人」ボタン → 選ぶ欄に参拝者SAが出る
+    const press = interaction('button', viewer, { customId: `shuin:unmet:${GU}` });
+    await app.onInteraction(press.i as never);
+    expect(JSON.stringify(press.replies)).toContain(SA);
+  });
+
   it('絵馬での昇格がONでも、4枚では昇格しない', async () => {
     await seedMembers();
     await seedTogether(3);
