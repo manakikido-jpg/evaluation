@@ -38,7 +38,9 @@ import { CONTACT_LEVEL_EMOJI, CONTACT_LEVEL_LABEL, contactOfRoles } from '../ser
 import { introOf, introUrl } from '../services/intros.js';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
-import { decidePromotion, highestRank, voiceCapPercentOf, voicePercentOf, type Promotion } from '../domain/ranks.js';
+import { currentAutoRank, decidePromotion, highestRank, voiceCapPercentOf, voicePercentOf, type Promotion } from '../domain/ranks.js';
+import { EMA_UJIKO_PROMOTE } from '../domain/ema.js';
+import { emaPromotableSanpaisha, emaPromotionEnabled } from '../services/emaPromotion.js';
 import { KeyedLock } from '../lib/lock.js';
 import { logger } from '../lib/logger.js';
 import { giveFlow, revokeFlow, type MemberInfo } from '../services/flows.js';
@@ -498,6 +500,11 @@ export class ShuinApp {
     const result = await this.lock.run(receiverId, () => giveEma(this.db, this.cfg, interaction.user.id, receiverId, message));
     if (result.ok) await this.log(`🎐 絵馬 <@${interaction.user.id}> → <@${receiverId}>（${result.created ? '新規' : '贈り直し'}・票 ${result.count}）`);
     await interaction.editReply({ ...emaGiveReply(receiverId, result), allowedMentions: NO_MENTIONS });
+    // 🎐 絵馬での昇格が ON なら、5枚に届いた相手をすぐ氏子に上げる（次の見回りを待たない）
+    if (result.ok && result.count >= EMA_UJIKO_PROMOTE && (await emaPromotionEnabled(this.db))) {
+      const receiver = await interaction.guild.members.fetch(receiverId).catch(() => undefined);
+      if (receiver) await this.lock.run(receiverId, () => this.emaPromote(receiver)).catch((err) => logger.warn({ err, receiverId }, 'ema promote after give failed'));
+    }
   }
 
   private async card(interaction: Repliable, ownerId: string, isPublic: boolean): Promise<void> {
@@ -512,12 +519,13 @@ export class ShuinApp {
 
     // 残高は、自分の御朱印帳を自分だけに見えるように開いたときだけ（ほかの人の残高は見せない）
     const showCoins = interaction.user.id === ownerId && !isPublic;
-    const [data, wallet, tickets, emaCount, emaMessages] = await Promise.all([
+    const [data, wallet, tickets, emaCount, emaMessages, emaMode] = await Promise.all([
       goshuinchoOf(this.db, ownerId),
       showCoins ? walletOf(this.db, ownerId) : undefined,
       showCoins ? ticketsOf(this.db, ownerId) : undefined,
       validEmaCountOf(this.db, ownerId),
       emaMessagesOf(this.db, ownerId),
+      emaPromotionEnabled(this.db),
     ]);
     const ticketText = tickets ? allTicketsLine(tickets, await customHoldingsOf(this.db, ownerId)) : undefined;
     const e = this.cfg.economy;
@@ -534,7 +542,7 @@ export class ShuinApp {
         data,
         wallet ? { emoji: e.currencyEmoji, name: e.currencyName, balance: wallet.balance } : undefined,
         { ...(await this.profileOf(owner, interaction.user.id === ownerId)), ...(ticketText ? { tickets: ticketText } : {}) },
-        { count: emaCount, messages: emaMessages },
+        { count: emaCount, messages: emaMessages, promoteMode: emaMode },
       ),
     );
   }
@@ -604,6 +612,16 @@ export class ShuinApp {
     if (guild.id !== this.cfg.guildId || this.checkingEvaluationPromotions) return;
     this.checkingEvaluationPromotions = true;
     try {
+      // 🎐 絵馬での昇格が ON のときは、参拝者→氏子を「有効な絵馬5枚」で決める（ご縁・縁側時間は使わない）
+      if (await emaPromotionEnabled(this.db)) {
+        for (const id of await emaPromotableSanpaisha(this.db, this.cfg, now)) {
+          const member = await guild.members.fetch(id).catch(() => undefined);
+          if (!member || member.user.bot) continue;
+          await this.lock.run(id, () => this.emaPromote(member, now))
+            .catch(err => logger.warn({ err, memberId: id }, 'ema promotion failed'));
+        }
+        return;
+      }
       const data = await ujikoEvaluation(this.db, this.cfg, { q: '', status: 'met' }, now);
       for (const row of data.rows) {
         const member = await guild.members.fetch(row.memberId).catch(() => undefined);
@@ -614,6 +632,21 @@ export class ShuinApp {
           .catch(err => logger.warn({ err, memberId: row.memberId }, 'evaluation promotion failed'));
       }
     } finally { this.checkingEvaluationPromotions = false; }
+  }
+
+  /** 🎐 絵馬での参拝者→氏子の昇格（絵馬5枚）。ご縁・縁側時間は見ない。自動降格はしない。 */
+  private async emaPromote(member: GuildMember, now = new Date()): Promise<void> {
+    const fresh = await member.guild.members.fetch({ user: member.id, force: true }).catch(() => undefined);
+    if (!fresh || fresh.user.bot) return;
+    const current = currentAutoRank(this.cfg.ranks, fresh.roles.cache.keys());
+    if (current?.key !== 'sanpaisha') return;
+    const ujiko = this.cfg.ranks.find((r) => r.key === 'ujiko');
+    if (!ujiko) return;
+    const count = await validEmaCountOf(this.db, fresh.id, now);
+    if (count < EMA_UJIKO_PROMOTE) return;
+    const held = new Set(fresh.roles.cache.keys());
+    const removeRoleIds = autoRanks(this.cfg.ranks).filter((r) => r.key !== 'ujiko' && held.has(r.roleId)).map((r) => r.roleId);
+    await this.promote(fresh, { from: current, to: ujiko, removeRoleIds }, await goenOf(this.db, fresh.id), count);
   }
 
   /**
@@ -628,6 +661,8 @@ export class ShuinApp {
     const promotion = decidePromotion(this.cfg.ranks, fresh.roles.cache.keys(), goen);
     if (!promotion) return;
     if (promotion.from.key === 'sanpaisha' && !alreadyMet) {
+      // 🎐 絵馬での昇格が ON のときは、参拝者→氏子は絵馬の昇格（emaPromote）だけが行う。ご縁では上げない。
+      if (await emaPromotionEnabled(this.db)) return;
       // ご縁40と縁側20時間の両方を、評価と同じ既定の全縁側・控除後の値で確かめる。
       // 評価一覧（checkEvaluationPromotions）から来た場合は確認済みなので、全走査を繰り返さない。
       const data = await ujikoEvaluation(this.db, this.cfg, { q: fresh.id, status: 'met' }, now);
@@ -636,9 +671,9 @@ export class ShuinApp {
     await this.promote(fresh, promotion, goen);
   }
 
-  /** 役職ロールを付け替えて #慶事 で発表する */
-  private async promote(member: GuildMember, promotion: Promotion, goen: number): Promise<void> {
-    const reason = `ご縁 ${goen} で ${promotion.to.name} に昇格`;
+  /** 役職ロールを付け替えて #慶事 で発表する（emaCount を渡すと「絵馬◯枚で昇格」になる） */
+  private async promote(member: GuildMember, promotion: Promotion, goen: number, emaCount?: number): Promise<void> {
+    const reason = emaCount !== undefined ? `絵馬 ${emaCount} 枚で ${promotion.to.name} に昇格` : `ご縁 ${goen} で ${promotion.to.name} に昇格`;
     try {
       await member.roles.add(promotion.to.roleId, reason);
     } catch (err) {
@@ -655,8 +690,8 @@ export class ShuinApp {
         await this.log(`⚠️ ${member} さまの前の役職ロールを外せませんでした。手で外してください。`);
       });
     }
-    await this.send(this.cfg.channels.keiji, promotionAnnouncement(member.id, promotion, goen, pingRoleIds(this.cfg), member.displayAvatarURL()));
-    await this.log(promotionLog(member.id, promotion, goen));
+    await this.send(this.cfg.channels.keiji, promotionAnnouncement(member.id, promotion, goen, pingRoleIds(this.cfg), member.displayAvatarURL(), emaCount));
+    await this.log(emaCount !== undefined ? `⬆️ 昇格 <@${member.id}> ${promotion.from.name} → ${promotion.to.name}（絵馬 ${emaCount} 枚）` : promotionLog(member.id, promotion, goen));
     await recordPromotion(this.db, member.id, promotion.from.key, promotion.to.key, goen).catch((err) =>
       logger.warn({ err }, 'recordPromotion failed'),
     );

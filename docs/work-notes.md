@@ -1,3 +1,14 @@
+## 2026年11月24日：新制度③（昇格の差し替え・スイッチ付き）を実装（Claude・本番反映予定）
+- 依頼「次は？」→③をスイッチ付きで（本人選択）。絵馬が0枚のため既定OFFで本番に出す（挙動は従来のまま）。
+- 実装：
+  - services/emaPromotion.ts（新）：emaPromotionEnabled/setEmaPromotion（settingsキー ema_promotion）、emaPromotableSanpaisha（参拝者・有効な絵馬5枚）、ujikoBelowKeep（氏子・絵馬3枚未満＝維持の注意）。承認サブ・運営サブ・BOT・退出を除外。
+  - discord/app.ts：checkEvaluationPromotions を ON/OFF で分岐（ON=emaPromotableSanpaisha を emaPromote）。promoteIfNeeded の参拝者分岐は ON のときスキップ（ご縁では上げない）。emaPromote（参拝者→氏子を絵馬5枚で、ご縁・時間を見ずに昇格）。emaSubmit で5枚到達時に即時昇格。promote に emaCount を追加（「絵馬◯枚で昇格」）。card で promoteMode を渡す。
+  - discord/views.ts：promotionAnnouncement に emaCount（慶事の発表が絵馬表示）。goshuinchoReply の「氏子の条件」が ON のとき絵馬5枚・あと◯枚。
+  - web：evaluation.tsx に POST /evaluation/ema-promotion（宮司・CSRF・confirm 必須・audit ema.promotion_mode）＋ GET でスイッチ状態・維持警告・名前を渡す。views/evaluation.tsx に宮司だけのスイッチ節＋維持の注意の一覧（details）。
+- 既定OFF＝本番に出しても昇格の挙動は変わらない。ONに切り替えるのが新制度の昇格ローンチ。
+- テスト：test/emaPromotion.test.ts（4件）、test/app.test.ts に昇格3件（ON=5枚で昇格・OFF=昇格しない・4枚では昇格しない）、test/web.test.ts にスイッチ1件（宮司だけ・確認必須・記録）。
+- 次：型チェック・全テストを通し fetch＆merge して本番へpush。周知none（切替＝ローンチの周知は本人と相談）。維持警告のDM通知は未実装。
+
 ## 2026年11月24日：新制度②（絵馬を贈る入口＋表示）を実装（Claude・本番反映予定）
 - 依頼：新制度がどこで止まっているか確認→本人が「A」を選択（たたき台の数字のまま②を作る）。確認で入口＝御朱印帳のボタン、表示＝Discord御朱印帳＋社務所Webの両方に決定。
 - 実装（土台①の giveEma 等を利用）：

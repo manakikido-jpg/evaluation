@@ -14,8 +14,14 @@
 - **贈る条件**：相手と違う日に3日以上・合計3時間以上いっしょの通話にいたこと（`voice_pairs` で判定・たたき台）。
 - **中身**：一言メッセージつき（最大100字）・匿名（誰が贈ったかは出さない）・贈り直しできる（1人1枚で、押し直すと一言と期限が新しくなる）。
 - **表示**：もらった絵馬（匿名の一言と有効な枚数）を、Discordの御朱印帳（参拝者・氏子のときだけ）と、社務所Webのメンバーのページ（`/members/:id`・「🎐 頂いた絵馬」と「頂いた絵馬の一言」）に出す。
-- **氏子の票は30日で失効**。有効な絵馬が5枚で氏子に昇格、3枚を割ると維持の警告（自動では降格しない）予定（③で接続）。
-- 表・サービスは `src/db/schema.ts` の `ema`、`src/services/ema.ts`（`giveEma`/`checkGiveEma`/`validEmaCountOf`/`emaMessagesOf`）、数字は `src/domain/ema.ts`。入口は `src/discord/app.ts`・`src/discord/views.ts`・`src/discord/ids.ts`、Web表示は `src/web/views/pages.tsx`。
+- **氏子の票は30日で失効**。有効な絵馬が5枚で氏子に昇格、3枚を割ると維持の警告（自動では降格しない）。
+- **絵馬での昇格のスイッチ（宮司だけ・③）**：社務所Webの「評価」ページの上に「🎐 絵馬での昇格」があります。**はじめは OFF**＝従来どおり（ご縁40＋縁側20時間）。宮司が「切り替えてよい」にチェックして切り替えると ON になります。
+  - ON のとき：参拝者→氏子は**有効な絵馬5枚**だけで決まる（ご縁・縁側時間は見ない）。絵馬が5枚に届くと、毎分の見回りか、絵馬を贈った直後に氏子へ上げる。氏子→世話役などは今までどおり。
+  - どちらでも**自動降格はしない**。今いる氏子は据え置き（絵馬0枚でも氏子のまま）。
+  - 切り替えの前の目安に、「維持の注意：有効な絵馬が3枚未満の氏子」の一覧（読み取り専用・少ない順）を出す。ここで絵馬が十分たまっているか確かめてから切り替える。
+  - ON のときは、#慶事の昇格の発表とプロフィールの「氏子の条件」も絵馬の表示になる。記録は `ema.promotion_mode`。
+  - **ON に切り替える＝新制度の昇格を始める瞬間**。周知のタイミングに注意（絵馬が十分たまってから）。
+- 表・サービスは `src/db/schema.ts` の `ema`、`src/services/ema.ts`（`giveEma`/`checkGiveEma`/`validEmaCountOf`/`emaMessagesOf`）、昇格スイッチは `src/services/emaPromotion.ts`（`emaPromotionEnabled`/`setEmaPromotion`/`emaPromotableSanpaisha`/`ujikoBelowKeep`）、数字は `src/domain/ema.ts`。入口は `src/discord/app.ts`・`src/discord/views.ts`・`src/discord/ids.ts`、Web表示は `src/web/views/pages.tsx`、切替は `src/web/evaluation.tsx`・`src/web/views/evaluation.tsx`。
 
 ### 新制度の検証ページ（推移 → 📐 新制度の検証）
 

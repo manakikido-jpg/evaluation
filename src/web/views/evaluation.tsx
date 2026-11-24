@@ -12,13 +12,37 @@ export function evaluationQuery(filter: EvaluationFilter, selectedIds: string[],
   return query.toString();
 }
 
-export function EvaluationPage({ session, data, filter, page }: {
+export function EvaluationPage({ session, data, filter, page, emaPromotion = false, keepWarnings = [], names, saved }: {
   session: AdminSession; data: EvaluationData; filter: EvaluationFilter; page: number;
+  emaPromotion?: boolean; keepWarnings?: { id: string; count: number }[]; names?: Map<string, string>; saved?: string;
 }) {
   const pageSize = 100, pages = Math.max(1, Math.ceil(data.rows.length / pageSize));
   const current = Math.min(page, pages), rows = data.rows.slice((current - 1) * pageSize, current * pageSize);
+  const nameOf = (id: string) => names?.get(id) ?? id;
   return <Layout title="評価" nav="evaluation" session={session} wide>
     <div class="evaluation-page"><h1>氏子への評価</h1>
+    {saved === 'on' && <p class="flash ok" role="status">🎐 絵馬での昇格に切り替えました。これからは参拝者は有効な絵馬5枚で氏子になります。</p>}
+    {saved === 'off' && <p class="flash ok" role="status">従来（ご縁40＋縁側20時間）に戻しました。</p>}
+    {saved === 'confirm' && <p class="flash warn" role="alert">「切り替えてよい」にチェックを入れてから押してください。</p>}
+    {session.level === 'guji' && <section class="card">
+      <h2>🎐 絵馬での昇格（新制度③）</h2>
+      <p>いまの昇格のきまり：{emaPromotion
+        ? <strong>絵馬で昇格（参拝者は有効な絵馬5枚で氏子）</strong>
+        : <strong>従来どおり（下の ご縁40＋縁側20時間）</strong>}。どちらでも自動降格はせず、今いる氏子は据え置きです。</p>
+      <form method="post" action="/evaluation/ema-promotion" class="ema-promotion-form">
+        <input type="hidden" name="_csrf" value={session.csrfToken}/>
+        <input type="hidden" name="on" value={emaPromotion ? '0' : '1'}/>
+        <label><input type="checkbox" name="confirm" value="yes"/> 切り替えてよい</label>
+        <button type="submit">{emaPromotion ? '従来（ご縁40＋縁側20時間）に戻す' : '絵馬5枚での昇格に切り替える'}</button>
+      </form>
+      <p class="note">絵馬での昇格に切り替えると、参拝者→氏子は<strong>有効な絵馬5枚</strong>だけで決まり、ご縁・縁側時間は使いません（氏子→世話役などは今までどおり）。切り替える前に、絵馬が十分にたまっているか下の「維持の注意」で確かめてください。</p>
+      <details><summary>維持の注意：有効な絵馬が3枚未満の氏子（{keepWarnings.length} 人）</summary>
+        <p class="note">自動では降格しません。運営が手で判断するための一覧です（絵馬の少ない順）。</p>
+        {keepWarnings.length
+          ? <ul>{keepWarnings.slice(0, 100).map((w) => <li><a href={'/members/' + w.id}>{nameOf(w.id)}</a> … 絵馬 {w.count} 枚</li>)}{keepWarnings.length > 100 && <li>ほか {keepWarnings.length - 100} 人</li>}</ul>
+          : <p>3枚未満の氏子はいません。</p>}
+      </details>
+    </section>}
     <section class="card">
       <h2>ご縁40 ＋ 縁側の合計20時間</h2><p><strong>参拝者時間の計測開始：{EVALUATION_START_LABEL}から</strong><br/>ミュート除外に対応した反映後の分は、マイク・スピーカーの両方が非ミュートと確認できた時間だけを加算します。過去分は控除後の合計を使います。</p>
       <p>対象は在籍中の参拝者です。両方を満たした人を先に、ご縁が多い順、同数なら過去分を含む縁側の合計時間が長い順に並べます。同じ条件なら同順位です。</p>

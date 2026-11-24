@@ -4,6 +4,8 @@ import type { Db } from '../db/client.js';
 import type { AdminSession } from '../db/schema.js';
 import { evaluationCsv, EvaluationSelectionError, ujikoEvaluation, type EvaluationFilter } from '../services/ujikoEvaluation.js';
 import { ujikoRatingRows, ujikoRatingXlsx } from '../services/ujikoRating.js';
+import { emaPromotionEnabled, setEmaPromotion, ujikoBelowKeep } from '../services/emaPromotion.js';
+import { namesOf } from '../services/members.js';
 import { audit } from '../services/audit.js';
 import { evaluationDeductionPage,saveEvaluationDeduction,EvaluationDeductionError } from '../services/evaluationDeductions.js';
 import { EvaluationDeductionsPage } from './views/evaluationDeductions.js';
@@ -23,7 +25,12 @@ export function mountEvaluation(app: Hono<Env>, db: Db, cfg: () => GuildConfig, 
     try {
       const data = await ujikoEvaluation(db, cfg(), filter, now());
       if (csv) return c.body(evaluationCsv(data), 200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="ujiko-evaluation.csv"' });
-      return c.html(<EvaluationPage session={c.get('session')} data={data} filter={filter} page={page}/>);
+      const session = c.get('session');
+      const emaPromotion = await emaPromotionEnabled(db);
+      // 🎐 維持の注意（有効な絵馬が3枚未満の氏子）は宮司だけに出す
+      const keepWarnings = session.level === 'guji' ? await ujikoBelowKeep(db, cfg(), now()) : [];
+      const names = keepWarnings.length ? await namesOf(db, keepWarnings.map((w) => w.id)) : new Map<string, string>();
+      return c.html(<EvaluationPage session={session} data={data} filter={filter} page={page} emaPromotion={emaPromotion} keepWarnings={keepWarnings} names={names} saved={c.req.query('ema') ?? undefined}/>);
     } catch (error) {
       if (!(error instanceof EvaluationSelectionError)) throw error;
       return c.text(error.message, 400);
@@ -50,6 +57,18 @@ export function mountEvaluation(app: Hono<Env>, db: Db, cfg: () => GuildConfig, 
   });
   app.get('/evaluation', c => read(c, false));
   app.get('/evaluation/export.csv', c => read(c, true));
+  // 🎐 絵馬での昇格（新制度③）の ON/OFF（宮司だけ）
+  app.post('/evaluation/ema-promotion', async (c) => {
+    c.header('Cache-Control', 'private, no-store');
+    const session = c.get('session');
+    if (session.level !== 'guji') return c.text('絵馬での昇格の切り替えは宮司だけが操作できます。', 403);
+    const body = await c.req.parseBody();
+    if (body.confirm !== 'yes') return c.redirect('/evaluation?ema=confirm', 303);
+    const on = body.on === '1';
+    await setEmaPromotion(db, on, session.userId);
+    await audit(db, { actorId: session.userId, action: 'ema.promotion_mode', detail: { on }, via: 'web' });
+    return c.redirect(`/evaluation?ema=${on ? 'on' : 'off'}`, 303);
+  });
   // 🍃 今いる氏子を 5 段階で評価するシート（エクセル）。宮司だけが取り出せる
   app.get('/evaluation/rating-sheet.xlsx', async (c) => {
     c.header('Cache-Control', 'private, no-store');

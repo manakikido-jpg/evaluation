@@ -366,6 +366,30 @@ describe('厄・BAN・キック・メモ（管理画面）', () => {
     expect((await loadOverrides(db)).security).toEqual({ roleGuard: 'revert', trustedBotIds: ['790000000000000004'], roleApproval: false, freeRoleIds: ['790000000000000200'], raidJoins: 5, raidMinutes: 3, raidHoldMinutes: 30, newAccountDays: 14 });
   });
 
+  it('🎐 絵馬での昇格の切り替え: 宮司だけ・確認が要る・記録に残る', async () => {
+    const { emaPromotionEnabled } = await import('../src/services/emaPromotion.js');
+    const g = await login(GUJI);
+    const gcsrf = await csrfOf(g);
+    const s = await login(STAFF);
+    const scsrf = await csrfOf(s);
+    // 神職は切り替えられない（403）
+    expect((await post('/evaluation/ema-promotion', s, { _csrf: scsrf, on: '1', confirm: 'yes' })).status).toBe(403);
+    // 確認チェックがないと切り替わらない
+    expect((await post('/evaluation/ema-promotion', g, { _csrf: gcsrf, on: '1' })).headers.get('location')).toBe('/evaluation?ema=confirm');
+    expect(await emaPromotionEnabled(db)).toBe(false);
+    // 宮司＋確認で ON、記録も残る
+    expect((await post('/evaluation/ema-promotion', g, { _csrf: gcsrf, on: '1', confirm: 'yes' })).headers.get('location')).toBe('/evaluation?ema=on');
+    expect(await emaPromotionEnabled(db)).toBe(true);
+    expect((await listAudit(db, { action: 'ema.promotion_mode' })).length).toBe(1);
+    // 評価ページに今のきまりが出る
+    const html = await (await get('/evaluation?ema=on', g)).text();
+    expect(html).toContain('絵馬での昇格');
+    expect(html).toContain('絵馬で昇格');
+    // OFF に戻せる
+    expect((await post('/evaluation/ema-promotion', g, { _csrf: gcsrf, on: '0', confirm: 'yes' })).headers.get('location')).toBe('/evaluation?ema=off');
+    expect(await emaPromotionEnabled(db)).toBe(false);
+  });
+
   it('CSRF トークンがない操作は拒否', async () => {
     const s = await login(STAFF);
     const res = await post(`/members/${USER}/yaku`, s, { reason: '誹謗中傷' });

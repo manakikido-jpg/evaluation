@@ -18,7 +18,7 @@ import { currentAutoRank, highestRank, nextAutoRank, rankLabel, type Promotion }
 import type { GiveDenied, GiveOutcome } from '../services/flows.js';
 import type { RevokeResult, GoshuinchoData } from '../services/shuin.js';
 import type { GiveEmaResult } from '../services/ema.js';
-import { EMA_DAYS_TOGETHER, EMA_MESSAGE_MAX, EMA_MINUTES_TOGETHER } from '../domain/ema.js';
+import { EMA_DAYS_TOGETHER, EMA_MESSAGE_MAX, EMA_MINUTES_TOGETHER, EMA_UJIKO_PROMOTE } from '../domain/ema.js';
 import { emaGiveId, emaModalId, shuinId } from './ids.js';
 
 /** 朱色 */
@@ -166,13 +166,15 @@ export function goshuinchoReply(
   data: GoshuinchoData,
   coins?: { emoji: string; name: string; balance: number },
   profile: ProfileExtra = {},
-  ema?: { count: number; messages: { message: string; createdAt: Date }[] },
+  ema?: { count: number; messages: { message: string; createdAt: Date }[]; promoteMode?: boolean },
 ): Reply {
   const rank = highestRank(ranks, owner.roleIds);
   const auto = currentAutoRank(ranks, owner.roleIds);
   const next = auto ? nextAutoRank(ranks, data.goen, auto) : undefined;
   const nextText = auto?.key === 'sanpaisha'
-    ? '（氏子の条件：ご縁40＋縁側20時間）'
+    ? (ema?.promoteMode
+        ? `（氏子の条件：絵馬 ${EMA_UJIKO_PROMOTE} 枚・あと ${Math.max(0, EMA_UJIKO_PROMOTE - ema.count)} 枚）`
+        : '（氏子の条件：ご縁40＋縁側20時間）')
     : next ? `（${next.rank.name}まで あと ${next.remaining}）` : '';
 
   const received = data.receivedCount
@@ -251,13 +253,19 @@ export function giversReply(ownerId: string, givers: { giverId: string }[], tota
   return { embeds: [embed.toJSON()], allowedMentions: { parse: [] } };
 }
 
-/** #慶事 での昇格の発表 */
-export function promotionAnnouncement(userId: string, promotion: Promotion, goen: number, roleIds: readonly string[], avatarUrl?: string): MessageCreateOptions {
+/** #慶事 での昇格の発表（emaCount を渡すと「絵馬◯枚」で飾る） */
+export function promotionAnnouncement(userId: string, promotion: Promotion, goen: number, roleIds: readonly string[], avatarUrl?: string, emaCount?: number): MessageCreateOptions {
+  const ema = emaCount !== undefined;
   const embed = new EmbedBuilder()
     .setColor(SAKURA)
     .setTitle('🌸 ご昇格おめでとうございます')
-    .setDescription(`${mention(userId)} さまのご縁が花ひらき、**${rankLabel(promotion.to)}** になられました。`)
-    .addFields({ name: '新しい位', value: rankLabel(promotion.to), inline: true }, { name: 'ご縁', value: String(goen), inline: true })
+    .setDescription(ema
+      ? `${mention(userId)} さまに絵馬（評価の票）が集まり、**${rankLabel(promotion.to)}** になられました。`
+      : `${mention(userId)} さまのご縁が花ひらき、**${rankLabel(promotion.to)}** になられました。`)
+    .addFields(
+      { name: '新しい位', value: rankLabel(promotion.to), inline: true },
+      ema ? { name: '絵馬', value: `${emaCount} 枚`, inline: true } : { name: 'ご縁', value: String(goen), inline: true },
+    )
     .setFooter({ text: '咲楽ノ宮・慶事' });
   if (avatarUrl) embed.setThumbnail(avatarUrl);
   return {

@@ -640,4 +640,45 @@ describe('ShuinApp：絵馬を贈る（新制度②）', () => {
     expect(emaField?.value).toContain('1 枚');
     expect(emaField?.value).toContain('すてきな時間でした');
   });
+
+  async function seedExistingEma(receiverId: string, n: number) {
+    const { ema } = await import('../src/db/schema.js');
+    await db.insert(ema).values(Array.from({ length: n }, (_, i) => ({ giverId: String(4760000000000000000n + BigInt(i)), receiverId, tier: 'ujiko' as const, message: '', createdAt: new Date(), revokedAt: null })));
+  }
+
+  it('絵馬での昇格がONなら、5枚に届いた参拝者がその場で氏子になる', async () => {
+    await seedMembers();
+    await seedTogether(3);
+    const { setEmaPromotion } = await import('../src/services/emaPromotion.js');
+    await setEmaPromotion(db, true, 'guji');
+    await seedExistingEma(SA, 4); // すでに4枚。GUの1枚で5枚になる
+    const giver = members.get(GU)!;
+    await app.onInteraction(interaction('button', giver, { customId: emaGiveId(SA) }).i as never);
+    await app.onInteraction(interaction('modal', giver, { customId: emaModalId(SA), fields: { getTextInputValue: () => 'よろしく' } }).i as never);
+    expect([...members.get(SA)!.roles.cache.keys()]).toContain(ROLE.ujiko);
+    const announce = sent.find((s) => s.channelId === cfg.channels.keiji);
+    expect(JSON.stringify(announce?.embeds ?? [])).toContain('絵馬');
+  });
+
+  it('絵馬での昇格がOFFなら、5枚になっても昇格しない（従来のまま）', async () => {
+    await seedMembers();
+    await seedTogether(3);
+    await seedExistingEma(SA, 4);
+    const giver = members.get(GU)!;
+    await app.onInteraction(interaction('button', giver, { customId: emaGiveId(SA) }).i as never);
+    await app.onInteraction(interaction('modal', giver, { customId: emaModalId(SA), fields: { getTextInputValue: () => 'よろしく' } }).i as never);
+    expect([...members.get(SA)!.roles.cache.keys()]).not.toContain(ROLE.ujiko);
+  });
+
+  it('絵馬での昇格がONでも、4枚では昇格しない', async () => {
+    await seedMembers();
+    await seedTogether(3);
+    const { setEmaPromotion } = await import('../src/services/emaPromotion.js');
+    await setEmaPromotion(db, true, 'guji');
+    await seedExistingEma(SA, 3); // GUの1枚で4枚どまり
+    const giver = members.get(GU)!;
+    await app.onInteraction(interaction('button', giver, { customId: emaGiveId(SA) }).i as never);
+    await app.onInteraction(interaction('modal', giver, { customId: emaModalId(SA), fields: { getTextInputValue: () => 'よろしく' } }).i as never);
+    expect([...members.get(SA)!.roles.cache.keys()]).not.toContain(ROLE.ujiko);
+  });
 });
