@@ -1,3 +1,10 @@
+## 2026年11月25日：新制度⑤の宿ゲートを実装（Claude・本番反映予定）
+- 「Aでも反映はリリース時から」＝同じ perk_ujiko フラグ（既定OFF）で宿も氏子からに。宮司がONにして初めて効く。
+- 実装：rooms.ts onCreated（通話入室の宿坊・シクレ＝部屋代を取る前に meetsUjiko 確認→本人へDM＋close、opts.stayは除外）。tempVoice.ts openStay に roleIds を渡し、staffでなく perk ON かつ非氏子なら rank_too_low（24時間/1時間の宿・パネルで案内）。運営(staff)は素通り。
+- テスト：tempVoice.test.ts に openStay の rank_too_low（ON=参拝者で止まる／OFFは止まらない）。onCreated は同じ合成なので perkGate 単体＋openStay 統合でカバー。
+- ⑤完了（カジノ＋宿）。次：⑥ 招待の補填＋評価期間延長、⑦ ご縁割引・倍率、⑧ 世話役・総代。④c 呼び名変更はローンチ時。
+- 次：型チェック・全テストを通し fetch＆merge して本番へpush。周知none。
+
 ## 2026年11月25日：新制度⑤（カジノを氏子から・スイッチ付き）カジノ分を実装（Claude・本番反映予定）
 - 「Aでいこう」で④cは保留、⑤へ。⑤もスイッチ付き（既定OFF）。
 - 実装：services/perkGate.ts（perk_ujiko フラグ＋meetsUjiko）。web/casino.tsx casinoAllowed に ujikoOnly（requireRank かつ accessRoleId 未設定のとき氏子以上）、current/login/callback で perkUjikoEnabled を読む。案内 no_ujiko（views/casino.tsx）。評価ページに宮司だけのスイッチ＋POST /evaluation/perk-ujiko（CSRF・confirm・audit perk.ujiko_gate）。

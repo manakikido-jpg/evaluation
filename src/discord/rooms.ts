@@ -44,6 +44,7 @@ import {
   type RoomRow,
 } from '../services/rooms.js';
 import { OWNER_ALLOW } from './tempVoice.js';
+import { perkUjikoEnabled, meetsUjiko } from '../services/perkGate.js';
 import { KeyedLock } from '../lib/lock.js';
 import { ROOM_MODES, roomKnockConfig, roomKnockState, type RoomMode } from '../services/roomKnock.js';
 import { closeRoomNow, extendStayRoom, stayDayPrice, STAY_MS } from '../services/tempVoice.js';
@@ -298,6 +299,17 @@ export class RoomApp {
     const row = await roomOf(this.db, channelId);
     if (!row || planOf(cfg, row.hubId) === 'none') return;
     const ch = this.voice(channelId);
+    // 🎁 宿（部屋代のかかる部屋）を氏子からに（新制度⑤・既定OFF）。24時間の宿はパネル側で確かめる。
+    // 参拝者が通話入口・シクレで開こうとしたら、部屋代を取る前に部屋を消して知らせる。
+    if (!opts.stay && (await perkUjikoEnabled(this.db))) {
+      const opener = this.guild?.members.cache.get(ownerId) ?? (await this.guild?.members.fetch(ownerId).catch(() => undefined));
+      if (opener && !meetsUjiko(cfg, opener.roles.cache.keys())) {
+        // 部屋はすぐ消すので、本人へ DM で知らせる（部屋のメッセージは消えてしまうため）
+        await opener.send('🏨 宿（部屋代のかかる部屋）は氏子以上の方からひらけます（新制度）。絵馬を集めて氏子になるとひらけます。').catch(() => undefined);
+        await this.close(channelId);
+        return;
+      }
+    }
     // 🏨 24 時間の宿: 宿代はパネルで払った。案内だけ出す
     if (opts.stay) {
       if (ch) await this.sendNotice(ch, row);

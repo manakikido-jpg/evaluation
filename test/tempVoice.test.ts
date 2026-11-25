@@ -327,6 +327,23 @@ describe('自分の通話部屋: 取りこぼし', () => {
     expect(await cleanupRooms(ctx, later())).toBe(1);
   });
 
+  it('🎁 宿を氏子からに（新制度⑤）：ONのとき参拝者は部屋代の前にrank_too_lowで断る', async () => {
+    const { setPerkUjiko } = await import('../src/services/perkGate.js');
+    const { TempVoiceApp } = await import('../src/discord/tempVoice.js');
+    const { ROLE } = await import('./helpers.js');
+    const guild = { id: cfg.guildId, members: { me: null }, channels: { cache: new Map() } };
+    const app = new TempVoiceApp(db, () => cfg);
+    await app.attach(guild as never);
+    await setPerkUjiko(db, true, 'guji');
+    // 参拝者は、部屋代を取る前に断る（createStayRoom に行かない）
+    expect((await app.openStay(HUB, 'u1', 'さくら', 'day', undefined, false, [ROLE.sanpaisha])).status).toBe('rank_too_low');
+    // 運営（staff）は、このゲートでは止めない（rank_too_low にならない。中の処理へ進む）
+    await setPerkUjiko(db, false, 'guji');
+    // OFF のときも、このゲートでは止めない（参拝者でも rank_too_low にならない）
+    const off = await app.openStay(HUB, 'u2', 'もも', 'day', undefined, false, [ROLE.sanpaisha]).catch(() => ({ status: 'threw' as const }));
+    expect(off.status).not.toBe('rank_too_low');
+  });
+
   it('ほかの入口では、その入口の部屋を新しく作る', async () => {
     const HUB2 = '920000000000000002';
     const cfg2: GuildConfig = { ...cfg, tempVoice: { hubs: [...cfg.tempVoice.hubs, { channelId: HUB2, name: '🎮 {name}の屋台' }] } };

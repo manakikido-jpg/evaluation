@@ -1,6 +1,7 @@
 import {roomAmountLabel,roomCoreTimeNote,roomRateAt} from '../services/roomPricing.js';
 import { ButtonStyle, ChannelType, DiscordAPIError, MessageFlags, OverwriteType, PermissionFlagsBits, type Guild, type GuildMember, type Interaction, type VoiceState } from 'discord.js';
 import { staffRoleIds } from '../services/meetings.js';
+import { perkUjikoEnabled, meetsUjiko } from '../services/perkGate.js';
 import { STAFF_STAY_LIMIT } from '../services/tempVoice.js';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
@@ -122,9 +123,11 @@ export class TempVoiceApp {
   }
 
   /** 🏨 パネルから 24 時間の宿（⏱ 1 時間ごとの宿）を買って立てる */
-  async openStay(hubId: string, userId: string, displayName: string, mode: 'day' | 'hourly' = 'day', parentId?: string, staff = false) {
+  async openStay(hubId: string, userId: string, displayName: string, mode: 'day' | 'hourly' = 'day', parentId?: string, staff = false, roleIds: string[] = []) {
     if (!this.ctx) return { status: 'failed' as const };
     this.ctx.cfg = this.cfg();
+    // 🎁 宿を氏子からに（新制度⑤・既定OFF）。運営はそのまま。参拝者は部屋代を取る前に断る。
+    if (!staff && (await perkUjikoEnabled(this.db)) && !meetsUjiko(this.cfg(), roleIds)) return { status: 'rank_too_low' as const };
     const r = await createStayRoom(this.ctx, { hubId, userId, displayName, mode, parentId, staff });
     if (r.status === 'created') await this.onCreated?.(r.channelId, userId, { stay: true }).catch((err) => logger.warn({ err }, 'stay room created hook failed'));
     if (r.status === 'created') await this.sortStays().catch((err) => logger.warn({ err }, 'stay sort failed'));
@@ -364,7 +367,8 @@ export async function onStayRoomInteraction(app: TempVoiceApp, cfg: () => GuildC
   }
   const staffRoles = staffRoleIds(current);
   const staff = i.member.roles.cache.some((r) => staffRoles.has(r.id));
-  const r = await app.openStay(pick.channelId, i.user.id, i.member.displayName, hourly ? 'hourly' : 'day', picked.parentId, staff);
+  const r = await app.openStay(pick.channelId, i.user.id, i.member.displayName, hourly ? 'hourly' : 'day', picked.parentId, staff, [...i.member.roles.cache.keys()]);
+  if (r.status === 'rank_too_low') return void (await i.editReply('🏨 宿（部屋代のかかる部屋）は氏子以上の方からです（新制度）。絵馬を集めて氏子になるとひらけます。'));
   if (r.status === 'insufficient') return void (await i.editReply(`${current.economy.currencyName}が足りません（${r.price.toLocaleString('ja-JP')} 枚必要）。`));
   if (r.status !== 'created' && r.status !== 'exists') return void (await i.editReply(r.status === 'busy' ? 'いま作っています。少し待ってください。' : `宿を作れませんでした。神職に知らせてください。${'reason' in r && r.reason ? `\n-# 理由: ${r.reason}` : ''}`));
   const url = `https://discord.com/channels/${i.guildId}/${r.channelId}`;
