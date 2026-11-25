@@ -1,4 +1,5 @@
 import { MessageFlags, type Guild, type GuildMember, type Interaction } from 'discord.js';
+import { w } from '../domain/terms.js';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { logger } from '../lib/logger.js';
@@ -8,8 +9,9 @@ import { namesOf } from '../services/members.js';
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 const TEXT: Record<AltRequestResult | 'okMain', string> = {
-  ok: '🔗 サブアカウントの申告を受け付けました。運営が確かめて承認します。\n-# 承認されると、このアカウントには銭が入らず、朱印・招待のお礼も受けません。今の銭は本アカウントへ移します。',
-  okMain: '🔗 サブアカウントの申告を受け付けました。運営が理由を確かめて承認します。\n-# 承認されると、サブのアカウントには銭が入らず、朱印・招待のお礼も受けません。サブが今持っている銭は、そのままです（本アカウントへは移しません）。\n-# まだサーバーに入っていないアカウントでも申告できます。承認のあとで入ると、自動でサブになり、決めたロール（縁人など）が付きます。',
+  // 🧵 ④のあとは「結び」の言葉（呼ぶたびに決まるよう getter）
+  get ok() { return `🔗 サブアカウントの申告を受け付けました。運営が確かめて承認します。\n-# 承認されると、このアカウントには銭が入らず、${w('朱印', '結び')}・招待のお礼も受けません。今の銭は本アカウントへ移します。`; },
+  get okMain() { return `🔗 サブアカウントの申告を受け付けました。運営が理由を確かめて承認します。\n-# 承認されると、サブのアカウントには銭が入らず、${w('朱印', '結び')}・招待のお礼も受けません。サブが今持っている銭は、そのままです（本アカウントへは移しません）。\n-# まだサーバーに入っていないアカウントでも申告できます。承認のあとで入ると、自動でサブになり、決めたロール（縁人など）が付きます。`; },
   invalid: '申告できませんでした。',
   self: '本アカウントには、別のアカウントを選んでください（サブのアカウントで打ちます）。',
   exists: 'このアカウントは、もう申告ずみです（運営の確認待ち、または承認ずみ）。',
@@ -49,7 +51,7 @@ async function useCode(db: Db, cfg: () => GuildConfig, guild: Guild, altId: stri
     await log.send({ content: text, allowedMentions: { parse: [] } }).catch((err: unknown) => logger.warn({ err }, 'member alt notify failed'));
   }
   if (r.status === 'pending') return '🔑 合言葉が合いました。運営が承認すると、サブとしてつながります。';
-  return `🔗 サブアカウントとしてつながりました（本アカウント: <@${r.mainId}>）。\n-# このアカウントには銭が入らず、朱印・招待のお礼も受けません。${r.moved > 0 ? `持っていた銭（${r.moved.toLocaleString('ja-JP')} 枚）は、本アカウントへ移しました。` : ''}`;
+  return `🔗 サブアカウントとしてつながりました（本アカウント: <@${r.mainId}>）。\n-# このアカウントには銭が入らず、${w('朱印', '結び')}・招待のお礼も受けません。${r.moved > 0 ? `持っていた銭（${r.moved.toLocaleString('ja-JP')} 枚）は、本アカウントへ移しました。` : ''}`;
 }
 
 /** 🔗 サブアカウントの申告パネル（/パネル サブ垢申告） */
@@ -59,7 +61,7 @@ export const altPanelBody = () => ({
     '**① 本アカウント**で「🔑 合言葉をもらう」を押します（6 文字・10 分・1 回だけ）。',
     '**② サブのアカウント**で「🔑 合言葉を入れる」を押して、合言葉を入れます。',
     '両方の操作がそろうと、その場でサブとしてつながります。',
-    '-# つながったサブには、銭が入らず、朱印・招待のお礼も受けません。サブの銭は本アカウントへ移ります。',
+    `-# つながったサブには、銭が入らず、${w('朱印', '結び')}・招待のお礼も受けません。サブの銭は本アカウントへ移ります。`,
   ].join('\n'), color: 0xd7003a }],
   components: [
     { type: 1, components: [

@@ -1,4 +1,6 @@
 import { otoshidamaSchema, fortuneGamesSchema, recordingSchema } from '../config.js';
+import { setMusubiMode } from '../domain/terms.js';
+import { newSystemStartedAt } from './shuin.js';
 import { z } from 'zod';
 import { setStyleCatalog } from './casino/styles.js';
 import { emaCounterSchema, casinoGachaSchema, CASINO_GAMES, CASINO_GAMES_V1, casinoSchema, omikujiSpecialSchema, omikujiTextsSchema, notifySchema, streakRewardSchema, goenPerkSchema, emaThresholdsSchema, coreTimeSchema, economyOpsSchema, opsWatchSchema, guildConfigSchema, rankSchema, marketSchema, roomsSchema, bellSchema, gachaSchema, voiceChatSchema, voiceGroupSchema, voiceCounterSchema, webAccessEntrySchema, type GuildConfig } from '../config.js';
@@ -322,6 +324,10 @@ export class ConfigStore {
     } catch (err) {
       logger.warn({ err }, 'failed to apply settings, keeping previous');
     }
+    // 🧵 呼び名（御朱印 → 結び）：④ご縁のリセットで新制度のご縁の時代になったら、言葉を結びにする（BOT・社務所Web の両方）。
+    // 読めなかったときは今の言葉のまま（ほかの設定の当てはめは止めない）
+    const started = await newSystemStartedAt(this.db).then(Boolean, () => undefined);
+    if (started !== undefined) setMusubiMode(started);
   }
 
   start(intervalMs = 60_000): void {

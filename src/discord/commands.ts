@@ -8,6 +8,7 @@ import {
 } from 'discord.js';
 import type { GuildConfig } from '../config.js';
 import { COMMAND } from './ids.js';
+import { w } from '../domain/terms.js';
 import { DURATIONS, PERM_PRESETS } from '../services/tempGrantPresets.js';
 
 const durationChoices = DURATIONS.map(([value, name]) => ({ name, value }));
@@ -51,9 +52,9 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .toJSON(),
     new SlashCommandBuilder()
       .setName(COMMAND.goshuin)
-      .setNameLocalizations({ ja: '御朱印帳' })
+      .setNameLocalizations({ ja: w('御朱印帳', 'プロフィール') })
       .setDescription('Show a goshuincho (shuin, goen and rank)')
-      .setDescriptionLocalizations({ ja: 'プロフィール（御朱印帳・自己紹介・ご縁）を見る。ここから朱印を押せる' })
+      .setDescriptionLocalizations({ ja: w('プロフィール（御朱印帳・自己紹介・ご縁）を見る。ここから朱印を押せる', 'プロフィール（自己紹介・ご縁・絵馬）を見る。ここから結べる') })
       .setContexts(InteractionContextType.Guild)
       .addUserOption((o) =>
         o
@@ -362,9 +363,9 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .addSubcommand((s) =>
         s
           .setName('shuin')
-          .setNameLocalizations({ ja: '朱印' })
+          .setNameLocalizations({ ja: w('朱印', '結ぶ') })
           .setDescription('Give-shuin button')
-          .setDescriptionLocalizations({ ja: '「🌸 朱印を押す」ボタンを、このチャンネルのいちばん下に出し続ける（#絵馬 など）' }),
+          .setDescriptionLocalizations({ ja: w('「🌸 朱印を押す」ボタンを、このチャンネルのいちばん下に出し続ける（#絵馬 など）', '「🧵 結ぶ」ボタンを、このチャンネルのいちばん下に出し続ける（#絵馬 など）') }),
       )
       .addSubcommand((s) =>
         s.setName('lottery').setNameLocalizations({ ja: '宝くじ' }).setDescription('Lottery shop').setDescriptionLocalizations({ ja: '🎫 宝くじ売り場に入るボタンを置く（当選の知らせもここに出す）' }),

@@ -99,3 +99,46 @@ export const DEFAULT_TERMS: GlossaryDefault[] = [
   { category: 'voice', term: '➕ ○○をひらく', description: '入ると自分の通話部屋ができる（名前・人数は自分で変えられる。全員抜けると消える）', aliases: '通話部屋,部屋' },
   { category: 'voice', term: '奥の院', reading: 'おくのいん', description: '放置（AFK）' },
 ];
+
+/**
+ * 🧵 新制度④c（御朱印 → 結び）の用語の入れかえ。from（今の標準）→ to（結びの標準）。
+ * ④ご縁のリセットで切り替えるとき、運営が手を入れていない（標準のままの）用語だけ入れかえる。
+ */
+export const MUSUBI_TERM_SWAPS: { category: GlossaryCategory; from: GlossaryDefault; to: GlossaryDefault }[] = [
+  {
+    category: 'roles',
+    from: { category: 'roles', emoji: '👹', term: '厄年', reading: 'やくどし', description: '警告中（朱印を押せない）' },
+    to: { category: 'roles', emoji: '👹', term: '厄年', reading: 'やくどし', description: '警告中（結べない）' },
+  },
+  {
+    category: 'system',
+    from: { category: 'system', emoji: '📖', term: '御朱印帳', reading: 'ごしゅいんちょう', description: '自分の評価カード（`/御朱印帳`）' },
+    to: { category: 'system', emoji: '📖', term: 'プロフィール', reading: 'ぷろふぃーる', description: '自分のカード。ご縁・絵馬・自己紹介が見られる（`/プロフィール`）' },
+  },
+  {
+    category: 'system',
+    from: { category: 'system', emoji: '🌸', term: '朱印', reading: 'しゅいん', description: '評価スタンプ。相手の名前を右クリック（スマホは長押し）→「アプリ」→「🌸 朱印を押す」' },
+    to: { category: 'system', emoji: '🧵', term: '結び', reading: 'むすび', description: 'はじめましてのあいさつ（同じ人と 1 回）。相手の名前を右クリック（スマホは長押し）→「アプリ」→「プロフィール」→「結ぶ」' },
+  },
+  {
+    category: 'system',
+    from: { category: 'system', emoji: '🎀', term: 'ご縁', reading: 'ごえん', description: '評価ポイント。貯まると役職が上がる' },
+    to: { category: 'system', emoji: '🎀', term: 'ご縁', reading: 'ごえん', description: '結びでたまる数。節目でごほうびがある（役職には使わない）' },
+  },
+  {
+    category: 'system',
+    from: { category: 'system', emoji: '⚖', term: '格', reading: 'かく', description: '朱印 1 回で渡せるご縁（役職が上がると増える）' },
+    to: { category: 'system', emoji: '🎐', term: '絵馬', reading: 'えま', description: '評価の票。氏子以上が、いっしょに過ごした相手に匿名の一言をそえて贈る。集まると役職が上がる' },
+  },
+  {
+    category: 'places',
+    from: { category: 'places', term: 'しきたり', description: 'ルール・用語集・朱印の仕組み（{#しきたり}）' },
+    to: { category: 'places', term: 'しきたり', description: 'ルール・用語集・結びと絵馬の仕組み（{#しきたり}）' },
+  },
+];
+
+/** いまの標準の用語（④のあとは結びの言葉）。用語を入れるときに使う */
+export function defaultTerms(musubi: boolean): GlossaryDefault[] {
+  if (!musubi) return DEFAULT_TERMS;
+  return DEFAULT_TERMS.map((d) => MUSUBI_TERM_SWAPS.find((s) => s.category === d.category && s.from.term === d.term && s.from.description === d.description)?.to ?? d);
+}

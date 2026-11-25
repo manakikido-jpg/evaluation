@@ -95,6 +95,9 @@ import { guildChannelsCached, syncCurrencyRename } from './services/notices.js';
 import { announceUpdates } from './services/updateNews.js';
 import { createDiscordActions } from './lib/discordRest.js';
 import { commandDefinitions } from './discord/commands.js';
+import { isMusubiMode, setMusubiMode } from './domain/terms.js';
+import { newSystemStartedAt } from './services/shuin.js';
+import { musubiApplied, setMusubiApplied, syncMusubiGlossary, syncMusubiNotices } from './services/musubiSwitch.js';
 import { logger } from './lib/logger.js';
 import { pingRoleIds } from './services/notify.js';
 import { explainStartupError } from './lib/startupErrors.js';
@@ -211,11 +214,50 @@ async function main(): Promise<void> {
       logger.error({ guildId: fileCfg.guildId }, 'BOT がこのサーバーに参加していません');
       return;
     }
+    // 🧵 呼び名（御朱印 → 結び）：コマンドの表示名を登録する前に、今の言葉を決めておく
+    setMusubiMode(Boolean(await newSystemStartedAt(db).catch(() => undefined)));
     // どれかが失敗しても（Discord が混んでいるなど）、止まらずに続ける
     await guild.commands
       .set(commandDefinitions(cfg()))
       .then(() => logger.info({ guild: guild.name }, 'commands registered'))
       .catch((err) => logger.error({ err }, 'command registration failed'));
+    let registeredMusubi = isMusubiMode();
+    let musubiBusy = false;
+    /**
+     * 🧵 ④ご縁のリセット（または取り消し）で言葉が変わったら、コマンドの表示名を登録し直し、
+     * 掲示・用語集を切り替えて出し直す。BOT が止まっていた間の切り替えも、ここで当てる（musubi_applied）。
+     */
+    const syncMusubi = async () => {
+      if (musubiBusy) return;
+      musubiBusy = true;
+      try {
+        const on = Boolean(await newSystemStartedAt(db));
+        setMusubiMode(on);
+        if (on !== registeredMusubi) {
+          await guild.commands.set(commandDefinitions(cfg()));
+          registeredMusubi = on;
+          logger.info({ on }, 'commands re-registered for musubi terms');
+        }
+        if (on !== (await musubiApplied(db))) {
+          const ctx = { db, cfg: cfg(), discord: actions };
+          const r = await syncMusubiNotices(ctx, on, 'system');
+          const terms = await syncMusubiGlossary(ctx, on, 'system');
+          await setMusubiApplied(db, on);
+          logger.info({ on, ...r, terms }, 'musubi terms applied');
+          const log = cfg().channels.log;
+          if (log) {
+            const word = on ? '結び' : '御朱印';
+            const custom = r.custom.length ? `\n手を入れてある掲示は自動では変えていません。手で直してください：${r.custom.join('・')}` : '';
+            await actions.sendMessage(log, { content: `🧵 呼び名を「${word}」に切り替えました（掲示 ${r.changed} 件・用語 ${terms} 件・出し直し ${r.republished} 件）。${custom}`, allowed_mentions: { parse: [] } }).catch(() => undefined);
+          }
+        }
+      } catch (err) {
+        logger.warn({ err }, 'musubi terms sync failed');
+      } finally {
+        musubiBusy = false;
+      }
+    };
+    await syncMusubi();
     // 通貨の名前を変えたあと（花びら → 銭）: 投稿済みの掲示を出し直す（1 回だけ）
     await syncCurrencyRename({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'currency rename sync failed'));
     // 📰 更新速報: 自動更新で入った新しい更新を #更新速報 に
@@ -297,6 +339,8 @@ async function main(): Promise<void> {
       void guideThreads.tick(guild).catch((err) => logger.warn({ err }, 'guide thread tick failed'));
       void guideReception.tick(guild).catch(err => logger.warn({ err }, 'guide tick failed'));
       void app.everyMinute(guild);
+      // 🧵 呼び名（御朱印 → 結び）の切り替え（④ご縁のリセットのあと）
+      void syncMusubi();
       void innGuest.tick(guild).catch((err) => logger.warn({ err }, 'inn guest tick failed'));
       void galleryRewardsApp.tick().catch(err => logger.warn({ err }, 'gallery settlement failed'));
       void messageArchive.tick().catch((err) => logger.warn({ err }, 'message archive prune failed'));

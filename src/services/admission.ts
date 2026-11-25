@@ -1,4 +1,5 @@
 import { raidState } from './raid.js';
+import { w } from '../domain/terms.js';
 import { watchOf } from './securityWatch.js';
 import { adminLevelOf, type GuildConfig } from '../config.js';
 import { autoRanks, currentAutoRank } from '../domain/ranks.js';
@@ -108,10 +109,10 @@ export async function completeJoin(ctx: ModCtx, memberId: string, now = new Date
       SIGN,
       `ようこそ、咲楽ノ宮へお参りくださいました。`,
       ...(opts.introChannelId ? [`まだの方は、<#${opts.introChannelId}> に自己紹介を書いてください（いちばん下のひな形をコピーして使えます）。`] : []),
-      `今日から ${ctx.cfg.omairi.days} 日間は「お参り期間」です。いいと思った方に朱印を押し、ご縁を結んでいってください。`,
-      '相手の名前を右クリック（スマホは長押し）→「アプリ」→「プロフィール」→「🌸 朱印を押す」でできます。',
+      w(`今日から ${ctx.cfg.omairi.days} 日間は「お参り期間」です。いいと思った方に朱印を押し、ご縁を結んでいってください。`, `今日から ${ctx.cfg.omairi.days} 日間は「お参り期間」です。出会った方と結んで、ご縁をつないでいってください。`),
+      w('相手の名前を右クリック（スマホは長押し）→「アプリ」→「プロフィール」→「🌸 朱印を押す」でできます。', '相手の名前を右クリック（スマホは長押し）→「アプリ」→「プロフィール」→「結ぶ」でできます。'),
       '',
-      `まずは \`/はじめて\` で「はじめての参拝」（おみくじ・朱印・通話）を見てみてください。${e.onboardingReward > 0 ? `全部できたら ${e.currencyEmoji}${e.onboardingReward} 枚のお祝いがあります。` : ''}`,
+      `まずは \`/はじめて\` で「はじめての参拝」（おみくじ・${w('朱印', '結び')}・通話）を見てみてください。${e.onboardingReward > 0 ? `全部できたら ${e.currencyEmoji}${e.onboardingReward} 枚のお祝いがあります。` : ''}`,
     ].join('\n'),
   );
 }

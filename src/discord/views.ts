@@ -20,6 +20,7 @@ import type { RevokeResult, GoshuinchoData } from '../services/shuin.js';
 import type { GiveEmaResult } from '../services/ema.js';
 import { EMA_DAYS_TOGETHER, EMA_MESSAGE_MAX, EMA_MINUTES_TOGETHER, EMA_TIER_LABEL } from '../domain/ema.js';
 import { emaGiveId, emaModalId, shuinId } from './ids.js';
+import { w } from '../domain/terms.js';
 
 /** 朱色 */
 export const SHU = 0xd7003a;
@@ -34,14 +35,14 @@ function row(...buttons: ButtonBuilder[]): Row {
   return new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(buttons);
 }
 
-const giveButton = (userId: string, label = '朱印を押す') =>
+const giveButton = (userId: string, label = w('朱印を押す', '結ぶ')) =>
   new ButtonBuilder().setCustomId(shuinId('give', userId)).setLabel(label).setEmoji('🌸').setStyle(ButtonStyle.Primary);
 const revokeButton = (userId: string) =>
   new ButtonBuilder().setCustomId(shuinId('revoke', userId)).setLabel('取り消す').setStyle(ButtonStyle.Secondary);
 const cardButton = (userId: string) =>
   new ButtonBuilder().setCustomId(shuinId('card', userId)).setLabel('プロフィールを見る').setEmoji('📕').setStyle(ButtonStyle.Secondary);
 const listButton = (userId: string) =>
-  new ButtonBuilder().setCustomId(shuinId('list', userId)).setLabel('朱印をくれた人').setStyle(ButtonStyle.Secondary);
+  new ButtonBuilder().setCustomId(shuinId('list', userId)).setLabel(w('朱印をくれた人', '結んでくれた人')).setStyle(ButtonStyle.Secondary);
 /** 🎐 絵馬（評価の票）を贈るボタン。氏子以上だけが贈れる（押したときに確かめる） */
 const emaGiveButton = (userId: string) =>
   new ButtonBuilder().setCustomId(emaGiveId(userId)).setLabel('絵馬を贈る').setEmoji('🎐').setStyle(ButtonStyle.Secondary);
@@ -51,29 +52,37 @@ const unmetButton = (userId: string) =>
 
 export type Reply = { content?: string; embeds?: APIEmbed[]; components?: Row[]; allowedMentions?: { parse: never[] } };
 
-const DENIED: Record<GiveDenied, string> = {
-  self: 'ご自身の御朱印帳には朱印を押せません。',
-  bot: 'BOT には朱印を押せません。',
-  not_member: 'その方は咲楽ノ宮にいらっしゃらないようです。',
-  giver_no_rank: 'まだ参拝者になっていないため、朱印を押せません。',
-  yakudoshi: '👹 厄年のあいだは朱印を押せません。お祓いが済むまでお待ちください。',
-  receiver_no_rank: 'その方はまだ参拝者になっていないため、朱印を押せません。',
-};
+/** 押せない理由（言葉は呼ぶたびに決まる：④のあとは「結び」） */
+const denied = (reason: GiveDenied): string =>
+  ({
+    self: w('ご自身の御朱印帳には朱印を押せません。', 'ご自身とは結べません。'),
+    bot: w('BOT には朱印を押せません。', 'BOT とは結べません。'),
+    not_member: 'その方は咲楽ノ宮にいらっしゃらないようです。',
+    giver_no_rank: w('まだ参拝者になっていないため、朱印を押せません。', 'まだ参拝者になっていないため、結べません。'),
+    yakudoshi: w('👹 厄年のあいだは朱印を押せません。お祓いが済むまでお待ちください。', '👹 厄年のあいだは結べません。お祓いが済むまでお待ちください。'),
+    receiver_no_rank: w('その方はまだ参拝者になっていないため、朱印を押せません。', 'その方はまだ参拝者になっていないため、結べません。'),
+  })[reason];
 
-/** 朱印を押した結果（本人だけに表示） */
+/** 朱印を押した（結んだ）結果（本人だけに表示） */
 export function giveReply(receiverId: string, outcome: GiveOutcome): Reply {
   switch (outcome.kind) {
     case 'denied':
-      return { content: DENIED[outcome.reason] };
+      return { content: denied(outcome.reason) };
     case 'already':
       return {
-        content: `${mention(receiverId)} さまには、すでに朱印を押しています（格 ${outcome.weight}）。`,
+        content: w(
+          `${mention(receiverId)} さまには、すでに朱印を押しています（格 ${outcome.weight}）。`,
+          `${mention(receiverId)} さまとは、もう結んでいます（結びは同じ方と 1 回だけ）。`,
+        ),
         components: [row(cardButton(receiverId), revokeButton(receiverId))],
       };
     case 'given': {
       const verb = outcome.restamped ? '押し直しました' : '押しました';
       return {
-        content: `🌸 ${mention(receiverId)} さまに朱印を${verb}（格 ${outcome.weight}・ご縁 +${outcome.addedGoen}）`,
+        content: w(
+          `🌸 ${mention(receiverId)} さまに朱印を${verb}（格 ${outcome.weight}・ご縁 +${outcome.addedGoen}）`,
+          `🧵 ${mention(receiverId)} さまと${outcome.restamped ? '結び直しました' : '結びました'}（ご縁 +${outcome.addedGoen}）`,
+        ),
         components: [row(cardButton(receiverId), revokeButton(receiverId))],
       };
     }
@@ -83,11 +92,11 @@ export function giveReply(receiverId: string, outcome: GiveOutcome): Reply {
 /** 取り消した結果（本人だけに表示） */
 export function revokeReply(receiverId: string, result: RevokeResult): Reply {
   if (result.status === 'not_found') {
-    return { content: `${mention(receiverId)} さまには、まだ朱印を押していません。`, components: [row(giveButton(receiverId))] };
+    return { content: w(`${mention(receiverId)} さまには、まだ朱印を押していません。`, `${mention(receiverId)} さまとは、まだ結んでいません。`), components: [row(giveButton(receiverId))] };
   }
   return {
-    content: `${mention(receiverId)} さまへの朱印を取り消しました（ご縁 -${result.weight}）。`,
-    components: [row(giveButton(receiverId, 'もう一度押す'))],
+    content: w(`${mention(receiverId)} さまへの朱印を取り消しました（ご縁 -${result.weight}）。`, `${mention(receiverId)} さまとの結びを取り消しました（ご縁 -${result.weight}）。`),
+    components: [row(giveButton(receiverId, w('もう一度押す', 'もう一度結ぶ')))],
   };
 }
 
@@ -211,9 +220,9 @@ export function goshuinchoReply(
     value: profile.intro ? `${profile.intro.excerpt ? `${profile.intro.excerpt}\n` : ''}[📝 自己紹介を見る](${profile.intro.url})` : 'まだありません',
   });
   embed.addFields(
-    { name: '頂いた朱印', value: received },
-    { name: '最近の朱印', value: recent },
-    { name: '押した朱印', value: `${data.givenCount} 人`, inline: true },
+    { name: w('頂いた朱印', '結んでくれた人'), value: received },
+    { name: w('最近の朱印', '最近結んでくれた人'), value: recent },
+    { name: w('押した朱印', '結んだ人'), value: `${data.givenCount} 人`, inline: true },
   );
   // 🧵 結びのコレクション（自分のプロフィールだけ）
   if (profile.self && collection) embed.addFields({ name: '🧵 結びのコレクション', value: `${collection.met} / ${collection.total} 人${collection.met < collection.total ? '（下の「まだ結んでいない人」から結べます）' : '（コンプリート！）'}`, inline: true });
@@ -257,13 +266,13 @@ function emaField(ema: { count: number; messages: { message: string; createdAt: 
  */
 export function giversReply(ownerId: string, givers: { giverId: string }[], total: number, names?: Map<string, string>): Reply {
   const nameOf = (id: string) => names?.get(id) ?? '退出した人';
-  if (!givers.length) return { content: `${nameOf(ownerId)} さまは、まだ朱印を頂いていません。`, allowedMentions: { parse: [] } };
+  if (!givers.length) return { content: w(`${nameOf(ownerId)} さまは、まだ朱印を頂いていません。`, `${nameOf(ownerId)} さまと結んだ方は、まだいません。`), allowedMentions: { parse: [] } };
   const lines = givers.map((g) => `${nameOf(g.giverId)} さま`).join('、');
   const more = total > givers.length ? `\nほか ${total - givers.length} 人` : '';
   const embed = new EmbedBuilder()
     .setColor(SHU)
-    .setTitle(`朱印をくれた人（${total} 人）`)
-    .setDescription(`${nameOf(ownerId)} さまの御朱印帳\n\n${lines}${more}`);
+    .setTitle(w(`朱印をくれた人（${total} 人）`, `結んでくれた人（${total} 人）`))
+    .setDescription(`${nameOf(ownerId)} ${w('さまの御朱印帳', 'さまのプロフィール')}\n\n${lines}${more}`);
   return { embeds: [embed.toJSON()], allowedMentions: { parse: [] } };
 }
 
@@ -299,7 +308,10 @@ export function promotionBurstAnnouncement(count: number, roleIds: readonly stri
 
 /** #記録 用のログ */
 export function giveLog(giverId: string, giverRank: Rank, receiverId: string, weight: number, goen: number, addedGoen: number): string {
-  return `🌸 朱印 ${mention(giverId)}（${giverRank.name}・格 ${weight}）→ ${mention(receiverId)}　ご縁 ${goen}（+${addedGoen}）`;
+  return w(
+    `🌸 朱印 ${mention(giverId)}（${giverRank.name}・格 ${weight}）→ ${mention(receiverId)}　ご縁 ${goen}（+${addedGoen}）`,
+    `🧵 結び ${mention(giverId)}（${giverRank.name}・重み ${weight}）→ ${mention(receiverId)}　ご縁 ${goen}（+${addedGoen}）`,
+  );
 }
 
 export function revokeLog(giverId: string, receiverId: string, weight: number, goen: number): string {
@@ -318,7 +330,7 @@ export const VC_LIST_MAX = 20;
 /** 通話に入った人がいたら、その通話のチャットのいちばん下に出すカード */
 export function vcPanel(channelId: string, help = false, inn = false, profile = true): Reply {
   const lines = [
-    ...(profile ? ['📕 **この通話の人のプロフィールを見る**', '-# 下のボタンを押すと、今この通話にいる人が出ます。プロフィールから朱印も押せます（あなたにだけ見えます）'] : []),
+    ...(profile ? ['📕 **この通話の人のプロフィールを見る**', w('-# 下のボタンを押すと、今この通話にいる人が出ます。プロフィールから朱印も押せます（あなたにだけ見えます）', '-# 下のボタンを押すと、今この通話にいる人が出ます。プロフィールから結べます（あなたにだけ見えます）')] : []),
     ...(help ? ['💤 寝落ちの人がいたら・🛡 困ったときは、下のボタンで衛士に知らせられます。'] : []),
     ...(inn ? ['👤 役職の方は、人を呼んで一時的にこの通話に入れられます。'] : []),
   ];
@@ -349,6 +361,13 @@ export function vcList(people: { id: string; name: string; stamped: boolean }[],
   const rows: Row[] = [];
   for (let i = 0; i < buttons.length; i += 5) rows.push(row(...buttons.slice(i, i + 5)));
   const more = total > VC_LIST_MAX ? `\n-# ほかの方は、名前を右クリック（スマホは長押し）→「アプリ」→「プロフィール」` : '';
-  return { content: `📕 プロフィールを見る人を選んでください（プロフィールの「🌸 朱印を押す」で朱印を押せます。今の格で押した人は ✅）
--# 昇格で格が上がったら押し直せます。前のご縁を残し、差額だけ付きます。${more}`, components: rows };
+  return {
+    content: w(
+      `📕 プロフィールを見る人を選んでください（プロフィールの「🌸 朱印を押す」で朱印を押せます。今の格で押した人は ✅）
+-# 昇格で格が上がったら押し直せます。前のご縁を残し、差額だけ付きます。${more}`,
+      `📕 プロフィールを見る人を選んでください（プロフィールの「結ぶ」で結べます。もう結んだ人は ✅）
+-# 結びは同じ方と 1 回だけです。${more}`,
+    ),
+    components: rows,
+  };
 }

@@ -86,7 +86,7 @@ export function EvaluationPage({ session, data, filter, page, emaPromotion = fal
       <p class="note">ONにすると、カジノは氏子以上の方だけが入れます（参拝者は「氏子になると入れます」と案内）。宿（宿坊など部屋代のかかる部屋）を氏子からにする分は準備中です。</p>
     </section>}
     {session.level === 'guji' && <section class="card">
-      <h2>🎁 ご縁の節目特典（新制度⑦）</h2>
+      <h2>🎁 ご縁の節目特典（新制度⑦：称号・ごほうび・解放）</h2>
       {goenPerksFlash === 'saved' && <p class="flash ok" role="status">ご縁の節目特典を保存しました。</p>}
       {goenPerksFlash === 'invalid' && <p class="flash warn" role="alert">書き方を確認してください（1行＝「ご縁 銭 ロールID（任意） 称号名（任意）」）。</p>}
       <p>ご縁（出会った人の数）が節目に届いたら、銭や称号（飾りのロール）をあげます。「🎐 絵馬での昇格」が ON のときだけ効きます（1人・節目ごとに1回）。</p>
@@ -98,6 +98,7 @@ export function EvaluationPage({ session, data, filter, page, emaPromotion = fal
         <button type="submit">ご縁の節目特典を保存</button>
       </form>
       <p class="note">例：「25 500」＝ご縁25で500銭。「100 2000 123456789012345678 ご縁上手」＝ご縁100で2000銭＋そのロール（称号）を付ける。ロールIDと称号名は省けます。銭だけなら「ご縁 銭」。ロールは宮司がロールのIDを入れたときだけ付きます。</p>
+      <p class="note">🔓 <strong>解放</strong>にも使えます：そのロールに「限定チャンネルを見る」などの権限を付けておくと、節目に届いた人にそのチャンネルや機能が開きます（例：「200 0 ロールID 縁結びの間」＝ご縁200で限定チャンネル『縁結びの間』が開く。銭は 0 でもかまいません）。称号名のところが、届いたときのお知らせに出る名前になります。</p>
     </section>}
     {session.level === 'guji' && <section class="card">
       <h2>🎐 絵馬の枚数（新制度③・⑧）</h2>

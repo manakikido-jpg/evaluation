@@ -67,6 +67,7 @@ import { appendFromSender, createSoudan, setSoudanCard } from '../services/souda
 import { goshuinchoOf } from '../services/shuin.js';
 import { emaPromotionEnabled } from '../services/emaPromotion.js';
 import { validEmaCountOf } from '../services/ema.js';
+import { w } from '../domain/terms.js';
 import { coreName } from '../lib/names.js';
 import { inviteOf } from '../services/invites.js';
 import { introBackfillDone, markIntroBackfill, recordIntro } from '../services/intros.js';
@@ -371,7 +372,7 @@ export class AdmissionApp {
       const r = await placeShuinButton(this.ctx, channel.id, i.user.id);
       const failed = r.some((x) => x === 'too_long');
       return void (await i.editReply(
-        failed ? '置けませんでした（このチャンネルの掲示の文字数が多すぎます）。' : '🌸 このチャンネルのいちばん下に「朱印を押す」ボタンを置きました（書き込みがあると、下に出し直します）。',
+        failed ? '置けませんでした（このチャンネルの掲示の文字数が多すぎます）。' : w('🌸 このチャンネルのいちばん下に「朱印を押す」ボタンを置きました（書き込みがあると、下に出し直します）。', '🧵 このチャンネルのいちばん下に「結ぶ」ボタンを置きました（書き込みがあると、下に出し直します）。'),
       ));
     }
     const kinds = ['apply', 'shop', 'gender', 'market', 'contact', 'bell', 'gacha', 'notify', 'invite'] as const;
@@ -710,7 +711,7 @@ export class AdmissionApp {
         .setDescription(
           [
             `${mention(memberId)}（${m?.displayName ?? memberId}）`,
-            `${progress} ・ 朱印をくれた人 ${card.receivedCount} 人`,
+            `${progress} ・ ${w('朱印をくれた人', '結んでくれた人')} ${card.receivedCount} 人`,
             m?.lastActiveAt ? `最後の活動 ${ts(m.lastActiveAt)}` : '最後の活動 記録なし',
           ].join('\n'),
         );

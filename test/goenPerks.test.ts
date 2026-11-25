@@ -41,3 +41,13 @@ it('あとからご縁がのびたら、新しく届いた節目だけ渡す', a
   expect(g.map((x) => x.goen)).toEqual([50, 100]);
   expect((await walletOf(db, A)).balance).toBe(500 + 1000 + 2000);
 });
+
+it('🔓 解放：銭0・ロールだけの節目（限定チャンネルを開くロール）も、届いたらロールを1回だけ返す', async () => {
+  const ROOM = '980000000000000077';
+  const c = { ...cfg, goenPerks: [{ goen: 20, coins: 0, roleId: ROOM, label: '縁結びの間' }] };
+  await addGoen(A, 25, '911000000000000005');
+  const g = await grantGoenPerks(db, c);
+  expect(g).toEqual([{ memberId: A, goen: 20, coins: 0, roleId: ROOM, label: '縁結びの間' }]);
+  expect((await walletOf(db, A)).balance).toBe(0); // 銭は渡さない
+  expect(await grantGoenPerks(db, c)).toEqual([]); // 二度は渡さない
+});

@@ -1,9 +1,10 @@
 import { asc, eq, max } from 'drizzle-orm';
+import { isMusubiMode } from '../domain/terms.js';
 import type { Db } from '../db/client.js';
 import { glossaryTerms, settings, type GlossaryTerm } from '../db/schema.js';
 import type { GuildChannel } from '../lib/discordRest.js';
 import { audit } from './audit.js';
-import { DEFAULT_TERMS, GLOSSARY_CATEGORIES, GLOSSARY_CATEGORY_KEYS, type GlossaryCategory } from './glossaryDefaults.js';
+import { DEFAULT_TERMS, defaultTerms, GLOSSARY_CATEGORIES, GLOSSARY_CATEGORY_KEYS, type GlossaryCategory } from './glossaryDefaults.js';
 import { createNotice, deleteNotice, findChannel, guildChannelsCached, listNotices, renderNotice, updateNotice, type NoticeCtx } from './notices.js';
 
 /**
@@ -92,7 +93,8 @@ export async function moveTerm(db: Db, id: number, dir: 'up' | 'down'): Promise<
 export async function seedDefaultTerms(db: Db, by: string): Promise<number> {
   const have = new Set((await listTerms(db)).map((t) => `${t.category}\n${t.term}`));
   let n = 0;
-  for (const d of DEFAULT_TERMS) {
+  // ④のあと（結び）なら結びの言葉の標準を入れる
+  for (const d of defaultTerms(isMusubiMode())) {
     if (have.has(`${d.category}\n${d.term}`)) continue;
     await db.insert(glossaryTerms).values({
       category: d.category,

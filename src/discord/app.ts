@@ -40,6 +40,7 @@ import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { currentAutoRank, decidePromotion, highestRank, voiceCapPercentOf, voicePercentOf, type Promotion } from '../domain/ranks.js';
 import { emaStepFrom, EMA_PROMOTION_BURST, EMA_TIER_LABEL } from '../domain/ema.js';
+import { w } from '../domain/terms.js';
 import { collectEmaKeepWarnings, emaPromotable, emaPromotionEnabled } from '../services/emaPromotion.js';
 import { grantGoenPerks } from '../services/goenPerks.js';
 import { KeyedLock } from '../lib/lock.js';
@@ -87,11 +88,11 @@ const POSTER_PAGES = 5;
 
 /** 選ぶ欄とページ送り（本人にだけ） */
 export function posterPicker(list: Poster[], page: number) {
-  if (!list.length) return { content: '🌸 このチャンネルには、まだ朱印を押せる人の投稿がありません。', components: [] };
+  if (!list.length) return { content: w('🌸 このチャンネルには、まだ朱印を押せる人の投稿がありません。', '🧵 このチャンネルには、まだ結べる人の投稿がありません。'), components: [] };
   const p = posterPage(list, page);
   const menu = new StringSelectMenuBuilder()
     .setCustomId(SHUIN_PICK_ONE_ID)
-    .setPlaceholder('朱印を押す相手')
+    .setPlaceholder(w('朱印を押す相手', '結ぶ相手'))
     .addOptions(p.items.map((x) => ({ label: x.name.slice(0, 100) || x.id, value: x.id })));
   const nav =
     p.pages > 1
@@ -111,7 +112,7 @@ export function posterPicker(list: Poster[], page: number) {
         ]
       : [];
   return {
-    content: `🌸 朱印を押す相手を選んでください（このチャンネルに投稿している ${list.length} 人・新しく投稿した順${p.pages > 1 ? `・${p.page + 1}/${p.pages} ページ` : ''}）。`,
+    content: `${w('🌸 朱印を押す相手', '🧵 結ぶ相手')}を選んでください（このチャンネルに投稿している ${list.length} 人・新しく投稿した順${p.pages > 1 ? `・${p.page + 1}/${p.pages} ページ` : ''}）。`,
     components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu), ...nav],
   };
 }
@@ -519,7 +520,7 @@ export class ShuinApp {
   /** 🧵 まだ結んでいない人（結びのコレクション）: 自分のプロフィールから。選ぶと結べる（SHUIN_PICK_ONE で give） */
   private async unmetPick(interaction: ButtonInteraction<'cached'>, viewerId: string): Promise<void> {
     if (interaction.user.id !== viewerId) {
-      await interaction.reply({ content: '🧵 「まだ結んでいない人」は、ご自身のプロフィール（御朱印帳）から見てください。', flags: MessageFlags.Ephemeral });
+      await interaction.reply({ content: w('🧵 「まだ結んでいない人」は、ご自身のプロフィール（御朱印帳）から見てください。', '🧵 「まだ結んでいない人」は、ご自身のプロフィールから見てください。'), flags: MessageFlags.Ephemeral });
       return;
     }
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });

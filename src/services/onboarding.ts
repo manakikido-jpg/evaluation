@@ -1,4 +1,5 @@
 import { and, eq, gte, isNull, sql } from 'drizzle-orm';
+import { w } from '../domain/terms.js';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { activityDaily, members, omikuji, onboardingDone, shuin } from '../db/schema.js';
@@ -36,7 +37,7 @@ export async function onboardingOf(db: Db, cfg: GuildConfig, memberId: string, r
   const coin = cfg.economy.currencyName;
   const steps: OnboardingStep[] = [
     { key: 'omikuji', label: 'おみくじを引く', hint: `${cfg.economy.omikujiVoiceOnly ? '通話に入って、' : ''}${link(cfg.channels.omikuji, 'おみくじ')} で \`/おみくじ\`（毎日${coin}がもらえます）`, done: Boolean(drew) },
-    { key: 'shuin', label: 'だれかに朱印を押す', hint: '相手の名前を右クリック（スマホは長押し）→「アプリ」→「プロフィール」→「🌸 朱印を押す」', done: Boolean(gave) },
+    { key: 'shuin', label: w('だれかに朱印を押す', 'だれかと結ぶ'), hint: w('相手の名前を右クリック（スマホは長押し）→「アプリ」→「プロフィール」→「🌸 朱印を押す」', '相手の名前を右クリック（スマホは長押し）→「アプリ」→「プロフィール」→「結ぶ」'), done: Boolean(gave) },
     {
       key: 'voice',
       label: `通話に ${ONBOARDING_VOICE_MINUTES} 分いる`,

@@ -14,6 +14,7 @@ import { describeStreakRewards, omikujiRange } from './omikuji.js';
 import { coreTimeRate, describeCoreTime } from './coreTime.js';
 import { emaSteps, EMA_DEFAULT_THRESHOLDS, EMA_TIER_LABEL } from '../domain/ema.js';
 import { musubiWeight } from '../domain/musubi.js';
+import { w } from '../domain/terms.js';
 
 /**
  * 掲示: #鳥居・#しきたり などに BOT が投稿する文面。
@@ -41,11 +42,12 @@ type NoticeImage = { file: MessageFile; position: ImagePosition };
 
 /** 「🌸 朱印を押す」ボタン（押すと相手を選んで朱印を押せる） */
 export const SHUIN_PICK_ID = 'shuin:pick';
-const SHUIN_BUTTON_ROW = { type: 1, components: [{ type: 2, style: 1, label: '朱印を押す', emoji: { name: '🌸' }, custom_id: SHUIN_PICK_ID }] };
+/** #絵馬 などのいちばん下の「朱印を押す」ボタン（④のあとは「🧵 結ぶ」。呼ぶたびに言葉が決まる） */
+const shuinButtonRow = () => ({ type: 1, components: [{ type: 2, style: 1, label: w('朱印を押す', '結ぶ'), emoji: { name: w('🌸', '🧵') }, custom_id: SHUIN_PICK_ID }] });
 
 function messageBody(style: string, text: string, mention = '', image?: NoticeImage, shuinButton = false): MessageBody {
   const head = mentionHead(mention);
-  const files = { ...(image ? { files: [image.file] } : {}), ...(shuinButton ? { components: [SHUIN_BUTTON_ROW] } : {}) };
+  const files = { ...(image ? { files: [image.file] } : {}), ...(shuinButton ? { components: [shuinButtonRow()] } : {}) };
   // 本文のないボタンだけの掲示（写真もなければ、ボタンだけのメッセージ）
   if (!text.trim() && shuinButton && !image) return { content: head, embeds: [], ...files };
   // 見せ方を切り替えたときに前の形が残らないよう、使わないほうは空にする。カードのメンションはカードの上（本文の外）に出す

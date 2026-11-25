@@ -1,4 +1,5 @@
 import { isRestrictedAccount } from './staffAlts.js';
+import { w } from '../domain/terms.js';
 import { and, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { coinTx, members, wallets } from '../db/schema.js';
@@ -306,8 +307,9 @@ export const COIN_REASON_LABEL: Record<string, string> = {
   scratch_buy: 'スクラッチを買った', scratch_prize: 'スクラッチの払戻', lottery_buy: '宝くじを買った', lottery_prize: '宝くじの当選賞金',
   voice: '通話',
   long_voice_bonus: '7時間の浮上ボーナス',
-  shuin_give: '朱印を押した',
-  shuin_receive: '朱印を頂いた',
+  // 🧵 ④のあとは「結び」の言葉（呼ぶたびに決まるよう getter にしている）
+  get shuin_give() { return w('朱印を押した', '結んだ'); },
+  get shuin_receive() { return w('朱印を頂いた', '結んでもらった'); },
   omikuji: 'おみくじ',
   join_bonus: '初期配布',
   shop: 'ショップ',
@@ -351,7 +353,7 @@ export const COIN_REASON_LABEL: Record<string, string> = {
   admin_grant: '運営から',
   admin_take: '運営が減らした',
   saisen: 'お賽銭（持ちすぎた分）',
-  shuin_revoke: '朱印の取り消し',
+  get shuin_revoke() { return w('朱印の取り消し', '結びの取り消し'); },
   menzaifu: '免罪符',
   casino_bet: 'カジノで賭けた',
   casino_win: 'カジノの払い戻し（勝ち）',
