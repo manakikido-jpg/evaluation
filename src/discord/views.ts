@@ -18,7 +18,7 @@ import { currentAutoRank, highestRank, nextAutoRank, rankLabel, type Promotion }
 import type { GiveDenied, GiveOutcome } from '../services/flows.js';
 import type { RevokeResult, GoshuinchoData } from '../services/shuin.js';
 import type { GiveEmaResult } from '../services/ema.js';
-import { EMA_DAYS_TOGETHER, EMA_MESSAGE_MAX, EMA_MINUTES_TOGETHER, EMA_UJIKO_PROMOTE } from '../domain/ema.js';
+import { EMA_DAYS_TOGETHER, EMA_MESSAGE_MAX, EMA_MINUTES_TOGETHER, EMA_TIER_LABEL } from '../domain/ema.js';
 import { emaGiveId, emaModalId, shuinId } from './ids.js';
 
 /** 朱色 */
@@ -115,7 +115,7 @@ const EMA_HOURS = Math.round((EMA_MINUTES_TOGETHER / 60) * 10) / 10;
 export function emaGiveReply(receiverId: string, result: GiveEmaResult): Reply {
   if (result.ok) {
     const verb = result.created ? '贈りました' : '贈り直しました（ひとことと日付を新しくしました）';
-    return { content: `🎐 ${mention(receiverId)} さまに絵馬を${verb}。あなたが贈ったことは匿名で飾られます。いまの票は **${result.count} 枚**です。` };
+    return { content: `🎐 ${mention(receiverId)} さまに絵馬（${EMA_TIER_LABEL[result.tier]}）を${verb}。あなたが贈ったことは匿名で飾られます。いまの票は **${result.count} 枚**です。` };
   }
   const reasons: Record<Exclude<GiveEmaResult, { ok: true }>['reason'], string> = {
     self: 'ご自身には絵馬を贈れません。',
@@ -124,7 +124,8 @@ export function emaGiveReply(receiverId: string, result: GiveEmaResult): Reply {
     left: 'その方はもう咲楽ノ宮にいらっしゃらないようです。',
     staff_alt: '運営のサブのアカウントには贈れません。',
     giver_not_ujiko: '絵馬を贈れるのは氏子以上の方です。',
-    receiver_rank: '絵馬を贈れる相手は、参拝者か氏子の方だけです。',
+    giver_not_sodai: '世話役の方へ絵馬（総代の票）を贈れるのは、総代か運営だけです。',
+    receiver_rank: '絵馬を贈れる相手は、参拝者・氏子・世話役の方だけです。',
     not_together: `まだいっしょに過ごした時間が足りません（違う日に ${EMA_DAYS_TOGETHER} 日以上・合計 ${EMA_HOURS} 時間以上、同じ通話にいること）。いまは ${result.days ?? 0} 日・${result.minutes ?? 0} 分です。`,
   };
   return { content: reasons[result.reason] };
@@ -169,17 +170,23 @@ export function goshuinchoReply(
   data: GoshuinchoData,
   coins?: { emoji: string; name: string; balance: number },
   profile: ProfileExtra = {},
-  ema?: { count: number; messages: { message: string; createdAt: Date }[]; promoteMode?: boolean },
+  ema?: { count: number; messages: { message: string; createdAt: Date }[]; promoteMode?: boolean; step?: { toName: string; need: number } },
   collection?: { total: number; met: number },
 ): Reply {
   const rank = highestRank(ranks, owner.roleIds);
   const auto = currentAutoRank(ranks, owner.roleIds);
   const next = auto ? nextAutoRank(ranks, data.goen, auto) : undefined;
-  const nextText = auto?.key === 'sanpaisha'
-    ? (ema?.promoteMode
-        ? `（氏子の条件：絵馬 ${EMA_UJIKO_PROMOTE} 枚・あと ${Math.max(0, EMA_UJIKO_PROMOTE - ema.count)} 枚）`
-        : '（氏子の条件：ご縁40＋縁側20時間）')
-    : next ? `（${next.rank.name}まで あと ${next.remaining}）` : '';
+  // 🎐 絵馬での昇格が ON のときは「次の段」を絵馬の枚数で案内する。OFF のときは従来どおりご縁で。
+  let nextText = '';
+  if (auto) {
+    if (ema?.promoteMode && ema.step) {
+      nextText = `（${ema.step.toName}の条件：絵馬 ${ema.step.need} 枚・あと ${Math.max(0, ema.step.need - ema.count)} 枚）`;
+    } else if (!ema?.promoteMode && auto.key === 'sanpaisha') {
+      nextText = '（氏子の条件：ご縁40＋縁側20時間）';
+    } else if (!ema?.promoteMode && next) {
+      nextText = `（${next.rank.name}まで あと ${next.remaining}）`;
+    }
+  }
 
   const received = data.receivedCount
     ? `${data.receivedCount} 人\n${breakdownLine(ranks, data.byRank)}`
@@ -210,8 +217,8 @@ export function goshuinchoReply(
   );
   // 🧵 結びのコレクション（自分のプロフィールだけ）
   if (profile.self && collection) embed.addFields({ name: '🧵 結びのコレクション', value: `${collection.met} / ${collection.total} 人${collection.met < collection.total ? '（下の「まだ結んでいない人」から結べます）' : '（コンプリート！）'}`, inline: true });
-  // 🎐 絵馬（評価の票）。参拝者・氏子にだけ出す（匿名の一言と有効な枚数）
-  const emaRelevant = rank?.key === 'sanpaisha' || rank?.key === 'ujiko';
+  // 🎐 絵馬（評価の票）。参拝者・氏子・世話役にだけ出す（匿名の一言と有効な枚数・次の段の票）
+  const emaRelevant = rank?.key === 'sanpaisha' || rank?.key === 'ujiko' || rank?.key === 'sewayaku';
   if (ema && emaRelevant) embed.addFields({ name: '🎐 頂いた絵馬', value: emaField(ema) });
   if (coins) embed.addFields({ name: coins.name, value: `${coins.emoji} ${coins.balance}`, inline: true });
   if (profile.tickets) embed.addFields({ name: '🎟 券', value: profile.tickets });

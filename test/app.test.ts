@@ -597,7 +597,7 @@ describe('ShuinApp：絵馬を贈る（新制度②）', () => {
 
     const submit = interaction('modal', giver, { customId: emaModalId(SA), fields: { getTextInputValue: () => 'いっしょに過ごせてうれしかったです' } });
     await app.onInteraction(submit.i as never);
-    expect(submit.replies[0]?.content).toContain('絵馬を');
+    expect(submit.replies[0]?.content).toContain('絵馬（氏子の票）を');
     const { validEmaCountOf, emaMessagesOf } = await import('../src/services/ema.js');
     expect(await validEmaCountOf(db, SA)).toBe(1);
     expect((await emaMessagesOf(db, SA))[0]?.message).toBe('いっしょに過ごせてうれしかったです');

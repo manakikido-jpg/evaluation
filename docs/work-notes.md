@@ -1,3 +1,14 @@
+## 2026年11月25日：新制度⑧（絵馬で世話役・総代に自動昇格）を実装（Claude・本番反映予定）
+- 本人「８やろか」→「絵馬で自動」→たたき台提示に「いいよ」。氏子→世話役→総代も絵馬で自動に。
+- たたき台（確定）：世話役の票（世話役以上＋運営→氏子・3枚）／総代の票（総代＋運営→世話役・3枚）。氏子の票は従来どおり（氏子以上→参拝者5枚・氏子→氏子は維持用）。世話役・総代の票は失効なし。票の種類は贈る人と相手の役職で自動決定。
+- 実装：domain/ema.ts に EmaTier 拡張（ujiko|sewayaku|sodai）・EMA_STEPS・emaTierFor（運営=staff は weight が総代超なので自動で含む）・EMA_TIER_LABEL・emaTierExpires（ujikoのみ失効）・EMA_SEWAYAKU_PROMOTE/EMA_SODAI_PROMOTE。ema.tier は text・PK に含むので移行不要。
+- services/ema.ts：checkGiveEma が tier を返す（giver_not_sodai 追加・receiver は参拝者/氏子/世話役）、giveEma は tier を自動決定。emaPromotion.ts：emaPromotableSanpaisha→emaPromotable（段ごと tier/枚数）。
+- app.ts：emaPromote を全段対応（highestRank の段・キャッシュで安く事前確認→force取得）。promoteIfNeeded と ensurePromotion は ema ON のときご縁昇格を止め emaPromote に回す（＝今まで氏子→世話役がご縁100で自動のままだった穴を塞いだ）。emaSubmit 後の即時昇格は枚数チェックを emaPromote 任せに。card は本人の段の tier を数える。
+- views.ts：goshuinchoReply の ema に step を足し promoteMode のとき次段を案内、絵馬ボタンは世話役にも。emaGiveReply に giver_not_sodai・「絵馬（◯の票）を」表示。web/app.tsx の member ページも段の tier を数える。
+- テスト：ema.test.ts（tier 決定・世話役へは総代だけ）・emaPromotion.test.ts（世話役/総代段）・app.test.ts（絵馬の文言）を更新。型チェック・ema/app/web/views テスト通過。
+- 枚数はコード定数（③の氏子5と同じ）＝宮司の編集UIは未実装（後で足せる）。残り：③解放（中身未定）・④c呼び名（ローンチ時）・ローンチ準備。
+- 次：全テストを通し fetch＆merge して本番へpush。周知none（ローンチ時にまとめて）。
+
 ## 2026年11月25日：⑦の仕上げ（宮司が編集するUI）を実装（Claude・本番反映予定）
 - 本人「7の仕上げ作って」。評価ページに宮司だけの「🎁 ご縁の節目特典」編集（textarea・1行＝goen coins [roleId] [label]）を追加。これで称号ロールも設定可能に。
 - settings override に goenPerks（配列）追加＋applyOverrides でマージ。POST /evaluation/goen-perks（宮司・CSRF・parseGoenPerks で検証・audit goen.perks_edit）。評価ページに goenPerksToText で現在値を表示。

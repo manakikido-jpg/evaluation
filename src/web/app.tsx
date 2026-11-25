@@ -181,6 +181,8 @@ import { audit, hideGujiAudit, listAudit } from '../services/audit.js';
 import { eventsOf, findMemberByNameOrId, getMember, memberDiff, recentLeaves, homeStats, isMemberSort, listMembers, membersWithRole, namesOf, roleMemberCounts, searchMembersWithoutRole, setMemberRole, shuinHistory, type MemberListQuery } from '../services/members.js';
 import { goenOf, goshuinchoOf } from '../services/shuin.js';
 import { validEmaCountOf, emaMessagesOf } from '../services/ema.js';
+import { highestRank } from '../domain/ranks.js';
+import { emaStepFrom } from '../domain/ema.js';
 import { jstDate, recentActivity } from '../services/activity.js';
 import { adminGrant, adminTake, currentMemberIds, grantJoinBonusToAll, recentCoinTx, validAdminAmount, walletOf } from '../services/economy.js';
 import { checkTarget, clearYaku, giveYaku, instantBan, isBannedByEvents, kickMember, unbanMember, writeMemo, type Actor, type Denied, type ModCtx } from '../services/moderation.js';
@@ -1050,7 +1052,9 @@ export function createWebApp(deps: WebDeps) {
     ]);
     const audits = await hideGujiAudit(db, cfg, audits0, session.userId);
     const goenRows = await specialGoenHistory(db, id);
-    const [emaCount, emaMessages] = await Promise.all([validEmaCountOf(db, id), emaMessagesOf(db, id)]);
+    // 🎐 絵馬は、その人の「次の段」の票を数える（参拝者=氏子の票／氏子=世話役の票／世話役=総代の票）
+    const emaTier = emaStepFrom(highestRank(cfg.ranks, member.roleIds)?.key)?.tier ?? 'ujiko';
+    const [emaCount, emaMessages] = await Promise.all([validEmaCountOf(db, id, undefined, emaTier), emaMessagesOf(db, id, undefined, emaTier)]);
     const names = await namesOf(db, [
       ...goenRows.flatMap((r) => [r.grantedBy, r.revokedBy ?? '']),
       ...history.received.map((r) => r.other),

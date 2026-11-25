@@ -6,7 +6,7 @@
 
 ## 新制度の絵馬（評価の票・段階的に実装中）
 
-新制度では、評価（昇格・維持）に **絵馬** という票を使います（ご縁は結びで集める別物）。土台（①）と、贈る入口＋表示（②）まで実装しました。**まだ昇格の判定には使いません**（昇格の差し替え＝③はこれから）。
+新制度では、評価（昇格・維持）に **絵馬** という票を使います（ご縁は結びで集める別物）。土台（①）・贈る入口＋表示（②）・昇格の差し替え（③スイッチ）・世話役/総代も絵馬で（⑧）まで実装しました。昇格は宮司が「🎐 絵馬での昇格」を ON にしたときだけ絵馬で決まります（既定 OFF＝従来どおり）。
 
 - **贈る入口（Discord）**：相手のプロフィール（御朱印帳）の「🎐 絵馬を贈る」ボタン。押すと一言のモーダルが出て、そえて贈る。参拝者・氏子のプロフィールにだけ出す。
   - 押せるのは氏子以上。氏子未満が押すと「氏子以上の方です」と出し、モーダルは出さない。条件を満たしていないと、いまの日数・分を添えて「足りません」と出す。
@@ -16,8 +16,9 @@
 - **表示**：もらった絵馬（匿名の一言と有効な枚数）を、Discordの御朱印帳（参拝者・氏子のときだけ）と、社務所Webのメンバーのページ（`/members/:id`・「🎐 頂いた絵馬」と「頂いた絵馬の一言」）に出す。
 - **氏子の票は30日で失効**。有効な絵馬が5枚で氏子に昇格、3枚を割ると維持の警告（自動では降格しない）。
 - **絵馬での昇格のスイッチ（宮司だけ・③）**：社務所Webの「評価」ページの上に「🎐 絵馬での昇格」があります。**はじめは OFF**＝従来どおり（ご縁40＋縁側20時間）。宮司が「切り替えてよい」にチェックして切り替えると ON になります。
-  - ON のとき：参拝者→氏子は**有効な絵馬5枚**だけで決まる（ご縁・縁側時間は見ない）。絵馬が5枚に届くと、毎分の見回りか、絵馬を贈った直後に氏子へ上げる。氏子→世話役などは今までどおり。
-  - どちらでも**自動降格はしない**。今いる氏子は据え置き（絵馬0枚でも氏子のまま）。
+  - ON のとき：昇格は**全部「絵馬」で決まる**（ご縁・縁側時間は一切見ない）。参拝者→氏子は**氏子の票5枚**、氏子→世話役は**世話役の票3枚**、世話役→総代は**総代の票3枚**（⑧）。必要枚数に届くと、毎分の見回りか、絵馬を贈った直後に上げる。
+  - **票の種類は贈る人と相手の役職で自動で決まる**（⑧）：参拝者へは氏子以上が「氏子の票」、氏子へは世話役以上＋運営が「世話役の票」（氏子どうしは維持用の「氏子の票」）、世話役へは総代＋運営が「総代の票」。**世話役の票・総代の票は失効なし**（氏子の票だけ30日で失効）。「🎐 絵馬を贈る」ボタンは参拝者・氏子・世話役のプロフィールに出る。
+  - どちらでも**自動降格はしない**。今いる人は据え置き（絵馬0枚でもそのまま）。
   - 切り替えの前の目安に、「維持の注意：有効な絵馬が3枚未満の氏子」の一覧（読み取り専用・少ない順）を出す。ここで絵馬が十分たまっているか確かめてから切り替える。
   - ON のときは、#慶事の昇格の発表とプロフィールの「氏子の条件」も絵馬の表示になる。記録は `ema.promotion_mode`。
   - **ON に切り替える＝新制度の昇格を始める瞬間**。周知のタイミングに注意（絵馬が十分たまってから）。
@@ -26,7 +27,7 @@
 - **特典のゲート：カジノを氏子から（宮司だけ・⑤）**：評価ページの「🎁 特典のゲート」で、カジノを「氏子以上だけ」に切り替える（既定OFF＝参拝者から）。ONのとき、カジノは氏子以上だけ入れる（参拝者には「氏子になると入れます」と案内）。確認チェック必須。記録は `perk.ujiko_gate`。サービスは `src/services/perkGate.ts`（`perkUjikoEnabled`/`setPerkUjiko`/`meetsUjiko`）、判定は `src/web/casino.tsx` の `casinoAllowed`。宿（宿坊・宵宮・24時間の宿など部屋代のかかる部屋）も同じスイッチで氏子以上に（参拝者がひらこうとすると部屋代の前に断る＝通話入室の宿坊は本人へDM・24時間の宿はパネルで案内。運営はそのまま）。判定は `src/discord/rooms.ts` onCreated と `src/discord/tempVoice.ts` openStay。
 - **招待の結び補填＋評価期間ののばし（新制度⑥）**：「絵馬での昇格」が ON のとき、招待した人が参拝者になると、招待主へご縁（結び）を足す（階級ごと：参拝者は5人まで各2＝上限10／氏子は10人まで各2＝上限20／世話役は全部各2／それ以外は各1）。さらに、お参り期間中の招待主は招待1人につき評価期間が+3日（招待での合計は+14日まで）。銭の招待報酬（参拝者150・氏子350）は今までどおり。記録は特別ご縁の「🤝 結び補填（招待）」。サービスは `src/services/invites.ts`（applyInvitePerks）・数字は `src/domain/invitePerks.ts`・評価期間は `src/services/applications.ts` の `extendOmairiByInvite`（`omairi.invite_ext_days`）。
 - **ご縁の節目特典（新制度⑦）**：「絵馬での昇格」が ON のとき、ご縁（出会った人の数）が節目に届いたら特典をあげる。初期は ご縁25で500銭／50で1000銭／100で2000銭／200で5000銭（1人・節目ごとに1回・毎分の見回りで渡す・DMと#記録）。称号（飾りのロール）も節目ごとに付けられる（`goenPerks` に roleId を設定したとき。いまは config の既定で銭のみ）。記録は銭の「goen_perk」と `goen_perk_claims` 表。サービスは `src/services/goenPerks.ts`・設定は `src/config.ts` の `goenPerks`。宮司は社務所Webの「評価」ページ「🎁 ご縁の節目特典」で、節目・銭・称号ロール・称号名を編集できる（1行＝「ご縁 銭 [ロールID] [称号名]」。記録 `goen.perks_edit`）。
-- 表・サービスは `src/db/schema.ts` の `ema`、`src/services/ema.ts`（`giveEma`/`checkGiveEma`/`validEmaCountOf`/`emaMessagesOf`）、昇格スイッチは `src/services/emaPromotion.ts`（`emaPromotionEnabled`/`setEmaPromotion`/`emaPromotableSanpaisha`/`ujikoBelowKeep`）、数字は `src/domain/ema.ts`。入口は `src/discord/app.ts`・`src/discord/views.ts`・`src/discord/ids.ts`、Web表示は `src/web/views/pages.tsx`、切替は `src/web/evaluation.tsx`・`src/web/views/evaluation.tsx`。
+- 表・サービスは `src/db/schema.ts` の `ema`、`src/services/ema.ts`（`giveEma`/`checkGiveEma`/`validEmaCountOf`/`emaMessagesOf`）、昇格スイッチは `src/services/emaPromotion.ts`（`emaPromotionEnabled`/`setEmaPromotion`/`emaPromotable`/`ujikoBelowKeep`）、票の種類・段・数字は `src/domain/ema.ts`（`EMA_STEPS`/`emaTierFor`/`EMA_TIER_LABEL`）。入口は `src/discord/app.ts`・`src/discord/views.ts`・`src/discord/ids.ts`、Web表示は `src/web/views/pages.tsx`、切替は `src/web/evaluation.tsx`・`src/web/views/evaluation.tsx`。
 
 ### 新制度の検証ページ（推移 → 📐 新制度の検証）
 

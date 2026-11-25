@@ -11,8 +11,10 @@ const R = '860000000000000002'; // 参拝者（相手）
 const R2 = '860000000000000003'; // 参拝者（相手2）
 const W = '860000000000000004'; // 世話役（贈れる）
 const P = '860000000000000005'; // 参拝者（贈れない）
-const SW = '860000000000000006'; // 世話役（相手にできない）
+const SW = '860000000000000006'; // 世話役（相手・総代の票をもらえる）
 const BOT = '860000000000000007'; // BOT
+const SD = '860000000000000008'; // 総代（世話役へ総代の票を贈れる）
+const GU = '860000000000000009'; // 宮司（運営）
 const now = new Date('2026-11-18T03:00:00Z');
 let db: Db, close: () => Promise<void>;
 beforeEach(async () => {
@@ -25,6 +27,8 @@ beforeEach(async () => {
     { id: P, username: 'p', displayName: '参拝者ピー', roleIds: [ROLE.sanpaisha] },
     { id: SW, username: 'sw', displayName: '世話役エス', roleIds: [ROLE.sewayaku] },
     { id: BOT, username: 'bot', displayName: 'ボット', roleIds: [ROLE.ujiko], isBot: true },
+    { id: SD, username: 'sd', displayName: '総代ソウ', roleIds: [ROLE.sodai] },
+    { id: GU, username: 'gu', displayName: '宮司グウ', roleIds: [ROLE.guji] },
   ]);
 });
 afterEach(async () => close());
@@ -64,11 +68,15 @@ it('氏子以上が、条件を満たした参拝者に絵馬を贈れる。贈�
   expect(row.createdAt.getTime()).toBe(later.getTime());
 });
 
-it('参拝者は贈れない・相手が世話役以上/自分/BOT/条件不足/退出者/運営サブも贈れない', async () => {
+it('参拝者は贈れない・相手が総代以上/世話役へは総代だけ/自分/BOT/条件不足/退出者/運営サブも贈れない', async () => {
   // 参拝者は贈れない（相手の条件以前に不可）
   expect(await giveEma(db, cfg, P, R, '', now)).toMatchObject({ ok: false, reason: 'giver_not_ujiko' });
-  // 相手が世話役以上
-  expect(await giveEma(db, cfg, G, SW, '', now)).toMatchObject({ ok: false, reason: 'receiver_rank' });
+  // 相手が総代以上（だれも贈れない）
+  expect(await giveEma(db, cfg, SD, SD, '', now)).toMatchObject({ ok: false, reason: 'self' });
+  expect(await giveEma(db, cfg, G, SD, '', now)).toMatchObject({ ok: false, reason: 'receiver_rank' });
+  // 世話役へは総代・運営だけ（氏子・世話役は贈れない）
+  expect(await giveEma(db, cfg, G, SW, '', now)).toMatchObject({ ok: false, reason: 'giver_not_sodai' });
+  expect(await giveEma(db, cfg, W, SW, '', now)).toMatchObject({ ok: false, reason: 'giver_not_sodai' });
   // 自分・BOT
   expect(await giveEma(db, cfg, G, G, '', now)).toMatchObject({ ok: false, reason: 'self' });
   expect(await giveEma(db, cfg, G, BOT, '', now)).toMatchObject({ ok: false, reason: 'bot' });
@@ -82,6 +90,24 @@ it('参拝者は贈れない・相手が世話役以上/自分/BOT/条件不足/
   await together(G, R, met);
   await db.update(members).set({ leftAt: now }).where(eq(members.id, R));
   expect(await giveEma(db, cfg, G, R, '', now)).toMatchObject({ ok: false, reason: 'left' });
+});
+
+it('票の種類は、贈る人と相手の役職で決まる（氏子→氏子は維持の氏子の票・世話役→氏子は世話役の票・総代/運営→世話役は総代の票）', async () => {
+  // 世話役 W → 氏子 G ＝ 世話役の票
+  await together(W, G, met);
+  expect(await giveEma(db, cfg, W, G, 'たよれる', now)).toMatchObject({ ok: true, tier: 'sewayaku', count: 1 });
+  // 氏子 G2 → 氏子 G ＝ 氏子の票（維持用）。世話役の票とは別に数える
+  const G2 = '860000000000000010';
+  await db.insert(members).values({ id: G2, username: 'g2', displayName: '氏子ふたり', roleIds: [ROLE.ujiko] });
+  await together(G2, G, met);
+  expect(await giveEma(db, cfg, G2, G, 'いつもありがとう', now)).toMatchObject({ ok: true, tier: 'ujiko', count: 1 });
+  expect(await validEmaCountOf(db, G, now, 'sewayaku')).toBe(1);
+  expect(await validEmaCountOf(db, G, now, 'ujiko')).toBe(1);
+  // 総代 SD → 世話役 SW ＝ 総代の票／運営（宮司）GU → 世話役 SW も総代の票
+  await together(SD, SW, met);
+  expect(await giveEma(db, cfg, SD, SW, '', now)).toMatchObject({ ok: true, tier: 'sodai', count: 1 });
+  await together(GU, SW, met);
+  expect(await giveEma(db, cfg, GU, SW, '', now)).toMatchObject({ ok: true, tier: 'sodai', count: 2 });
 });
 
 it('有効な枚数は、失効（30日超）と取り消しを除く。一言は匿名で新しい順に返す', async () => {
