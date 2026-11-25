@@ -423,6 +423,24 @@ describe('厄・BAN・キック・メモ（管理画面）', () => {
     expect(o.goenPerks).toEqual([{ goen: 30, coins: 700, label: '' }, { goen: 100, coins: 2000, roleId: '790000000000000001', label: 'ご縁上手' }]);
   });
 
+  it('🎐 絵馬の枚数の編集: 宮司だけ・保存できる・おかしな数は拒否', async () => {
+    const { loadOverrides } = await import('../src/services/settings.js');
+    const g = await login(GUJI);
+    const gcsrf = await csrfOf(g);
+    const s = await login(STAFF);
+    const scsrf = await csrfOf(s);
+    // 神職は403
+    expect((await post('/evaluation/ema-thresholds', s, { _csrf: scsrf, ujikoPromote: '5', ujikoKeep: '3', sewayakuPromote: '3', sodaiPromote: '3' })).status).toBe(403);
+    // おかしな数（0や非数）は拒否
+    expect((await post('/evaluation/ema-thresholds', g, { _csrf: gcsrf, ujikoPromote: '0', ujikoKeep: '3', sewayakuPromote: '3', sodaiPromote: '3' })).headers.get('location')).toBe('/evaluation?th=invalid');
+    // 宮司が保存
+    expect((await post('/evaluation/ema-thresholds', g, { _csrf: gcsrf, ujikoPromote: '7', ujikoKeep: '0', sewayakuPromote: '4', sodaiPromote: '2' })).headers.get('location')).toBe('/evaluation?th=saved');
+    expect((await loadOverrides(db)).emaThresholds).toEqual({ ujikoPromote: 7, ujikoKeep: 0, sewayakuPromote: 4, sodaiPromote: 2 });
+    expect((await listAudit(db, { action: 'ema.thresholds_edit' })).length).toBe(1);
+    // 評価ページに今の枚数が出る
+    expect(await (await get('/evaluation?th=saved', g)).text()).toContain('絵馬の枚数');
+  });
+
   it('🔄 ご縁のリセット: 宮司だけ・絵馬昇格ONと合言葉が要る・元に戻せる', async () => {
     const { goenOf, giveShuin } = await import('../src/services/shuin.js');
     const { setEmaPromotion } = await import('../src/services/emaPromotion.js');

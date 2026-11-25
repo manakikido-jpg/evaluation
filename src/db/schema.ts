@@ -537,6 +537,17 @@ export const goenPerkClaims = pgTable(
   (t) => [primaryKey({ columns: [t.memberId, t.goen] })],
 );
 
+/**
+ * 🎐 絵馬の維持の注意（新制度③⑧）。氏子の票が維持の枚数を割った氏子に、1回だけお知らせするための状態。
+ * - reachedKeep: これまでに維持の枚数に届いたことがあるか（届いたことがない据え置きの氏子には知らせない）。
+ * - warnedAt: 今の「割っている状態」でお知らせした時刻（枚数が戻ると null に消して、次に割ったらまた知らせる）。
+ */
+export const emaKeepWarn = pgTable('ema_keep_warn', {
+  memberId: text('member_id').primaryKey(),
+  reachedKeep: boolean('reached_keep').notNull().default(false),
+  warnedAt: timestamp('warned_at', { withTimezone: true }),
+});
+
 export const settings = pgTable('settings', {
   key: text('key').primaryKey(),
   value: jsonb('value').$type<unknown>().notNull(),

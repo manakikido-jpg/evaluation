@@ -1,3 +1,11 @@
+## 2026年11月25日：新制度の後詰め（枚数の編集UI＋維持警告DM）を実装（Claude・本番反映予定）
+- 本人「後詰めれるところある？」→ 棚卸し提示→「維持警告のDM・枚数の編集UI・ローンチ準備」を選択。まず前2つ（コードを足すだけ）を実装。
+- 枚数編集UI：config emaThresholds（ujikoPromote5/ujikoKeep3/sewayakuPromote3/sodaiPromote3）＋settings override（applyOverrides・60秒で反映）。domain/ema.ts は EMA_STEPS→emaSteps(th)・emaStepFrom(key, th)（既定 EMA_DEFAULT_THRESHOLDS）。emaPromotable/ujikoBelowKeep/card/web member/評価ページ表示が cfg.emaThresholds を見る。評価ページに「🎐 絵馬の枚数」編集（4つの number）＋POST /evaluation/ema-thresholds（宮司・CSRF・audit ema.thresholds_edit）。
+- 維持警告DM：ema ON のとき毎分 checkEmaKeep→collectEmaKeepWarnings。氏子の有効な氏子の票を一括集計し、ema_keep_warn（member_id PK・reached_keep・warned_at／移行0171）で「一度は維持枚数に届いた人が割った」ときだけ1回、本人へDM＋#記録。戻る（≥keep）と warned_at を消し再通知可。据え置き（未到達）は通知しない。keep=0 で無効。自動降格なし。
+- テスト：emaPromotion.test.ts（枚数の設定・維持DMの1回/据え置き除外/戻り）・web.test.ts（枚数編集：宮司だけ・保存・おかしな数拒否）。型チェック通過。
+- 残り：ローンチ準備（④c 呼び名・周知文/画像・宮司の当日手順）＝次。③解放（中身未定）・特別ご縁の扱いは本人の決め待ち。
+- 次：全テストを通し fetch＆merge して本番へpush。周知none（ローンチ時にまとめて）。
+
 ## 2026年11月25日：新制度⑧（絵馬で世話役・総代に自動昇格）を実装（Claude・本番反映予定）
 - 本人「８やろか」→「絵馬で自動」→たたき台提示に「いいよ」。氏子→世話役→総代も絵馬で自動に。
 - たたき台（確定）：世話役の票（世話役以上＋運営→氏子・3枚）／総代の票（総代＋運営→世話役・3枚）。氏子の票は従来どおり（氏子以上→参拝者5枚・氏子→氏子は維持用）。世話役・総代の票は失効なし。票の種類は贈る人と相手の役職で自動決定。

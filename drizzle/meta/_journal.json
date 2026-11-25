@@ -1198,6 +1198,13 @@
       "when": 1795602691271,
       "tag": "0170_deep_speedball",
       "breakpoints": true
+    },
+    {
+      "idx": 171,
+      "version": "7",
+      "when": 1795608326692,
+      "tag": "0171_motionless_grey_gargoyle",
+      "breakpoints": true
     }
   ]
 }

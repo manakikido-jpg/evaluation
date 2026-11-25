@@ -1,9 +1,13 @@
 import { afterEach, beforeEach, expect, it } from 'vitest';
+import { and, eq } from 'drizzle-orm';
 import type { Db } from '../src/db/client.js';
 import { ema, memberAlts, members } from '../src/db/schema.js';
-import { emaPromotionEnabled, setEmaPromotion, emaPromotable, ujikoBelowKeep } from '../src/services/emaPromotion.js';
+import { emaPromotionEnabled, setEmaPromotion, emaPromotable, ujikoBelowKeep, collectEmaKeepWarnings } from '../src/services/emaPromotion.js';
 import { EMA_EXPIRE_DAYS, type EmaTier } from '../src/domain/ema.js';
 import { cfg, makeDb, ROLE } from './helpers.js';
+import type { GuildConfig } from '../src/config.js';
+
+const withThresholds = (patch: Partial<GuildConfig['emaThresholds']>): GuildConfig => ({ ...cfg, emaThresholds: { ...cfg.emaThresholds, ...patch } });
 
 const SA = '870000000000000001'; // 参拝者
 const SA2 = '870000000000000002'; // 参拝者
@@ -77,4 +81,42 @@ it('維持の注意：有効な氏子の票3枚未満の氏子を、少ない順
   await seedEma(UJ2, 3); // 3枚ちょうど＝注意なし
   // SA（参拝者）は絵馬0枚だが、氏子ではないので対象外
   expect(await ujikoBelowKeep(db, cfg, now)).toEqual([{ id: UJ, count: 2 }]);
+});
+
+it('枚数の設定は宮司が変えられる（世話役の票2枚で候補・維持0枚で注意なし）', async () => {
+  await seedEma(UJ, 2, false, 'sewayaku'); // 既定(3)では足りないが…
+  expect(await emaPromotable(db, cfg, now)).toEqual([]);
+  expect(await emaPromotable(db, withThresholds({ sewayakuPromote: 2 }), now)).toEqual([UJ]); // 2に下げると候補
+  // UJ2 は氏子で氏子の票0枚。維持0なら注意なし
+  expect(await ujikoBelowKeep(db, withThresholds({ ujikoKeep: 0 }), now)).toEqual([]);
+});
+
+/** receiver の氏子の票をちょうど n 枚にする（それまでの氏子の票は消す） */
+async function setUjikoVotes(receiverId: string, n: number) {
+  await db.delete(ema).where(and(eq(ema.receiverId, receiverId), eq(ema.tier, 'ujiko')));
+  if (n > 0) await db.insert(ema).values(Array.from({ length: n }, (_, i) => ({ giverId: String(4800000000000000000n + BigInt(i)), receiverId, tier: 'ujiko' as const, message: '', createdAt: now, revokedAt: null })));
+}
+
+it('維持の注意DM：一度は届いた氏子が割ったら1回だけ・据え置き0枚は知らせない・戻ると消える', async () => {
+  // UJ：4枚（健全）→ 2枚（割る）→ 2枚のまま → 3枚（戻る）→ 1枚（また割る）
+  await setUjikoVotes(UJ, 4);
+  expect(await collectEmaKeepWarnings(db, cfg, now)).toEqual([]); // 健全：知らせない（到達済みを記録）
+  await setUjikoVotes(UJ, 2);
+  expect(await collectEmaKeepWarnings(db, cfg, now)).toEqual([{ id: UJ, count: 2 }]); // 割った → 1回知らせる
+  expect(await collectEmaKeepWarnings(db, cfg, now)).toEqual([]); // もう知らせない（二度は出さない）
+  // UJ2：0枚のまま据え置き（一度も届いていない）→ 知らせない
+  await setUjikoVotes(UJ2, 0);
+  expect(await collectEmaKeepWarnings(db, cfg, now)).toEqual([]);
+  // UJ：戻すと注意が消え、また割ると改めて知らせる
+  await setUjikoVotes(UJ, 3);
+  expect(await collectEmaKeepWarnings(db, cfg, now)).toEqual([]); // 戻った：知らせない（記録を消す）
+  await setUjikoVotes(UJ, 1);
+  expect(await collectEmaKeepWarnings(db, cfg, now)).toEqual([{ id: UJ, count: 1 }]); // また割った → 改めて知らせる
+});
+
+it('維持の注意DM：維持0枚なら誰にも知らせない', async () => {
+  await setUjikoVotes(UJ, 4);
+  await collectEmaKeepWarnings(db, cfg, now); // 到達済みにしておく
+  await setUjikoVotes(UJ, 0);
+  expect(await collectEmaKeepWarnings(db, withThresholds({ ujikoKeep: 0 }), now)).toEqual([]);
 });

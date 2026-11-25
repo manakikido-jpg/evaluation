@@ -8,7 +8,7 @@ import { emaPromotionEnabled, setEmaPromotion, ujikoBelowKeep } from '../service
 import { resetAllShuin, undoAllShuinReset, lastAllShuinReset } from '../services/shuin.js';
 import { perkUjikoEnabled, setPerkUjiko } from '../services/perkGate.js';
 import { loadOverrides, saveOverrides } from '../services/settings.js';
-import { goenPerkSchema, type GoenPerk } from '../config.js';
+import { goenPerkSchema, emaThresholdsSchema, type GoenPerk } from '../config.js';
 import { namesOf } from '../services/members.js';
 
 /** テキスト（1行＝「ご縁 銭 [ロールID] [称号名]」）→ ご縁の節目特典。おかしな行があれば null */
@@ -60,7 +60,7 @@ export function mountEvaluation(app: Hono<Env>, db: Db, cfg: () => GuildConfig, 
       const names = keepWarnings.length ? await namesOf(db, keepWarnings.map((w) => w.id)) : new Map<string, string>();
       const resetUndoable = session.level === 'guji' ? await lastAllShuinReset(db) : undefined;
       const perkUjiko = await perkUjikoEnabled(db);
-      return c.html(<EvaluationPage session={session} data={data} filter={filter} page={page} emaPromotion={emaPromotion} keepWarnings={keepWarnings} names={names} saved={c.req.query('ema') ?? undefined} resetFlash={c.req.query('reset') ?? undefined} resetUndoable={resetUndoable} perkUjiko={perkUjiko} perkFlash={c.req.query('perk') ?? undefined} goenPerksText={goenPerksToText(cfg().goenPerks)} goenPerksFlash={c.req.query('gp') ?? undefined}/>);
+      return c.html(<EvaluationPage session={session} data={data} filter={filter} page={page} emaPromotion={emaPromotion} keepWarnings={keepWarnings} names={names} saved={c.req.query('ema') ?? undefined} resetFlash={c.req.query('reset') ?? undefined} resetUndoable={resetUndoable} perkUjiko={perkUjiko} perkFlash={c.req.query('perk') ?? undefined} goenPerksText={goenPerksToText(cfg().goenPerks)} goenPerksFlash={c.req.query('gp') ?? undefined} emaThresholds={cfg().emaThresholds} emaThresholdsFlash={c.req.query('th') ?? undefined}/>);
     } catch (error) {
       if (!(error instanceof EvaluationSelectionError)) throw error;
       return c.text(error.message, 400);
@@ -121,6 +121,24 @@ export function mountEvaluation(app: Hono<Env>, db: Db, cfg: () => GuildConfig, 
     await saveOverrides(db, { ...(await loadOverrides(db)), goenPerks: perks }, session.userId);
     await audit(db, { actorId: session.userId, action: 'goen.perks_edit', detail: { count: perks.length }, via: 'web' });
     return c.redirect('/evaluation?gp=saved', 303);
+  });
+  // 🎐 絵馬の昇格・維持に要る枚数の編集（宮司だけ・新制度③⑧）
+  app.post('/evaluation/ema-thresholds', async (c) => {
+    c.header('Cache-Control', 'private, no-store');
+    const session = c.get('session');
+    if (session.level !== 'guji') return c.text('絵馬の枚数の編集は宮司だけです。', 403);
+    const body = await c.req.parseBody();
+    const num = (name: string) => (typeof body[name] === 'string' && /^\d{1,3}$/.test(body[name] as string) ? Number(body[name]) : NaN);
+    const parsed = emaThresholdsSchema.safeParse({
+      ujikoPromote: num('ujikoPromote'),
+      ujikoKeep: num('ujikoKeep'),
+      sewayakuPromote: num('sewayakuPromote'),
+      sodaiPromote: num('sodaiPromote'),
+    });
+    if (!parsed.success) return c.redirect('/evaluation?th=invalid', 303);
+    await saveOverrides(db, { ...(await loadOverrides(db)), emaThresholds: parsed.data }, session.userId);
+    await audit(db, { actorId: session.userId, action: 'ema.thresholds_edit', detail: parsed.data, via: 'web' });
+    return c.redirect('/evaluation?th=saved', 303);
   });
   app.post('/evaluation/goen-reset-undo', async (c) => {
     c.header('Cache-Control', 'private, no-store');

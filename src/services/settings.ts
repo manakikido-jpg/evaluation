@@ -1,7 +1,7 @@
 import { otoshidamaSchema, fortuneGamesSchema, recordingSchema } from '../config.js';
 import { z } from 'zod';
 import { setStyleCatalog } from './casino/styles.js';
-import { emaCounterSchema, casinoGachaSchema, CASINO_GAMES, CASINO_GAMES_V1, casinoSchema, omikujiSpecialSchema, omikujiTextsSchema, notifySchema, streakRewardSchema, goenPerkSchema, coreTimeSchema, economyOpsSchema, opsWatchSchema, guildConfigSchema, rankSchema, marketSchema, roomsSchema, bellSchema, gachaSchema, voiceChatSchema, voiceGroupSchema, voiceCounterSchema, webAccessEntrySchema, type GuildConfig } from '../config.js';
+import { emaCounterSchema, casinoGachaSchema, CASINO_GAMES, CASINO_GAMES_V1, casinoSchema, omikujiSpecialSchema, omikujiTextsSchema, notifySchema, streakRewardSchema, goenPerkSchema, emaThresholdsSchema, coreTimeSchema, economyOpsSchema, opsWatchSchema, guildConfigSchema, rankSchema, marketSchema, roomsSchema, bellSchema, gachaSchema, voiceChatSchema, voiceGroupSchema, voiceCounterSchema, webAccessEntrySchema, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { settings } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
@@ -82,6 +82,8 @@ export const overridesSchema = z.object({
   omikujiStreak: z.object({ rewards: z.array(streakRewardSchema).max(5) }).partial().default({}),
   /** 🎁 ご縁の節目特典（新制度⑦） */
   goenPerks: z.array(goenPerkSchema).max(30).optional(),
+  /** 🎐 絵馬の昇格・維持に要る枚数（新制度③⑧・送られたときは全部置きかえる） */
+  emaThresholds: emaThresholdsSchema.optional(),
   /** 🎴 運営吉（送られたときは全部置きかえる） */
   omikujiSpecial: omikujiSpecialSchema.optional(),
   /** ⛩ おみくじの文と紙（送られたときは全部置きかえる） */
@@ -183,6 +185,7 @@ export function applyOverrides(base: GuildConfig, o: Overrides): GuildConfig {
     })(),
     omikujiStreak: { ...base.omikujiStreak, ...o.omikujiStreak },
     goenPerks: o.goenPerks ?? base.goenPerks,
+    emaThresholds: o.emaThresholds ?? base.emaThresholds,
     omikujiSpecial: o.omikujiSpecial ?? base.omikujiSpecial,
     omikujiTexts: o.omikujiTexts ?? base.omikujiTexts,
     notify: { ...base.notify, ...o.notify },

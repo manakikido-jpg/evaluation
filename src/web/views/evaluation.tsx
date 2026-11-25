@@ -3,6 +3,7 @@ import type { AdminSession } from '../../db/schema.js';
 import type { EvaluationData, EvaluationFilter } from '../../services/ujikoEvaluation.js';
 import { fmtMinutes } from '../../services/voiceUsage.js';
 import { UJIKO_RATING_ITEMS } from '../../services/ujikoRating.js';
+import { EMA_DEFAULT_THRESHOLDS, type EmaThresholdCounts } from '../../domain/ema.js';
 import { Layout } from './layout.js';
 
 export function evaluationQuery(filter: EvaluationFilter, selectedIds: string[], page?: number): string {
@@ -12,34 +13,35 @@ export function evaluationQuery(filter: EvaluationFilter, selectedIds: string[],
   return query.toString();
 }
 
-export function EvaluationPage({ session, data, filter, page, emaPromotion = false, keepWarnings = [], names, saved, resetFlash, resetUndoable, perkUjiko = false, perkFlash, goenPerksText = '', goenPerksFlash }: {
+export function EvaluationPage({ session, data, filter, page, emaPromotion = false, keepWarnings = [], names, saved, resetFlash, resetUndoable, perkUjiko = false, perkFlash, goenPerksText = '', goenPerksFlash, emaThresholds = EMA_DEFAULT_THRESHOLDS, emaThresholdsFlash }: {
   session: AdminSession; data: EvaluationData; filter: EvaluationFilter; page: number;
   emaPromotion?: boolean; keepWarnings?: { id: string; count: number }[]; names?: Map<string, string>; saved?: string;
   resetFlash?: string; resetUndoable?: { at: Date; remaining: number; specialRemaining: number };
   perkUjiko?: boolean; perkFlash?: string;
   goenPerksText?: string; goenPerksFlash?: string;
+  emaThresholds?: EmaThresholdCounts; emaThresholdsFlash?: string;
 }) {
   const pageSize = 100, pages = Math.max(1, Math.ceil(data.rows.length / pageSize));
   const current = Math.min(page, pages), rows = data.rows.slice((current - 1) * pageSize, current * pageSize);
   const nameOf = (id: string) => names?.get(id) ?? id;
   return <Layout title="評価" nav="evaluation" session={session} wide>
     <div class="evaluation-page"><h1>氏子への評価</h1>
-    {saved === 'on' && <p class="flash ok" role="status">🎐 絵馬での昇格に切り替えました。これからは参拝者は有効な絵馬5枚で氏子になります。</p>}
+    {saved === 'on' && <p class="flash ok" role="status">🎐 絵馬での昇格に切り替えました。これからは参拝者は有効な絵馬{emaThresholds.ujikoPromote}枚で氏子になります。</p>}
     {saved === 'off' && <p class="flash ok" role="status">従来（ご縁40＋縁側20時間）に戻しました。</p>}
     {saved === 'confirm' && <p class="flash warn" role="alert">「切り替えてよい」にチェックを入れてから押してください。</p>}
     {session.level === 'guji' && <section class="card">
-      <h2>🎐 絵馬での昇格（新制度③）</h2>
+      <h2>🎐 絵馬での昇格（新制度③・⑧）</h2>
       <p>いまの昇格のきまり：{emaPromotion
-        ? <strong>絵馬で昇格（参拝者は有効な絵馬5枚で氏子）</strong>
-        : <strong>従来どおり（下の ご縁40＋縁側20時間）</strong>}。どちらでも自動降格はせず、今いる氏子は据え置きです。</p>
+        ? <strong>絵馬で昇格（参拝者は有効な絵馬{emaThresholds.ujikoPromote}枚で氏子・氏子以降も絵馬で）</strong>
+        : <strong>従来どおり（下の ご縁40＋縁側20時間）</strong>}。どちらでも自動降格はせず、今いる人は据え置きです。</p>
       <form method="post" action="/evaluation/ema-promotion" class="ema-promotion-form">
         <input type="hidden" name="_csrf" value={session.csrfToken}/>
         <input type="hidden" name="on" value={emaPromotion ? '0' : '1'}/>
         <label><input type="checkbox" name="confirm" value="yes"/> 切り替えてよい</label>
-        <button type="submit">{emaPromotion ? '従来（ご縁40＋縁側20時間）に戻す' : '絵馬5枚での昇格に切り替える'}</button>
+        <button type="submit">{emaPromotion ? '従来（ご縁40＋縁側20時間）に戻す' : `絵馬${emaThresholds.ujikoPromote}枚での昇格に切り替える`}</button>
       </form>
-      <p class="note">絵馬での昇格に切り替えると、参拝者→氏子は<strong>有効な絵馬5枚</strong>だけで決まり、ご縁・縁側時間は使いません（氏子→世話役などは今までどおり）。切り替える前に、絵馬が十分にたまっているか下の「維持の注意」で確かめてください。</p>
-      <details><summary>維持の注意：有効な絵馬が3枚未満の氏子（{keepWarnings.length} 人）</summary>
+      <p class="note">絵馬での昇格に切り替えると、昇格は全部<strong>絵馬</strong>で決まり、ご縁・縁側時間は使いません（参拝者→氏子は氏子の票{emaThresholds.ujikoPromote}枚／氏子→世話役は世話役の票{emaThresholds.sewayakuPromote}枚／世話役→総代は総代の票{emaThresholds.sodaiPromote}枚）。枚数は下の「絵馬の枚数」で変えられます。切り替える前に、絵馬が十分にたまっているか下の「維持の注意」で確かめてください。</p>
+      <details><summary>維持の注意：有効な絵馬が{emaThresholds.ujikoKeep}枚未満の氏子（{keepWarnings.length} 人）</summary>
         <p class="note">自動では降格しません。運営が手で判断するための一覧です（絵馬の少ない順）。</p>
         {keepWarnings.length
           ? <ul>{keepWarnings.slice(0, 100).map((w) => <li><a href={'/members/' + w.id}>{nameOf(w.id)}</a> … 絵馬 {w.count} 枚</li>)}{keepWarnings.length > 100 && <li>ほか {keepWarnings.length - 100} 人</li>}</ul>
@@ -96,6 +98,21 @@ export function EvaluationPage({ session, data, filter, page, emaPromotion = fal
         <button type="submit">ご縁の節目特典を保存</button>
       </form>
       <p class="note">例：「25 500」＝ご縁25で500銭。「100 2000 123456789012345678 ご縁上手」＝ご縁100で2000銭＋そのロール（称号）を付ける。ロールIDと称号名は省けます。銭だけなら「ご縁 銭」。ロールは宮司がロールのIDを入れたときだけ付きます。</p>
+    </section>}
+    {session.level === 'guji' && <section class="card">
+      <h2>🎐 絵馬の枚数（新制度③・⑧）</h2>
+      {emaThresholdsFlash === 'saved' && <p class="flash ok" role="status">絵馬の枚数を保存しました。</p>}
+      {emaThresholdsFlash === 'invalid' && <p class="flash warn" role="alert">1〜100 の数で入れてください（維持は0でもかまいません）。</p>}
+      <p>昇格・維持に要る絵馬（票）の枚数です。「🎐 絵馬での昇格」が ON のときに効きます。変えると次の見回り（1分ほど）から新しい枚数で判定します。</p>
+      <form method="post" action="/evaluation/ema-thresholds" class="ema-thresholds-form">
+        <input type="hidden" name="_csrf" value={session.csrfToken}/>
+        <label>参拝者→氏子（氏子の票）<input type="number" name="ujikoPromote" min={1} max={100} value={emaThresholds.ujikoPromote}/></label>
+        <label>氏子の維持（これ未満で注意・0で注意なし）<input type="number" name="ujikoKeep" min={0} max={100} value={emaThresholds.ujikoKeep}/></label>
+        <label>氏子→世話役（世話役の票）<input type="number" name="sewayakuPromote" min={1} max={100} value={emaThresholds.sewayakuPromote}/></label>
+        <label>世話役→総代（総代の票）<input type="number" name="sodaiPromote" min={1} max={100} value={emaThresholds.sodaiPromote}/></label>
+        <button type="submit">絵馬の枚数を保存</button>
+      </form>
+      <p class="note">票の種類は贈る人と相手の役職で自動で決まります（氏子へは世話役以上＋運営が「世話役の票」、世話役へは総代＋運営が「総代の票」）。世話役の票・総代の票は失効しません（氏子の票だけ30日で失効）。自動降格はしません。</p>
     </section>}
     <section class="card">
       <h2>ご縁40 ＋ 縁側の合計20時間</h2><p><strong>参拝者時間の計測開始：{EVALUATION_START_LABEL}から</strong><br/>ミュート除外に対応した反映後の分は、マイク・スピーカーの両方が非ミュートと確認できた時間だけを加算します。過去分は控除後の合計を使います。</p>

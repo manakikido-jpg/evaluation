@@ -40,7 +40,7 @@ import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { currentAutoRank, decidePromotion, highestRank, voiceCapPercentOf, voicePercentOf, type Promotion } from '../domain/ranks.js';
 import { emaStepFrom, EMA_TIER_LABEL } from '../domain/ema.js';
-import { emaPromotable, emaPromotionEnabled } from '../services/emaPromotion.js';
+import { collectEmaKeepWarnings, emaPromotable, emaPromotionEnabled } from '../services/emaPromotion.js';
 import { grantGoenPerks } from '../services/goenPerks.js';
 import { KeyedLock } from '../lib/lock.js';
 import { logger } from '../lib/logger.js';
@@ -297,6 +297,7 @@ export class ShuinApp {
     await recordPresence(this.db, presence, now).catch((err) => logger.warn({ err }, 'voice presence record failed'));
     await this.checkEvaluationPromotions(guild, now).catch(err => logger.warn({ err }, 'evaluation promotion check failed'));
     await this.checkGoenPerks(guild, now).catch(err => logger.warn({ err }, 'goen perk check failed'));
+    await this.checkEmaKeep(guild, now).catch(err => logger.warn({ err }, 'ema keep check failed'));
     await awardLongVoiceBonuses(this.db, this.cfg, now).catch(err => logger.warn({ err }, 'long voice bonus tick failed'));
     await notifyLongVoiceBonuses(this.db, this.cfg, { sendMessage: async (channelId, body) => {
       const ch = await this.client.channels.fetch(channelId);
@@ -547,7 +548,7 @@ export class ShuinApp {
     // 残高は、自分の御朱印帳を自分だけに見えるように開いたときだけ（ほかの人の残高は見せない）
     const showCoins = interaction.user.id === ownerId && !isPublic;
     // 🎐 絵馬は、その人の「次の段」の票を数える（参拝者=氏子の票／氏子=世話役の票／世話役=総代の票）
-    const ownerStep = emaStepFrom(highestRank(this.cfg.ranks, owner.roles.cache.keys())?.key);
+    const ownerStep = emaStepFrom(highestRank(this.cfg.ranks, owner.roles.cache.keys())?.key, this.cfg.emaThresholds);
     const emaTier = ownerStep?.tier ?? 'ujiko';
     const [data, wallet, tickets, emaCount, emaMessages, emaMode] = await Promise.all([
       goshuinchoOf(this.db, ownerId),
@@ -666,6 +667,31 @@ export class ShuinApp {
     } finally { this.checkingGoenPerks = false; }
   }
 
+  private checkingEmaKeep = false;
+  /**
+   * 🎐 維持の注意（新制度③⑧）: 絵馬での昇格が ON のときだけ。
+   * 氏子の票が維持の枚数を割った氏子（一度は届いたことがある人）へ、本人にやさしくDM＋運営へ記録を、1回ずつ。
+   * 自動降格はしない。据え置きで0枚のままの氏子には知らせない。
+   */
+  async checkEmaKeep(guild: Guild, now = new Date()): Promise<void> {
+    if (guild.id !== this.cfg.guildId || this.checkingEmaKeep) return;
+    if (!(await emaPromotionEnabled(this.db))) return;
+    this.checkingEmaKeep = true;
+    try {
+      const keep = this.cfg.emaThresholds.ujikoKeep;
+      for (const w of await collectEmaKeepWarnings(this.db, this.cfg, now)) {
+        await this.client.users
+          .fetch(w.id)
+          .then((u) => u.send({
+            content: `🎐 絵馬（氏子の票）が今 **${w.count} 枚**になりました。氏子でい続けるには **${keep} 枚**あると安心です。また通話でいっしょになった方から絵馬をいただけます。（すぐに降格になるわけではありません）`,
+            allowedMentions: { parse: [] as never[] },
+          }))
+          .catch(() => undefined);
+        await this.log(`🎐 維持の注意 <@${w.id}>（氏子の票 ${w.count} 枚・維持 ${keep} 枚）— 本人へお知らせしました（自動降格はしません）。`);
+      }
+    } finally { this.checkingEmaKeep = false; }
+  }
+
   private checkingEvaluationPromotions = false;
   /** 時間が最後の条件だった人も、追加の朱印操作なしで昇格を確かめる。 */
   async checkEvaluationPromotions(guild: Guild, now = new Date()): Promise<void> {
@@ -703,14 +729,14 @@ export class ShuinApp {
   private async emaPromote(member: GuildMember, now = new Date()): Promise<void> {
     if (member.user.bot) return;
     // まずキャッシュの役職で「段があり、必要枚数に届いている」かを安く確かめる（毎回の force 取得を避ける）
-    const cachedStep = emaStepFrom(highestRank(this.cfg.ranks, member.roles.cache.keys())?.key);
+    const cachedStep = emaStepFrom(highestRank(this.cfg.ranks, member.roles.cache.keys())?.key, this.cfg.emaThresholds);
     if (!cachedStep) return;
     if ((await validEmaCountOf(this.db, member.id, now, cachedStep.tier)) < cachedStep.promote) return;
     // 昇格しそうなときだけ、最新の役職を取り直して二重昇格を防ぐ
     const fresh = await member.guild.members.fetch({ user: member.id, force: true }).catch(() => undefined);
     if (!fresh || fresh.user.bot) return;
     // 段は「いちばん格の高い役職」で決める（最上位が運営なら昇格させない）
-    const step = emaStepFrom(highestRank(this.cfg.ranks, fresh.roles.cache.keys())?.key);
+    const step = emaStepFrom(highestRank(this.cfg.ranks, fresh.roles.cache.keys())?.key, this.cfg.emaThresholds);
     const current = currentAutoRank(this.cfg.ranks, fresh.roles.cache.keys());
     if (!step || !current || current.key !== step.from) return;
     const to = this.cfg.ranks.find((r) => r.key === step.to);

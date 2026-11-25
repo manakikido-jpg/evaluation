@@ -1053,7 +1053,7 @@ export function createWebApp(deps: WebDeps) {
     const audits = await hideGujiAudit(db, cfg, audits0, session.userId);
     const goenRows = await specialGoenHistory(db, id);
     // 🎐 絵馬は、その人の「次の段」の票を数える（参拝者=氏子の票／氏子=世話役の票／世話役=総代の票）
-    const emaTier = emaStepFrom(highestRank(cfg.ranks, member.roleIds)?.key)?.tier ?? 'ujiko';
+    const emaTier = emaStepFrom(highestRank(cfg.ranks, member.roleIds)?.key, cfg.emaThresholds)?.tier ?? 'ujiko';
     const [emaCount, emaMessages] = await Promise.all([validEmaCountOf(db, id, undefined, emaTier), emaMessagesOf(db, id, undefined, emaTier)]);
     const names = await namesOf(db, [
       ...goenRows.flatMap((r) => [r.grantedBy, r.revokedBy ?? '']),

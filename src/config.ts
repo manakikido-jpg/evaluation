@@ -364,6 +364,20 @@ export const goenPerksSchema = z
     { goen: 100, coins: 2000, label: '' },
     { goen: 200, coins: 5000, label: '' },
   ]);
+/** 🎐 絵馬での昇格・維持に要る票の枚数（新制度③⑧。たたき台の既定値。宮司が社務所Webで変えられる） */
+export const emaThresholdsSchema = z
+  .object({
+    /** 参拝者→氏子に要る「氏子の票」 */
+    ujikoPromote: z.number().int().min(1).max(100).default(5),
+    /** これを割ると維持の注意（0なら注意なし・自動降格はしない） */
+    ujikoKeep: z.number().int().min(0).max(100).default(3),
+    /** 氏子→世話役に要る「世話役の票」 */
+    sewayakuPromote: z.number().int().min(1).max(100).default(3),
+    /** 世話役→総代に要る「総代の票」 */
+    sodaiPromote: z.number().int().min(1).max(100).default(3),
+  });
+export type EmaThresholds = z.infer<typeof emaThresholdsSchema>;
+
 export type OmikujiStreakConfig = z.infer<typeof omikujiStreakSchema>;
 
 /** 🎴 運営吉（おみくじでまれに出る、運営の特別な運勢）。絵は社務所Web で入れる（omikuji-1〜4） */
@@ -842,6 +856,8 @@ export const guildConfigSchema = z
     omikujiStreak: omikujiStreakSchema.default(omikujiStreakSchema.parse({})),
     /** 🎁 ご縁の節目特典（新制度⑦。絵馬での昇格が ON のときだけ効く） */
     goenPerks: goenPerksSchema,
+    /** 🎐 絵馬での昇格・維持に要る票の枚数（新制度③⑧） */
+    emaThresholds: emaThresholdsSchema.default(emaThresholdsSchema.parse({})),
     omikujiSpecial: omikujiSpecialSchema.default(omikujiSpecialSchema.parse({})),
     omikujiTexts: omikujiTextsSchema.default(omikujiTextsSchema.parse({})),
     notify: notifySchema.default({}),

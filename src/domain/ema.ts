@@ -65,15 +65,34 @@ export interface EmaStep {
   promote: number;
 }
 
-export const EMA_STEPS: readonly EmaStep[] = [
-  { from: 'sanpaisha', to: 'ujiko', tier: 'ujiko', promote: EMA_UJIKO_PROMOTE },
-  { from: 'ujiko', to: 'sewayaku', tier: 'sewayaku', promote: EMA_SEWAYAKU_PROMOTE },
-  { from: 'sewayaku', to: 'sodai', tier: 'sodai', promote: EMA_SODAI_PROMOTE },
-];
+/** 絵馬の昇格・維持に要る票の枚数（宮司が社務所Webで変えられる。config.emaThresholds と同じ形） */
+export interface EmaThresholdCounts {
+  ujikoPromote: number;
+  ujikoKeep: number;
+  sewayakuPromote: number;
+  sodaiPromote: number;
+}
+
+/** 既定の枚数（たたき台）。設定がないときのフォールバック。 */
+export const EMA_DEFAULT_THRESHOLDS: EmaThresholdCounts = {
+  ujikoPromote: EMA_UJIKO_PROMOTE,
+  ujikoKeep: EMA_UJIKO_KEEP,
+  sewayakuPromote: EMA_SEWAYAKU_PROMOTE,
+  sodaiPromote: EMA_SODAI_PROMOTE,
+};
+
+/** 枚数の設定から、絵馬の昇格の段を作る。 */
+export function emaSteps(th: EmaThresholdCounts = EMA_DEFAULT_THRESHOLDS): EmaStep[] {
+  return [
+    { from: 'sanpaisha', to: 'ujiko', tier: 'ujiko', promote: th.ujikoPromote },
+    { from: 'ujiko', to: 'sewayaku', tier: 'sewayaku', promote: th.sewayakuPromote },
+    { from: 'sewayaku', to: 'sodai', tier: 'sodai', promote: th.sodaiPromote },
+  ];
+}
 
 /** その役職 key から見た、次の絵馬の段（なければ undefined＝これ以上は絵馬で上がらない） */
-export function emaStepFrom(key: string | undefined): EmaStep | undefined {
-  return key ? EMA_STEPS.find((s) => s.from === key) : undefined;
+export function emaStepFrom(key: string | undefined, th: EmaThresholdCounts = EMA_DEFAULT_THRESHOLDS): EmaStep | undefined {
+  return key ? emaSteps(th).find((s) => s.from === key) : undefined;
 }
 
 /**
