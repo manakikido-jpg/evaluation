@@ -23,6 +23,7 @@
   - **ON に切り替える＝新制度の昇格を始める瞬間**。周知のタイミングに注意（絵馬が十分たまってから）。
 - **ご縁のリセット（宮司だけ・④）**：評価ページの「🔄 ご縁のリセット」で、新制度を始めるときに**全員のご縁（結び＝朱印）と ✨ 特別ご縁をいっせいに 0 に戻す**（みんな同じところから結び直す）。役職は変えない（自動降格なし・今いる氏子は据え置き）。「🎐 絵馬での昇格」が ON のときだけ押せる（ご縁を0にしても昇格が止まらないように）。確認のため「リセット」と入力＋チェックが必要。押した直後なら「元に戻す」で戻せる。記録は `shuin.reset_all`・`shuin.reset_all_undo`。サービスは `src/services/shuin.ts` の `resetAllShuin`/`undoAllShuinReset`/`lastAllShuinReset`。
 - **結びのコレクション（本人向け・④）**：自分のプロフィール（御朱印帳）に「🧵 結びのコレクション ◯/◯人」が出る。「🧵 まだ結んでいない人」ボタンで、まだ結んでいない人（最近きた順）をえらんでその場で結べる。サービスは `src/services/shuin.ts` の `metCollection`。
+- **特典のゲート：カジノを氏子から（宮司だけ・⑤）**：評価ページの「🎁 特典のゲート」で、カジノを「氏子以上だけ」に切り替える（既定OFF＝参拝者から）。ONのとき、カジノは氏子以上だけ入れる（参拝者には「氏子になると入れます」と案内）。確認チェック必須。記録は `perk.ujiko_gate`。サービスは `src/services/perkGate.ts`（`perkUjikoEnabled`/`setPerkUjiko`/`meetsUjiko`）、判定は `src/web/casino.tsx` の `casinoAllowed`。宿（宿坊など部屋代のかかる部屋）を氏子からにする分は準備中。
 - 表・サービスは `src/db/schema.ts` の `ema`、`src/services/ema.ts`（`giveEma`/`checkGiveEma`/`validEmaCountOf`/`emaMessagesOf`）、昇格スイッチは `src/services/emaPromotion.ts`（`emaPromotionEnabled`/`setEmaPromotion`/`emaPromotableSanpaisha`/`ujikoBelowKeep`）、数字は `src/domain/ema.ts`。入口は `src/discord/app.ts`・`src/discord/views.ts`・`src/discord/ids.ts`、Web表示は `src/web/views/pages.tsx`、切替は `src/web/evaluation.tsx`・`src/web/views/evaluation.tsx`。
 
 ### 新制度の検証ページ（推移 → 📐 新制度の検証）

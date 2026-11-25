@@ -1,3 +1,10 @@
+## 2026年11月25日：新制度⑤（カジノを氏子から・スイッチ付き）カジノ分を実装（Claude・本番反映予定）
+- 「Aでいこう」で④cは保留、⑤へ。⑤もスイッチ付き（既定OFF）。
+- 実装：services/perkGate.ts（perk_ujiko フラグ＋meetsUjiko）。web/casino.tsx casinoAllowed に ujikoOnly（requireRank かつ accessRoleId 未設定のとき氏子以上）、current/login/callback で perkUjikoEnabled を読む。案内 no_ujiko（views/casino.tsx）。評価ページに宮司だけのスイッチ＋POST /evaluation/perk-ujiko（CSRF・confirm・audit perk.ujiko_gate）。
+- テスト：perkGate 3（フラグ・meetsUjiko・casinoAllowed）、web 1（宮司だけ・confirm・記録）。型チェック・該当テスト通過。
+- 残り：宿の氏子ゲート（宿坊＝tempVoice の VC 入室→onCreated／24時間宿＝パネル支払い／宵宮。複数経路・UX要検討）。カジノと同じ perk_ujiko フラグを見る形にする予定。
+- 次：型チェック・全テストを通し fetch＆merge して本番へpush（カジノ分）。周知none。
+
 ## 2026年11月24日：新制度④b（結びのコレクション表示）を実装（Claude・本番反映予定）
 - 御朱印帳（本人向けDiscord）に「🧵 結びのコレクション ◯/◯人」＋「まだ結んでいない人」ボタンを追加。えらぶとその場で結べる（SHUIN_PICK_ONE→give に合流）。
 - services/shuin.ts metCollection（在籍・非BOT・自分以外から、未取消で朱印した相手を引いた未結びを最近活動順24人まで）。discord: ids.ts に unmet、views.ts にコレクション欄＋unmetButton、app.ts card で self のとき metCollection を渡す・unmetPick ハンドラ。

@@ -12,10 +12,11 @@ export function evaluationQuery(filter: EvaluationFilter, selectedIds: string[],
   return query.toString();
 }
 
-export function EvaluationPage({ session, data, filter, page, emaPromotion = false, keepWarnings = [], names, saved, resetFlash, resetUndoable }: {
+export function EvaluationPage({ session, data, filter, page, emaPromotion = false, keepWarnings = [], names, saved, resetFlash, resetUndoable, perkUjiko = false, perkFlash }: {
   session: AdminSession; data: EvaluationData; filter: EvaluationFilter; page: number;
   emaPromotion?: boolean; keepWarnings?: { id: string; count: number }[]; names?: Map<string, string>; saved?: string;
   resetFlash?: string; resetUndoable?: { at: Date; remaining: number; specialRemaining: number };
+  perkUjiko?: boolean; perkFlash?: string;
 }) {
   const pageSize = 100, pages = Math.max(1, Math.ceil(data.rows.length / pageSize));
   const current = Math.min(page, pages), rows = data.rows.slice((current - 1) * pageSize, current * pageSize);
@@ -64,6 +65,22 @@ export function EvaluationPage({ session, data, filter, page, emaPromotion = fal
         <label><input type="checkbox" name="confirm" value="yes"/> 全員のご縁と特別ご縁を 0 に戻してよい</label>
         <button type="submit">全員のご縁をリセットして新制度を始める</button>
       </form>
+    </section>}
+    {session.level === 'guji' && <section class="card">
+      <h2>🎁 特典のゲート：カジノ・宿を氏子から（新制度⑤）</h2>
+      {perkFlash === 'on' && <p class="flash ok" role="status">🍃 カジノ・宿を「氏子以上だけ」にしました。</p>}
+      {perkFlash === 'off' && <p class="flash ok" role="status">カジノ・宿を「参拝者から」（今までどおり）に戻しました。</p>}
+      {perkFlash === 'confirm' && <p class="flash warn" role="alert">「切り替えてよい」にチェックを入れてから押してください。</p>}
+      <p>いまのきまり：{perkUjiko
+        ? <strong>氏子以上だけ（カジノ・宿）</strong>
+        : <strong>参拝者から（今までどおり）</strong>}。</p>
+      <form method="post" action="/evaluation/perk-ujiko" class="perk-ujiko-form">
+        <input type="hidden" name="_csrf" value={session.csrfToken}/>
+        <input type="hidden" name="on" value={perkUjiko ? '0' : '1'}/>
+        <label><input type="checkbox" name="confirm" value="yes"/> 切り替えてよい</label>
+        <button type="submit">{perkUjiko ? '参拝者から（今までどおり）に戻す' : 'カジノ・宿を氏子以上だけにする'}</button>
+      </form>
+      <p class="note">ONにすると、カジノは氏子以上の方だけが入れます（参拝者は「氏子になると入れます」と案内）。宿（宿坊など部屋代のかかる部屋）を氏子からにする分は準備中です。</p>
     </section>}
     <section class="card">
       <h2>ご縁40 ＋ 縁側の合計20時間</h2><p><strong>参拝者時間の計測開始：{EVALUATION_START_LABEL}から</strong><br/>ミュート除外に対応した反映後の分は、マイク・スピーカーの両方が非ミュートと確認できた時間だけを加算します。過去分は控除後の合計を使います。</p>

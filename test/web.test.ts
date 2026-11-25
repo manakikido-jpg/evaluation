@@ -390,6 +390,23 @@ describe('厄・BAN・キック・メモ（管理画面）', () => {
     expect(await emaPromotionEnabled(db)).toBe(false);
   });
 
+  it('🎁 特典のゲート（カジノ・宿を氏子から）の切り替え: 宮司だけ・確認が要る・記録に残る', async () => {
+    const { perkUjikoEnabled } = await import('../src/services/perkGate.js');
+    const g = await login(GUJI);
+    const gcsrf = await csrfOf(g);
+    const s = await login(STAFF);
+    const scsrf = await csrfOf(s);
+    expect((await post('/evaluation/perk-ujiko', s, { _csrf: scsrf, on: '1', confirm: 'yes' })).status).toBe(403);
+    expect((await post('/evaluation/perk-ujiko', g, { _csrf: gcsrf, on: '1' })).headers.get('location')).toBe('/evaluation?perk=confirm');
+    expect(await perkUjikoEnabled(db)).toBe(false);
+    expect((await post('/evaluation/perk-ujiko', g, { _csrf: gcsrf, on: '1', confirm: 'yes' })).headers.get('location')).toBe('/evaluation?perk=on');
+    expect(await perkUjikoEnabled(db)).toBe(true);
+    expect((await listAudit(db, { action: 'perk.ujiko_gate' })).length).toBe(1);
+    expect(await (await get('/evaluation?perk=on', g)).text()).toContain('特典のゲート');
+    expect((await post('/evaluation/perk-ujiko', g, { _csrf: gcsrf, on: '0', confirm: 'yes' })).headers.get('location')).toBe('/evaluation?perk=off');
+    expect(await perkUjikoEnabled(db)).toBe(false);
+  });
+
   it('🔄 ご縁のリセット: 宮司だけ・絵馬昇格ONと合言葉が要る・元に戻せる', async () => {
     const { goenOf, giveShuin } = await import('../src/services/shuin.js');
     const { setEmaPromotion } = await import('../src/services/emaPromotion.js');

@@ -69,6 +69,7 @@ import { eq } from 'drizzle-orm';
 import { members } from '../db/schema.js';
 import type { DiscordApi } from './discordApi.js';
 import { createMemberSession, deleteMemberSession, findMemberSession, markMemberChecked, MEMBER_RECHECK_MS, MEMBER_SESSION_DAYS } from './memberSessions.js';
+import { meetsUjiko, perkUjikoEnabled } from '../services/perkGate.js';
 import { randomToken, safeEqual } from './sessions.js';
 import {
   BaccaratPage,
@@ -143,11 +144,17 @@ const STATE = 'sakura_casino_state';
 type Deps = { db: Db; api: DiscordApi; cfg: () => GuildConfig; baseUrl: string; secure: boolean; now: () => Date };
 type Me = CasinoMe;
 
-/** 位のロールがあるか（requireRank を止めていれば、サーバーにいればよい） */
-export const casinoAllowed = (cfg: GuildConfig, roles: string[]) =>
-  cfg.casino.accessRoleId ? roles.includes(cfg.casino.accessRoleId) : !cfg.casino.requireRank || cfg.ranks.some((r) => roles.includes(r.roleId));
-/** 入れなかったときの案内（カジノのロールか、位のロールか） */
-const deniedCode = (cfg: GuildConfig) => (cfg.casino.accessRoleId ? 'no_role' : 'no_rank');
+/** 位のロールがあるか（requireRank を止めていれば、サーバーにいればよい）。ujikoOnly なら氏子以上だけ（新制度⑤） */
+export const casinoAllowed = (cfg: GuildConfig, roles: string[], ujikoOnly = false) =>
+  cfg.casino.accessRoleId
+    ? roles.includes(cfg.casino.accessRoleId)
+    : !cfg.casino.requireRank
+      ? true
+      : ujikoOnly
+        ? meetsUjiko(cfg, roles)
+        : cfg.ranks.some((r) => roles.includes(r.roleId));
+/** 入れなかったときの案内（カジノのロールか、位のロールか、氏子以上か） */
+const deniedCode = (cfg: GuildConfig, ujikoOnly = false) => (cfg.casino.accessRoleId ? 'no_role' : ujikoOnly ? 'no_ujiko' : 'no_rank');
 
 const SOLO: CasinoGame[] = ['blackjack', 'highlow', 'baccarat', 'slots', 'roulette', 'chinchiro', 'othello'];
 
@@ -175,10 +182,11 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
         roles = undefined;
       }
       if (roles !== undefined) {
-        if (!roles || !casinoAllowed(d.cfg(), roles)) {
+        const ujikoOnly = await perkUjikoEnabled(db);
+        if (!roles || !casinoAllowed(d.cfg(), roles, ujikoOnly)) {
           await deleteMemberSession(db, session.id);
           deleteCookie(c, COOKIE, { path: '/casino' });
-          return { error: roles ? deniedCode(d.cfg()) : 'not_member' };
+          return { error: roles ? deniedCode(d.cfg(), ujikoOnly) : 'not_member' };
         }
         await markMemberChecked(db, session.id, d.now());
       }
@@ -414,7 +422,8 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
       return c.redirect('/casino?e=failed');
     }
     if (!roles) return c.redirect('/casino?e=not_member');
-    if (!casinoAllowed(d.cfg(), roles)) return c.redirect(`/casino?e=${deniedCode(d.cfg())}`);
+    const ujikoOnly = await perkUjikoEnabled(db);
+    if (!casinoAllowed(d.cfg(), roles, ujikoOnly)) return c.redirect(`/casino?e=${deniedCode(d.cfg(), ujikoOnly)}`);
     const token = await createMemberSession(db, { id: user.id, username: user.displayName, displayName: user.displayName, avatarUrl: user.avatarUrl }, d.now());
     setCookie(c, COOKIE, token, { httpOnly: true, secure: d.secure, sameSite: 'Lax', path: '/casino', maxAge: MEMBER_SESSION_DAYS * 86_400 });
     await audit(db, { actorId: user.id, action: 'casino.login', detail: { via: 'link' }, via: 'web' });
@@ -437,7 +446,8 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
       return c.redirect('/casino?e=failed');
     }
     if (!roles) return c.redirect('/casino?e=not_member');
-    if (!casinoAllowed(d.cfg(), roles)) return c.redirect(`/casino?e=${deniedCode(d.cfg())}`);
+    const ujikoOnly = await perkUjikoEnabled(db);
+    if (!casinoAllowed(d.cfg(), roles, ujikoOnly)) return c.redirect(`/casino?e=${deniedCode(d.cfg(), ujikoOnly)}`);
     const token = await createMemberSession(db, user, d.now());
     setCookie(c, COOKIE, token, { httpOnly: true, secure: d.secure, sameSite: 'Lax', path: '/casino', maxAge: MEMBER_SESSION_DAYS * 86_400 });
     await audit(db, { actorId: user.id, action: 'casino.login', via: 'web' });

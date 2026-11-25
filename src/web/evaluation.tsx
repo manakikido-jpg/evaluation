@@ -6,6 +6,7 @@ import { evaluationCsv, EvaluationSelectionError, ujikoEvaluation, type Evaluati
 import { ujikoRatingRows, ujikoRatingXlsx } from '../services/ujikoRating.js';
 import { emaPromotionEnabled, setEmaPromotion, ujikoBelowKeep } from '../services/emaPromotion.js';
 import { resetAllShuin, undoAllShuinReset, lastAllShuinReset } from '../services/shuin.js';
+import { perkUjikoEnabled, setPerkUjiko } from '../services/perkGate.js';
 import { namesOf } from '../services/members.js';
 import { audit } from '../services/audit.js';
 import { evaluationDeductionPage,saveEvaluationDeduction,EvaluationDeductionError } from '../services/evaluationDeductions.js';
@@ -32,7 +33,8 @@ export function mountEvaluation(app: Hono<Env>, db: Db, cfg: () => GuildConfig, 
       const keepWarnings = session.level === 'guji' ? await ujikoBelowKeep(db, cfg(), now()) : [];
       const names = keepWarnings.length ? await namesOf(db, keepWarnings.map((w) => w.id)) : new Map<string, string>();
       const resetUndoable = session.level === 'guji' ? await lastAllShuinReset(db) : undefined;
-      return c.html(<EvaluationPage session={session} data={data} filter={filter} page={page} emaPromotion={emaPromotion} keepWarnings={keepWarnings} names={names} saved={c.req.query('ema') ?? undefined} resetFlash={c.req.query('reset') ?? undefined} resetUndoable={resetUndoable}/>);
+      const perkUjiko = await perkUjikoEnabled(db);
+      return c.html(<EvaluationPage session={session} data={data} filter={filter} page={page} emaPromotion={emaPromotion} keepWarnings={keepWarnings} names={names} saved={c.req.query('ema') ?? undefined} resetFlash={c.req.query('reset') ?? undefined} resetUndoable={resetUndoable} perkUjiko={perkUjiko} perkFlash={c.req.query('perk') ?? undefined}/>);
     } catch (error) {
       if (!(error instanceof EvaluationSelectionError)) throw error;
       return c.text(error.message, 400);
@@ -88,6 +90,18 @@ export function mountEvaluation(app: Hono<Env>, db: Db, cfg: () => GuildConfig, 
     if (session.level !== 'guji') return c.text('ご縁のリセットは宮司だけが操作できます。', 403);
     const r = await undoAllShuinReset(db, session.userId);
     return c.redirect(`/evaluation?reset=${r.status === 'ok' ? 'undone' : 'none'}`, 303);
+  });
+  // 🎁 特典のゲート（新制度⑤）：カジノ・宿を「氏子から」に切り替える（宮司だけ・確認必須）
+  app.post('/evaluation/perk-ujiko', async (c) => {
+    c.header('Cache-Control', 'private, no-store');
+    const session = c.get('session');
+    if (session.level !== 'guji') return c.text('特典のゲートの切り替えは宮司だけが操作できます。', 403);
+    const body = await c.req.parseBody();
+    if (body.confirm !== 'yes') return c.redirect('/evaluation?perk=confirm', 303);
+    const on = body.on === '1';
+    await setPerkUjiko(db, on, session.userId);
+    await audit(db, { actorId: session.userId, action: 'perk.ujiko_gate', detail: { on }, via: 'web' });
+    return c.redirect(`/evaluation?perk=${on ? 'on' : 'off'}`, 303);
   });
   // 🍃 今いる氏子を 5 段階で評価するシート（エクセル）。宮司だけが取り出せる
   app.get('/evaluation/rating-sheet.xlsx', async (c) => {
