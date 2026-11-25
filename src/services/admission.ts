@@ -24,6 +24,7 @@ import { CONTACT_KINDS, isContactLevel, setContact, type ContactLevel } from './
 import { notifyOf, notifyReady, setNotify } from './notify.js';
 import { checkTarget, SYSTEM, type Actor, type ModCtx } from './moderation.js';
 import { appendFromStaff, getSoudan, senderOf, setSoudanStatus } from './soudan.js';
+import { emaPromotionEnabled } from './emaPromotion.js';
 
 /**
  * 入鯖申請・宵参り申請・お参り期間・年齢区分・相談の返信。
@@ -379,7 +380,11 @@ export async function checkOmairi(ctx: ModCtx, now = new Date()): Promise<{ prom
     const ext = ctx.cfg.omairi.extendDays;
     if (o.extendedCount === 0 && ext > 0) {
       await extendOmairi(ctx.db, o.memberId, ext, now);
-      await ctx.discord.sendDm(o.memberId, [SIGN, `お参り期間を ${ext} 日延長しました。引き続き、ご縁を結んでいってください。`].join('\n'));
+      // 🎐 絵馬での昇格が ON のときは、氏子への道は「絵馬」なので、そう案内する
+      const how = (await emaPromotionEnabled(ctx.db))
+        ? `引き続き、通話でいっしょに過ごしてください。氏子以上の方から絵馬（氏子の票）を ${ctx.cfg.emaThresholds.ujikoPromote} 枚もらうと氏子になれます。`
+        : '引き続き、ご縁を結んでいってください。';
+      await ctx.discord.sendDm(o.memberId, [SIGN, `お参り期間を ${ext} 日延長しました。${how}`].join('\n'));
       out.extended.push(o.memberId);
       continue;
     }

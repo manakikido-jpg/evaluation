@@ -56,6 +56,45 @@ describe('🔄 新制度の切替：全員のご縁リセット', () => {
     expect(await lastAllShuinReset(db)).toBeUndefined();
     expect(await undoAllShuinReset(db, 'guji')).toEqual({ status: 'none' });
   });
+
+  it('リセットで「新制度の開始」の印が立ち、元に戻すと消える', async () => {
+    const { resetAllShuin, undoAllShuinReset, newSystemStartedAt } = await import('../src/services/shuin.js');
+    await giveShuin(db, { giverId: A, receiverId: B, weight: 1, giverRank: 'sanpaisha' });
+    expect(await newSystemStartedAt(db)).toBeUndefined();
+    const at = new Date('2026-12-01T03:00:00Z');
+    await resetAllShuin(db, 'guji', at);
+    expect((await newSystemStartedAt(db))?.getTime()).toBe(at.getTime());
+    await undoAllShuinReset(db, 'guji');
+    expect(await newSystemStartedAt(db)).toBeUndefined(); // 旧ご縁が戻ったので印も消える
+  });
+});
+
+describe('🧵 新制度の結び（④リセットのあと）', () => {
+  it('重みは参拝者1・氏子1・世話役2（総代以上も2）。リセット前は旧御朱印の格の重み', async () => {
+    const { resetAllShuin } = await import('../src/services/shuin.js');
+    // リセット前：氏子は格の重み 2
+    expect(await giveFlow(db, cfg, member(A, ROLE.ujiko), member(B, ROLE.sanpaisha))).toMatchObject({ kind: 'given', weight: 2 });
+    await resetAllShuin(db, 'guji');
+    // リセット後：結びの重み（氏子1・世話役2・参拝者1・総代2）
+    expect(await giveFlow(db, cfg, member(A, ROLE.ujiko), member(B, ROLE.sanpaisha))).toMatchObject({ kind: 'given', weight: 1, goen: 1 });
+    expect(await giveFlow(db, cfg, member(C, ROLE.sewayaku), member(B, ROLE.sanpaisha))).toMatchObject({ kind: 'given', weight: 2, goen: 3 });
+    const D = '200000000000000004', E = '200000000000000005';
+    expect(await giveFlow(db, cfg, member(D, ROLE.sanpaisha), member(B, ROLE.sanpaisha))).toMatchObject({ kind: 'given', weight: 1, goen: 4 });
+    expect(await giveFlow(db, cfg, member(E, ROLE.sodai), member(B, ROLE.sanpaisha))).toMatchObject({ kind: 'given', weight: 2, goen: 6 });
+  });
+
+  it('同じ相手には1回きり：昇格しても押し直しで差額は足さない（取り消したものは結び直せる）', async () => {
+    const { resetAllShuin } = await import('../src/services/shuin.js');
+    await resetAllShuin(db, 'guji');
+    expect(await giveFlow(db, cfg, member(A, ROLE.sanpaisha), member(B, ROLE.sanpaisha))).toMatchObject({ kind: 'given', weight: 1, goen: 1 });
+    // A が世話役に上がってから、もう一度押しても「もう結んだ」（差額なし）
+    expect(await giveFlow(db, cfg, member(A, ROLE.sewayaku), member(B, ROLE.sanpaisha))).toMatchObject({ kind: 'already', weight: 1, goen: 1 });
+    // 取り消したら、今の階級の重みで結び直せる
+    await revokeFlow(db, A, B);
+    expect(await giveFlow(db, cfg, member(A, ROLE.sewayaku), member(B, ROLE.sanpaisha))).toMatchObject({ kind: 'given', weight: 2, goen: 2 });
+    // 通話の一覧の ✅：結びは取り消していなければ「結んだ」（今の格に関係なく）
+    expect(await stampedBy(db, A, [B], 0)).toEqual(new Set([B]));
+  });
 });
 
 describe('朱印を押す', () => {

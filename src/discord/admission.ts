@@ -65,6 +65,8 @@ import { isNotifyLevel, notifyReady, setNotify, type NotifyLevel } from '../serv
 import type { Actor, ModCtx } from '../services/moderation.js';
 import { appendFromSender, createSoudan, setSoudanCard } from '../services/soudan.js';
 import { goshuinchoOf } from '../services/shuin.js';
+import { emaPromotionEnabled } from '../services/emaPromotion.js';
+import { validEmaCountOf } from '../services/ema.js';
 import { coreName } from '../lib/names.js';
 import { inviteOf } from '../services/invites.js';
 import { introBackfillDone, markIntroBackfill, recordIntro } from '../services/intros.js';
@@ -695,15 +697,20 @@ export class AdmissionApp {
     const ch = await this.client.channels.fetch(channelId).catch(() => null);
     if (!ch?.isSendable()) return;
     const first = this.cfg.ranks.filter((x) => x.auto).sort((a, b) => a.requiredGoen - b.requiredGoen)[1];
+    // 🎐 絵馬での昇格が ON のときは、判定の目安を「氏子の票の枚数」で出す（ご縁は昇格に使わないため）
+    const emaOn = await emaPromotionEnabled(this.db);
     for (const memberId of r.review) {
-      const [m, card] = await Promise.all([getMember(this.db, memberId), goshuinchoOf(this.db, memberId)]);
+      const [m, card, emaCount] = await Promise.all([getMember(this.db, memberId), goshuinchoOf(this.db, memberId), emaOn ? validEmaCountOf(this.db, memberId, now) : Promise.resolve(0)]);
+      const progress = emaOn
+        ? `🎐 絵馬（氏子の票） ${emaCount} / ${this.cfg.emaThresholds.ujikoPromote} 枚 ・ ご縁 ${card.goen}`
+        : `ご縁 ${card.goen}${first ? ` / ${first.requiredGoen}` : ''}`;
       const embed = new EmbedBuilder()
         .setColor(SHU)
         .setTitle('お参り期間の判定')
         .setDescription(
           [
             `${mention(memberId)}（${m?.displayName ?? memberId}）`,
-            `ご縁 ${card.goen}${first ? ` / ${first.requiredGoen}` : ''} ・ 朱印をくれた人 ${card.receivedCount} 人`,
+            `${progress} ・ 朱印をくれた人 ${card.receivedCount} 人`,
             m?.lastActiveAt ? `最後の活動 ${ts(m.lastActiveAt)}` : '最後の活動 記録なし',
           ].join('\n'),
         );

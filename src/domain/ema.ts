@@ -37,6 +37,12 @@ export const EMA_SEWAYAKU_PROMOTE = 3;
 /** 世話役→総代に必要な「総代の票」の枚数（たたき台） */
 export const EMA_SODAI_PROMOTE = 3;
 
+/**
+ * 1回の見回りでこの人数を超えて昇格するときは「いっぺんに上がった」とみなし、
+ * 1人ずつの発表には役職の通知を付けず、まとめて1回だけ通知する（切り替えた直後の通知の連打を防ぐ）。
+ */
+export const EMA_PROMOTION_BURST = 3;
+
 /** 一言メッセージの最大文字数 */
 export const EMA_MESSAGE_MAX = 100;
 

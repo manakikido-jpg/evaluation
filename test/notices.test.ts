@@ -118,6 +118,20 @@ describe('差し込み', () => {
     expect(r.unknown).toEqual([]);
   });
 
+  it('🎐 新制度の差し込み：絵馬での上がり方・結びの重み・枚数（宮司が変えた枚数に合わせる）', () => {
+    const r = renderNotice('{役職一覧（絵馬）}\n{絵馬の昇格}\n氏子{氏子の絵馬}・世話役{世話役の絵馬}・総代{総代の絵馬}・維持{維持の絵馬}', cfg, CHANNELS);
+    expect(r.unknown).toEqual([]);
+    expect(r.text).toContain('**氏子** … 絵馬（氏子の票）5 枚 ・ 結び 1');
+    expect(r.text).toContain('**世話役** … 絵馬（世話役の票）3 枚 ・ 結び 2');
+    expect(r.text).toContain('**総代** … 絵馬（総代の票）3 枚 ・ 結び 2');
+    expect(r.text).toContain('**参拝者** … 入ったとき ・ 結び 1');
+    expect(r.text).toContain('参拝者→氏子は氏子の票 5 枚／氏子→世話役は世話役の票 3 枚／世話役→総代は総代の票 3 枚');
+    expect(r.text).toContain('氏子5・世話役3・総代3・維持3');
+    // 枚数を変えると差し込みも変わる
+    const changed = renderNotice('{氏子の絵馬}/{世話役の絵馬}', { ...cfg, emaThresholds: { ...cfg.emaThresholds, ujikoPromote: 7, sewayakuPromote: 4 } }, CHANNELS);
+    expect(changed.text).toBe('7/4');
+  });
+
   it('プレビューではリンクの代わりに #名前 を出す。同じ名前ならテキストチャンネルを選ぶ', () => {
     expect(renderNotice('{#しきたり} {#宵宮}', cfg, CHANNELS, { forPreview: true }).text).toBe('#しきたり #宵宮');
     expect(renderNotice('{#宵宮}', cfg, CHANNELS).text).toBe(`<#${CH.yoimiya}>`);

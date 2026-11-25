@@ -38,4 +38,9 @@ it('氏子の条件に届いたら「達成」、まだなら残りを出す', (
   const zero = { total: 0, engawa: 0 };
   expect(voiceTimeView('a', { today: zero, week: zero, month: zero, all: zero, evaluation: 1200 }).embeds[0]!.description).toContain('（達成）');
   expect(voiceTimeView('a', { today: zero, week: zero, month: zero, all: zero, evaluation: 1140 }).embeds[0]!.description).toContain('（あと 1時間0分）');
+  // 🎐 絵馬での昇格が ON：縁側の時間は氏子の条件ではないので、条件の行を出さずに絵馬で決まると案内する
+  const ema = voiceTimeView('a', { today: zero, week: zero, month: zero, all: zero, evaluation: 1140 }, true).embeds[0]!.description;
+  expect(ema).toContain('絵馬');
+  expect(ema).not.toContain('氏子の条件に数える縁側の時間');
+  expect(ema).not.toContain('あと 1時間0分');
 });

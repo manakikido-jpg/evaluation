@@ -135,6 +135,24 @@ export async function giveEma(
   return { ok: true, created, count: total, days, minutes, tier };
 }
 
+/**
+ * 運営（宮司）が見る、その人が受け取った絵馬の一覧（取り消していないもの・全部の種類・新しい順）。
+ * 取り消しに要る giverId と tier を返すが、画面には贈った人の名前を出さない（メンバーには匿名のまま）。
+ * valid は、いま票として数えられているか（氏子の票は30日で失効）。
+ */
+export async function emaEntriesOf(db: Db, receiverId: string, now = new Date()): Promise<{ giverId: string; tier: EmaTier; message: string; createdAt: Date; valid: boolean }[]> {
+  const rows = await db
+    .select({ giverId: ema.giverId, tier: ema.tier, message: ema.message, createdAt: ema.createdAt })
+    .from(ema)
+    .where(and(eq(ema.receiverId, receiverId), isNull(ema.revokedAt)))
+    .orderBy(desc(ema.createdAt));
+  const fresh = emaFreshSince(now);
+  return rows.map((r) => {
+    const tier = r.tier as EmaTier;
+    return { ...r, tier, valid: !emaTierExpires(tier) || r.createdAt >= fresh };
+  });
+}
+
 /** 絵馬を取り消す（運営用）。あれば true。 */
 export async function revokeEma(db: Db, giverId: string, receiverId: string, now = new Date(), tier: EmaTier = 'ujiko'): Promise<boolean> {
   const res = await db

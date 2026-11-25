@@ -1,7 +1,7 @@
 import { isRestrictedAccount as isStaffAlt } from './staffAlts.js';
 import { and, count, desc, eq, gte, inArray, isNotNull, isNull, sql, sum } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
-import { auditLogs as auditLog, members, shuin, specialGoen } from '../db/schema.js';
+import { auditLogs as auditLog, members, settings, shuin, specialGoen } from '../db/schema.js';
 import { audit } from './audit.js';
 import { specialGoenOf } from './specialGoen.js';
 
@@ -27,6 +27,8 @@ export async function goenOf(db: Db, userId: string): Promise<number> {
 export async function giveShuin(
   db: Db,
   input: { giverId: string; receiverId: string; weight: number; giverRank: string },
+  /** once: 新制度の結び＝同じ相手には1回きり（昇格しても押し直しで差額を足さない。取り消したものは結び直せる） */
+  opts: { once?: boolean } = {},
 ): Promise<GiveResult> {
   if (input.giverId === input.receiverId) throw new Error('自分には朱印を押せません');
   // 🕶 運営のサブアカウントは、朱印を押せない・押されない
@@ -38,7 +40,8 @@ export async function giveShuin(
     }
     const [previous] = await tx.select({ weight: shuin.weight, revokedAt: shuin.revokedAt }).from(shuin)
       .where(and(eq(shuin.giverId, input.giverId), eq(shuin.receiverId, input.receiverId))).for('update');
-    if (previous && (previous.revokedAt !== null || input.weight > previous.weight)) {
+    // 取り消したものは結び直せる。旧御朱印は格が上がったら差額を足す（新制度の結びは1回きりで足さない）
+    if (previous && (previous.revokedAt !== null || (!opts.once && input.weight > previous.weight))) {
       await tx.update(shuin).set({ weight: input.weight, giverRank: input.giverRank, createdAt: sql`now()`, revokedAt: null })
         .where(and(eq(shuin.giverId, input.giverId), eq(shuin.receiverId, input.receiverId)));
       const addedGoen = input.weight - (previous.revokedAt === null ? previous.weight : 0);
@@ -191,9 +194,27 @@ export async function resetAllShuin(db: Db, by: string, now = new Date()): Promi
     const specials = await tx.update(specialGoen).set({ revokedAt: at, revokedBy: by }).where(isNull(specialGoen.revokedAt)).returning({ memberId: specialGoen.memberId });
     const members = new Set([...rows.map((r) => r.receiverId), ...specials.map((s) => s.memberId)]);
     const result = { members: members.size, count: rows.length, special: specials.length, at };
+    // 🌸 新制度が本当に始まった印（ご縁が新制度のものだけになった）。節目特典などはこの印があるときだけ動く
+    await tx
+      .insert(settings)
+      .values({ key: NEW_SYSTEM_KEY, value: { at: at.toISOString() }, updatedBy: by })
+      .onConflictDoUpdate({ target: settings.key, set: { value: { at: at.toISOString() }, updatedBy: by, updatedAt: at } });
     await audit(tx as Db, { actorId: by, action: 'shuin.reset_all', detail: { at: at.toISOString(), members: result.members, count: result.count, special: result.special }, via: 'web' });
     return result;
   });
+}
+
+/** 新制度の開始の印（ご縁のリセットで立ち、元に戻すで消える） */
+const NEW_SYSTEM_KEY = 'new_system_started';
+
+/**
+ * 🌸 新制度が本当に始まったか（④ご縁のリセットが済んで、元に戻されていない）。始まった時刻を返す。
+ * ご縁を使う特典（⑦の節目特典など）は、旧制度のご縁で動かないよう、これが立ってから動かす。
+ */
+export async function newSystemStartedAt(db: Db): Promise<Date | undefined> {
+  const [row] = await db.select().from(settings).where(eq(settings.key, NEW_SYSTEM_KEY));
+  const at = (row?.value as { at?: string } | undefined)?.at;
+  return at ? new Date(at) : undefined;
 }
 
 /** いちばん新しい全員リセット（まだ元に戻せるもの）。取り消したままの朱印・特別ご縁の数を返す */
@@ -215,6 +236,8 @@ export async function undoAllShuinReset(db: Db, by: string): Promise<{ status: '
   return db.transaction(async (tx) => {
     const rows = await tx.update(shuin).set({ revokedAt: null }).where(eq(shuin.revokedAt, last.at)).returning({ giverId: shuin.giverId });
     const specials = await tx.update(specialGoen).set({ revokedAt: null, revokedBy: null }).where(eq(specialGoen.revokedAt, last.at)).returning({ id: specialGoen.id });
+    // 元に戻した＝旧制度のご縁が戻ったので、新制度の開始の印も消す（節目特典を旧ご縁で動かさない）
+    await tx.delete(settings).where(eq(settings.key, NEW_SYSTEM_KEY));
     await audit(tx as Db, { actorId: by, action: 'shuin.reset_all_undo', detail: { at: last.at.toISOString(), count: rows.length, special: specials.length }, via: 'web' });
     return { status: 'ok' as const, count: rows.length, special: specials.length };
   });

@@ -1,8 +1,9 @@
 import type { GuildConfig, Rank } from '../config.js';
 import type { Db } from '../db/client.js';
 import { decidePromotion, highestRank, type Promotion } from '../domain/ranks.js';
+import { musubiWeight } from '../domain/musubi.js';
 import { addCoins } from './economy.js';
-import { giveShuin, revokeShuin } from './shuin.js';
+import { giveShuin, newSystemStartedAt, revokeShuin } from './shuin.js';
 
 /**
  * Discord に依存しない「朱印を押す／取り消す」の手順。
@@ -41,14 +42,17 @@ export async function giveFlow(
   if (!giverRank) return { kind: 'denied', reason: 'giver_no_rank' };
   if (!highestRank(cfg.ranks, receiver.roleIds)) return { kind: 'denied', reason: 'receiver_no_rank' };
 
+  // 🧵 新制度のご縁の時代（④リセットのあと）は「結び」：重みは参拝者1/氏子1/世話役2・同じ相手には1回きり。
+  // それまでは旧御朱印のまま（格の重み・昇格後の押し直しで差額）。
+  const musubi = Boolean(await newSystemStartedAt(db));
   // 朱印と通貨を一緒に記録する（途中で失敗したら、どちらも残さない）
   const res = await db.transaction(async (tx) => {
     const r = await giveShuin(tx, {
       giverId: giver.id,
       receiverId: receiver.id,
-      weight: giverRank.weight,
+      weight: musubi ? musubiWeight(giverRank.key) : giverRank.weight,
       giverRank: giverRank.key,
-    });
+    }, { once: musubi });
     // 通貨は同じ相手とは最初の 1 回だけ（取り消して押し直しても増えない）
     if (r.status === 'given' && !r.restamped) {
       const detail = { giverId: giver.id, receiverId: receiver.id };

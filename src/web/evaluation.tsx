@@ -135,7 +135,8 @@ export function mountEvaluation(app: Hono<Env>, db: Db, cfg: () => GuildConfig, 
       sewayakuPromote: num('sewayakuPromote'),
       sodaiPromote: num('sodaiPromote'),
     });
-    if (!parsed.success) return c.redirect('/evaluation?th=invalid', 303);
+    // 維持が昇格より多いと、氏子に上がった瞬間から「維持不足」になってしまうので断る
+    if (!parsed.success || parsed.data.ujikoKeep > parsed.data.ujikoPromote) return c.redirect('/evaluation?th=invalid', 303);
     await saveOverrides(db, { ...(await loadOverrides(db)), emaThresholds: parsed.data }, session.userId);
     await audit(db, { actorId: session.userId, action: 'ema.thresholds_edit', detail: parsed.data, via: 'web' });
     return c.redirect('/evaluation?th=saved', 303);

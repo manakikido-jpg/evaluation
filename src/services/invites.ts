@@ -11,6 +11,7 @@ import { addCoins } from './economy.js';
 import { audit } from './audit.js';
 import { emaPromotionEnabled } from './emaPromotion.js';
 import { grantSpecialGoen } from './specialGoen.js';
+import { newSystemStartedAt } from './shuin.js';
 import { extendOmairiByInvite } from './applications.js';
 import { inviteGoenTier, INVITE_OMAIRI_EXT_CAP_DAYS, INVITE_OMAIRI_EXT_DAYS } from '../domain/invitePerks.js';
 
@@ -24,10 +25,11 @@ async function applyInvitePerks(ctx: RewardContext, inviterId: string, inviteeId
   if (!(await emaPromotionEnabled(ctx.db))) return;
   const [inviter] = await ctx.db.select().from(members).where(eq(members.id, inviterId));
   if (!inviter || inviter.leftAt || inviter.isBot) return;
-  // 結び補填：階級ごとの 1 人あたりのご縁と上限人数
+  // 結び補填：階級ごとの 1 人あたりのご縁と上限人数。
+  // ご縁を足すので、④ご縁のリセットが済んでから（リセット前に足すとリセットで消え、1回きりの印だけ残ってしまう）
   const tier = inviteGoenTier(ctx.cfg.ranks, inviter.roleIds);
   const [{ n } = { n: 0 }] = await ctx.db.select({ n: count() }).from(specialGoen).where(and(eq(specialGoen.memberId, inviterId), eq(specialGoen.reason, INVITE_GOEN_REASON), isNull(specialGoen.revokedAt)));
-  if (Number(n) < tier.cap) {
+  if (Number(n) < tier.cap && (await newSystemStartedAt(ctx.db))) {
     await grantSpecialGoen(ctx.db, { memberId: inviterId, amount: tier.amount, reason: INVITE_GOEN_REASON, by: 'system', nonce: `invite_goen:${inviterId}:${inviteeId}` }).catch((err) => logger.warn({ err, inviterId, inviteeId }, 'invite goen grant failed'));
   }
   // 評価期間の延長（お参り中の参拝者だけ・招待での合計は上限まで）

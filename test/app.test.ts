@@ -670,19 +670,49 @@ describe('ShuinApp：絵馬を贈る（新制度②）', () => {
     expect([...members.get(SA)!.roles.cache.keys()]).not.toContain(ROLE.ujiko);
   });
 
-  it('🎁 ご縁の節目特典：絵馬での昇格がONのとき節目でもらえる・OFFなら渡さない', async () => {
+  it('🌸 いっぺんに4人以上が上がるときは、1人ずつのカードに通知を付けず、まとめて1回だけ通知する', async () => {
     const { setEmaPromotion } = await import('../src/services/emaPromotion.js');
+    const { recordJoin } = await import('../src/services/members.js');
+    const { ema } = await import('../src/db/schema.js');
+    await setEmaPromotion(db, true, 'guji');
+    const ids = ['400000000000000071', '400000000000000072', '400000000000000073', '400000000000000074'];
+    for (const [k, id] of ids.entries()) {
+      await recordJoin(db, { id, username: `b${k}`, displayName: `b${k}`, avatarUrl: null, roleIds: [ROLE.sanpaisha], isBot: false, joinedAt: new Date() });
+      add(id, ROLE.sanpaisha);
+      await db.insert(ema).values(Array.from({ length: 5 }, (_, i) => ({ giverId: String(4770000000000000000n + BigInt(k * 10 + i)), receiverId: id, tier: 'ujiko' as const, message: '', createdAt: new Date(), revokedAt: null })));
+    }
+    await app.checkEvaluationPromotions(guild as never, new Date());
+    for (const id of ids) expect([...members.get(id)!.roles.cache.keys()]).toContain(ROLE.ujiko);
+    const keiji = sent.filter((s) => s.channelId === cfg.channels.keiji) as { content?: string; embeds?: unknown[] }[];
+    const cards = keiji.filter((s) => s.embeds?.length);
+    expect(cards).toHaveLength(4);
+    for (const c of cards) expect(c.content ?? '').not.toContain('<@&'); // 1人ずつのカードは通知なし
+    const summary = keiji.filter((s) => !s.embeds?.length);
+    expect(summary).toHaveLength(1);
+    expect(summary[0]!.content).toContain('4 名');
+    expect(summary[0]!.content).toContain('<@&'); // まとめて1回だけ通知
+  });
+
+  it('🎁 ご縁の節目特典：ON＋④リセット後の新しいご縁でだけもらえる（旧ご縁では払わない）・OFFなら渡さない', async () => {
+    const { setEmaPromotion } = await import('../src/services/emaPromotion.js');
+    const { resetAllShuin } = await import('../src/services/shuin.js');
     const { shuin } = await import('../src/db/schema.js');
     const { recordJoin } = await import('../src/services/members.js');
     const RCV = '400000000000000055';
     await recordJoin(db, { id: RCV, username: 'r', displayName: 'r', avatarUrl: null, roleIds: [], isBot: false, joinedAt: new Date() });
     add(RCV);
+    // 旧制度のご縁（ローンチ前からあった分）
     await db.insert(shuin).values({ giverId: '401000000000000001', receiverId: RCV, weight: 30, giverRank: 'sanpaisha' });
     // OFF：渡さない
     await app.checkGoenPerks(guild as never, new Date());
     expect((await walletOf(db, RCV)).balance).toBe(0);
-    // ON：ご縁30 → 25の節目で 500
+    // ③ON したが ④リセット前：旧ご縁で払わない（当日の手順のすき間で一斉に払われる事故を防ぐ）
     await setEmaPromotion(db, true, 'guji');
+    await app.checkGoenPerks(guild as never, new Date());
+    expect((await walletOf(db, RCV)).balance).toBe(0);
+    // ④リセット（旧ご縁は消える）→ 新制度で結んだご縁30 → 25の節目で 500
+    await resetAllShuin(db, 'guji', new Date());
+    await db.insert(shuin).values({ giverId: '401000000000000002', receiverId: RCV, weight: 30, giverRank: 'sanpaisha' });
     await app.checkGoenPerks(guild as never, new Date());
     expect((await walletOf(db, RCV)).balance).toBe(500);
     // 冪等：もう一度動かしても増えない

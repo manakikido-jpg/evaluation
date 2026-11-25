@@ -193,6 +193,10 @@ strong.big { font-size: 1.6rem; color: var(--shu); }
 .application .who { flex-wrap: wrap; margin-bottom: 8px; }
 .facts .wide { grid-column: 1 / -1; }
 .inline-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+/* 🎐 絵馬の取り消し（宮司だけ）：一言・種類・日付・ボタンを1行に */
+.ema-admin { list-style: none; padding: 0; margin: 0; }
+.ema-admin li { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.ema-admin form { display: inline; margin: 0 0 0 auto; }
 .inline-actions input[type=text] { flex: 1 1 220px; }
 .inline-actions input, .inline-actions select, .inline-actions button, .settings input {
   font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink);

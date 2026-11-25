@@ -39,7 +39,7 @@ import { introOf, introUrl } from '../services/intros.js';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { currentAutoRank, decidePromotion, highestRank, voiceCapPercentOf, voicePercentOf, type Promotion } from '../domain/ranks.js';
-import { emaStepFrom, EMA_TIER_LABEL } from '../domain/ema.js';
+import { emaStepFrom, EMA_PROMOTION_BURST, EMA_TIER_LABEL } from '../domain/ema.js';
 import { collectEmaKeepWarnings, emaPromotable, emaPromotionEnabled } from '../services/emaPromotion.js';
 import { grantGoenPerks } from '../services/goenPerks.js';
 import { KeyedLock } from '../lib/lock.js';
@@ -54,7 +54,7 @@ import { listPrizes } from '../services/gacha.js';
 import { activeCoreTime, coreTimeBonus } from '../services/coreTime.js';
 import { setOmairiStatus } from '../services/applications.js';
 import { ActivityTracker, getMember, leaveNotice, namesOf, recordJoin, recordLeave, recordPromotion, syncAllMembers, upsertMember, type MemberSnapshot } from '../services/members.js';
-import { giversOf, goenOf, goshuinchoOf, metCollection, receivedCountOf, stampedBy } from '../services/shuin.js';
+import { giversOf, goenOf, goshuinchoOf, metCollection, newSystemStartedAt, receivedCountOf, stampedBy } from '../services/shuin.js';
 import { checkGiveEma, giveEma, emaMessagesOf, validEmaCountOf } from '../services/ema.js';
 import { takeUncheckedSpecialGoen } from '../services/specialGoen.js';
 import { COMMAND, parseEmaId, parseShuinId } from './ids.js';
@@ -67,6 +67,7 @@ import {
   goshuinchoReply,
   type ProfileExtra,
   promotionAnnouncement,
+  promotionBurstAnnouncement,
   promotionLog,
   revokeLog,
   revokeReply,
@@ -479,7 +480,9 @@ export class ShuinApp {
     const channel = interaction.member.voice.channel ?? interaction.guild.channels.cache.get(channelId);
     const others = channel?.isVoiceBased() ? [...channel.members.values()].filter((m) => !m.user.bot && m.id !== interaction.user.id) : [];
     const giverRank = highestRank(this.cfg.ranks, toInfo(interaction.member).roleIds);
-    const stamped = await stampedBy(this.db, interaction.user.id, others.map((m) => m.id), giverRank?.weight ?? 0);
+    // 🧵 新制度の結びは1回きり（押し直しなし）なので、取り消していなければ「結んだ」（✅）。旧御朱印は今の格で押したものだけ ✅
+    const musubi = Boolean(await newSystemStartedAt(this.db));
+    const stamped = await stampedBy(this.db, interaction.user.id, others.map((m) => m.id), musubi ? 0 : giverRank?.weight ?? 0);
     const people = others
       .map((m) => ({ id: m.id, name: m.displayName, stamped: stamped.has(m.id) }))
       // まだ押していない人を先に
@@ -647,10 +650,15 @@ export class ShuinApp {
   }
 
   private checkingGoenPerks = false;
-  /** 🎁 ご縁の節目特典（新制度⑦）: 絵馬での昇格が ON のときだけ。節目に届いた人へ銭・称号ロールを 1 回ずつ。 */
+  /**
+   * 🎁 ご縁の節目特典（新制度⑦）: 絵馬での昇格が ON で、かつ ④ご縁のリセットが済んでから。
+   * 節目に届いた人へ銭・称号ロールを 1 回ずつ。
+   * リセット前に動くと、旧制度のご縁で特典が一斉に払われ、受け取り記録も残ってしまうので待つ。
+   */
   async checkGoenPerks(guild: Guild, now = new Date()): Promise<void> {
     if (guild.id !== this.cfg.guildId || this.checkingGoenPerks) return;
     if (!(await emaPromotionEnabled(this.db))) return;
+    if (!(await newSystemStartedAt(this.db))) return;
     this.checkingGoenPerks = true;
     try {
       const grants = await grantGoenPerks(this.db, this.cfg, now);
@@ -701,12 +709,19 @@ export class ShuinApp {
       // 🎐 絵馬での昇格が ON のときは、昇格を全部「絵馬」で決める（ご縁・縁側時間は使わない）。
       // 参拝者→氏子（氏子の票5）／氏子→世話役（世話役の票3）／世話役→総代（総代の票3）。
       if (await emaPromotionEnabled(this.db)) {
-        for (const id of await emaPromotable(this.db, this.cfg, now)) {
+        const ids = await emaPromotable(this.db, this.cfg, now);
+        // 🌸 切り替えた直後など、いっぺんに大勢が上がるときは、1人ずつの発表で役職の通知を鳴らしつづけない。
+        // 発表のカードは1人ずつ出すが通知は付けず、最後に「◯名が昇格」を1回だけ通知する。
+        const burst = ids.length > EMA_PROMOTION_BURST;
+        let promoted = 0;
+        for (const id of ids) {
           const member = await guild.members.fetch(id).catch(() => undefined);
           if (!member || member.user.bot) continue;
-          await this.lock.run(id, () => this.emaPromote(member, now))
-            .catch(err => logger.warn({ err, memberId: id }, 'ema promotion failed'));
+          const ok = await this.lock.run(id, () => this.emaPromote(member, now, { quiet: burst }))
+            .catch(err => { logger.warn({ err, memberId: id }, 'ema promotion failed'); return false; });
+          if (ok) promoted++;
         }
+        if (burst && promoted > 0) await this.send(this.cfg.channels.keiji, promotionBurstAnnouncement(promoted, pingRoleIds(this.cfg)));
         return;
       }
       const data = await ujikoEvaluation(this.db, this.cfg, { q: '', status: 'met' }, now);
@@ -726,26 +741,26 @@ export class ShuinApp {
    * 参拝者→氏子（氏子の票5）／氏子→世話役（世話役の票3）／世話役→総代（総代の票3）。
    * ご縁・縁側時間は見ない。自動降格はしない。運営（最上位が自動役職でない人）は対象外。
    */
-  private async emaPromote(member: GuildMember, now = new Date()): Promise<void> {
-    if (member.user.bot) return;
+  private async emaPromote(member: GuildMember, now = new Date(), opts: { quiet?: boolean } = {}): Promise<boolean> {
+    if (member.user.bot) return false;
     // まずキャッシュの役職で「段があり、必要枚数に届いている」かを安く確かめる（毎回の force 取得を避ける）
     const cachedStep = emaStepFrom(highestRank(this.cfg.ranks, member.roles.cache.keys())?.key, this.cfg.emaThresholds);
-    if (!cachedStep) return;
-    if ((await validEmaCountOf(this.db, member.id, now, cachedStep.tier)) < cachedStep.promote) return;
+    if (!cachedStep) return false;
+    if ((await validEmaCountOf(this.db, member.id, now, cachedStep.tier)) < cachedStep.promote) return false;
     // 昇格しそうなときだけ、最新の役職を取り直して二重昇格を防ぐ
     const fresh = await member.guild.members.fetch({ user: member.id, force: true }).catch(() => undefined);
-    if (!fresh || fresh.user.bot) return;
+    if (!fresh || fresh.user.bot) return false;
     // 段は「いちばん格の高い役職」で決める（最上位が運営なら昇格させない）
     const step = emaStepFrom(highestRank(this.cfg.ranks, fresh.roles.cache.keys())?.key, this.cfg.emaThresholds);
     const current = currentAutoRank(this.cfg.ranks, fresh.roles.cache.keys());
-    if (!step || !current || current.key !== step.from) return;
+    if (!step || !current || current.key !== step.from) return false;
     const to = this.cfg.ranks.find((r) => r.key === step.to);
-    if (!to) return;
+    if (!to) return false;
     const count = await validEmaCountOf(this.db, fresh.id, now, step.tier);
-    if (count < step.promote) return;
+    if (count < step.promote) return false;
     const held = new Set(fresh.roles.cache.keys());
     const removeRoleIds = autoRanks(this.cfg.ranks).filter((r) => r.key !== step.to && held.has(r.roleId)).map((r) => r.roleId);
-    await this.promote(fresh, { from: current, to, removeRoleIds }, await goenOf(this.db, fresh.id), count);
+    return this.promote(fresh, { from: current, to, removeRoleIds }, await goenOf(this.db, fresh.id), count, opts);
   }
 
   /**
@@ -770,8 +785,11 @@ export class ShuinApp {
     await this.promote(fresh, promotion, goen);
   }
 
-  /** 役職ロールを付け替えて #慶事 で発表する（emaCount を渡すと「絵馬◯枚で昇格」になる） */
-  private async promote(member: GuildMember, promotion: Promotion, goen: number, emaCount?: number): Promise<void> {
+  /**
+   * 役職ロールを付け替えて #慶事 で発表する（emaCount を渡すと「絵馬◯枚で昇格」になる）。
+   * quiet: 発表のカードに役職の通知を付けない（大勢がいっぺんに上がるとき。通知はまとめて1回）。昇格できたら true。
+   */
+  private async promote(member: GuildMember, promotion: Promotion, goen: number, emaCount?: number, opts: { quiet?: boolean } = {}): Promise<boolean> {
     const reason = emaCount !== undefined ? `絵馬 ${emaCount} 枚で ${promotion.to.name} に昇格` : `ご縁 ${goen} で ${promotion.to.name} に昇格`;
     try {
       await member.roles.add(promotion.to.roleId, reason);
@@ -779,7 +797,7 @@ export class ShuinApp {
       // BOT のロールが役職ロールより下にある、権限がない など
       logger.error({ err, userId: member.id, to: promotion.to.key }, 'promotion role update failed');
       await this.log(`⚠️ ${member} さまの昇格（${promotion.to.name}）でロールを変更できませんでした。BOT のロールの位置と権限を確認してください。`);
-      return;
+      return false;
     }
     await this.rewardInvites(member);
     // 新しい役職は付いた。古い役職を外せなくても、昇格の発表と記録はする（あとから手で外せばよい）
@@ -789,13 +807,14 @@ export class ShuinApp {
         await this.log(`⚠️ ${member} さまの前の役職ロールを外せませんでした。手で外してください。`);
       });
     }
-    await this.send(this.cfg.channels.keiji, promotionAnnouncement(member.id, promotion, goen, pingRoleIds(this.cfg), member.displayAvatarURL(), emaCount));
+    await this.send(this.cfg.channels.keiji, promotionAnnouncement(member.id, promotion, goen, opts.quiet ? [] : pingRoleIds(this.cfg), member.displayAvatarURL(), emaCount));
     await this.log(emaCount !== undefined ? `⬆️ 昇格 <@${member.id}> ${promotion.from.name} → ${promotion.to.name}（絵馬 ${emaCount} 枚）` : promotionLog(member.id, promotion, goen));
     await recordPromotion(this.db, member.id, promotion.from.key, promotion.to.key, goen).catch((err) =>
       logger.warn({ err }, 'recordPromotion failed'),
     );
     // お参り期間中なら完了にする
     await setOmairiStatus(this.db, member.id, 'promoted', 'system').catch((err) => logger.warn({ err }, 'omairi close failed'));
+    return true;
   }
 
   private async log(content: string): Promise<void> {

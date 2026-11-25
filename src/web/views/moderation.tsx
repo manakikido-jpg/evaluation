@@ -62,6 +62,9 @@ export const FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
   shuin_reset_none: { text: '元に戻せるリセットはありません。', kind: 'warn' },
   shuin_reset_confirm: { text: 'リセットするときは、確かめのチェックを入れてください。', kind: 'warn' },
   shuin_reset_forbidden: { text: '御朱印のリセットは宮司のみできます。', kind: 'warn' },
+  ema_revoked: { text: '🎐 絵馬を取り消しました（一言も飾られなくなり、票の数からも外れます。役職はそのままです）。#記録 に残しました。', kind: 'ok' },
+  ema_not_found: { text: 'その絵馬は、もう取り消されているか、見つかりません。', kind: 'warn' },
+  ema_forbidden: { text: '絵馬の取り消しは宮司のみできます。', kind: 'warn' },
 };
 
 export function Flash(props: { code?: string }) {

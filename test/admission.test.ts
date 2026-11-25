@@ -255,6 +255,25 @@ describe('お参り期間', () => {
     expect((await checkOmairi(ctx, new Date(t1.getTime() + 9 * DAY))).review).toEqual([]);
   });
 
+  it('延長のDMは、従来は「ご縁を結んで」・🎐 絵馬での昇格が ON なら「絵馬を◯枚もらうと氏子」と案内する', async () => {
+    await approved();
+    calls.length = 0;
+    await checkOmairi(ctx, new Date(now.getTime() + 15 * DAY));
+    expect(calls.find((c) => c.startsWith(`dm ${NEW}`))).toContain('ご縁を結んで');
+    // ON のときの案内（別の人で確かめる：延長は1人1回）
+    const { setEmaPromotion } = await import('../src/services/emaPromotion.js');
+    await setEmaPromotion(db, true, 'guji');
+    const NEW2 = '600000000000000099';
+    const r = (await submitJoin(ctx, { id: NEW2, roleIds: [], accountCreatedAt: recentAccount }, answers, now)) as { id: number };
+    await decide(ctx, shinshoku, r.id, true, '', now);
+    await upsertMember(db, snap(NEW2, [ROLE.sanpaisha]));
+    calls.length = 0;
+    await checkOmairi(ctx, new Date(now.getTime() + 15 * DAY));
+    const dm = calls.find((c) => c.startsWith(`dm ${NEW2}`)) ?? '';
+    expect(dm).toContain('絵馬（氏子の票）を 5 枚');
+    expect(dm).not.toContain('ご縁を結んで');
+  });
+
   it('神職の判定: 氏子にする / 延長 / 退出', async () => {
     await approved();
     expect(await decideOmairi(ctx, shinshoku, NEW, 'promote')).toBe('ok');

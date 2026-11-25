@@ -513,6 +513,16 @@ describe('相談（Discord）', () => {
 });
 
 describe('お参り期間（Discord）', () => {
+  it('🎐 絵馬での昇格が ON のときは、判定の目安を氏子の票の枚数で出す', async () => {
+    const { setEmaPromotion } = await import('../src/services/emaPromotion.js');
+    await setEmaPromotion(db, true, 'guji');
+    await startOmairi(db, USER, 14, new Date('2026-08-01T00:00:00Z'));
+    await app.checkOmairi(new Date('2026-08-20T00:00:00Z'));
+    await app.checkOmairi(new Date('2026-09-20T00:00:00Z'));
+    const card = sent.find((s) => s.channelId === OMAIRI)!;
+    expect(card.payload.embeds?.[0]?.description).toContain('絵馬（氏子の票） 0 / 5 枚');
+  });
+
   it('判定待ちになった人を #お参り判定 に出し、ボタンで判定', async () => {
     const past = new Date('2026-08-01T00:00:00Z');
     await startOmairi(db, USER, 14, past);
@@ -521,6 +531,9 @@ describe('お参り期間（Discord）', () => {
     await app.checkOmairi(new Date('2026-09-20T00:00:00Z'));
     const card = sent.find((s) => s.channelId === OMAIRI)!;
     expect(card.payload.embeds?.[0]?.title).toBe('お参り期間の判定');
+    // 絵馬での昇格が OFF のときは、目安はご縁（氏子の必要ご縁）
+    expect(card.payload.embeds?.[0]?.description).toContain('ご縁 0 / ');
+    expect(card.payload.embeds?.[0]?.description).not.toContain('絵馬');
     const ids = card.payload.components?.[0]?.components.map((c) => c.data.custom_id);
     expect(ids).toEqual([`omairi:extend:${USER}`, `omairi:promote:${USER}`, `omairi:remove:${USER}`]);
 

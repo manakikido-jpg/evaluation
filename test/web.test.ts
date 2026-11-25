@@ -324,6 +324,34 @@ describe('厄・BAN・キック・メモ（管理画面）', () => {
       body: new URLSearchParams(form).toString(),
     });
 
+  it('🎐 絵馬の取り消し：宮司だけ・贈った人は出さない・取り消すと票から外れる・記録に残る', async () => {
+    const { ema } = await import('../src/db/schema.js');
+    const { validEmaCountOf } = await import('../src/services/ema.js');
+    const GIVER = '700000000000000009';
+    await recordJoin(db, { id: GIVER, username: 'secret', displayName: '贈り主ひみつ', avatarUrl: null, roleIds: [ROLE.ujiko], isBot: false, joinedAt: new Date('2026-09-01T00:00:00Z') });
+    await db.insert(ema).values({ giverId: GIVER, receiverId: USER, tier: 'ujiko', message: 'あらしの一言', createdAt: clock, revokedAt: null });
+    const s = await login(STAFF);
+    const g = await login(GUJI);
+    // 神職には取り消しの欄を出さない・送っても宮司だけ
+    expect(await (await get(`/members/${USER}`, s)).text()).not.toContain('絵馬の取り消し');
+    expect((await post(`/members/${USER}/ema-revoke`, s, { _csrf: await csrfOf(s), giverId: GIVER, tier: 'ujiko' })).headers.get('location')).toContain('msg=ema_forbidden');
+    expect(await validEmaCountOf(db, USER, clock)).toBe(1);
+    // 宮司には欄が出るが、贈った人の名前は出さない（メンバーには匿名のまま）
+    const html = await (await get(`/members/${USER}`, g)).text();
+    expect(html).toContain('絵馬の取り消し');
+    expect(html).toContain('あらしの一言');
+    expect(html).not.toContain('贈り主ひみつ');
+    // おかしな種類は見つからない扱い
+    expect((await post(`/members/${USER}/ema-revoke`, g, { _csrf: await csrfOf(g), giverId: GIVER, tier: 'bogus' })).headers.get('location')).toContain('msg=ema_not_found');
+    // 宮司が取り消す → 票から外れ、記録が残る
+    expect((await post(`/members/${USER}/ema-revoke`, g, { _csrf: await csrfOf(g), giverId: GIVER, tier: 'ujiko' })).headers.get('location')).toContain('msg=ema_revoked');
+    expect(await validEmaCountOf(db, USER, clock)).toBe(0);
+    expect((await listAudit(db, { action: 'ema.revoke' })).length).toBe(1);
+    expect(actions.some((a) => a.includes('絵馬（氏子の票）を1枚取り消しました'))).toBe(true);
+    // もう一度は見つからない
+    expect((await post(`/members/${USER}/ema-revoke`, g, { _csrf: await csrfOf(g), giverId: GIVER, tier: 'ujiko' })).headers.get('location')).toContain('msg=ema_not_found');
+  });
+
   it('🛡 要注意リスト: 神職が入れる・宮司だけが外す・記録に残る', async () => {
     const { watchOf, addWatch } = await import('../src/services/securityWatch.js');
     expect(await addWatch(db, 'abc', 'x', STAFF)).toBe(false);
@@ -433,6 +461,8 @@ describe('厄・BAN・キック・メモ（管理画面）', () => {
     expect((await post('/evaluation/ema-thresholds', s, { _csrf: scsrf, ujikoPromote: '5', ujikoKeep: '3', sewayakuPromote: '3', sodaiPromote: '3' })).status).toBe(403);
     // おかしな数（0や非数）は拒否
     expect((await post('/evaluation/ema-thresholds', g, { _csrf: gcsrf, ujikoPromote: '0', ujikoKeep: '3', sewayakuPromote: '3', sodaiPromote: '3' })).headers.get('location')).toBe('/evaluation?th=invalid');
+    // 維持が昇格より多いのは拒否（氏子に上がった瞬間から維持不足になる）
+    expect((await post('/evaluation/ema-thresholds', g, { _csrf: gcsrf, ujikoPromote: '5', ujikoKeep: '6', sewayakuPromote: '3', sodaiPromote: '3' })).headers.get('location')).toBe('/evaluation?th=invalid');
     // 宮司が保存
     expect((await post('/evaluation/ema-thresholds', g, { _csrf: gcsrf, ujikoPromote: '7', ujikoKeep: '0', sewayakuPromote: '4', sodaiPromote: '2' })).headers.get('location')).toBe('/evaluation?th=saved');
     expect((await loadOverrides(db)).emaThresholds).toEqual({ ujikoPromote: 7, ujikoKeep: 0, sewayakuPromote: 4, sodaiPromote: 2 });

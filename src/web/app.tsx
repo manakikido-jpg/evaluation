@@ -180,9 +180,9 @@ import { logger } from '../lib/logger.js';
 import { audit, hideGujiAudit, listAudit } from '../services/audit.js';
 import { eventsOf, findMemberByNameOrId, getMember, memberDiff, recentLeaves, homeStats, isMemberSort, listMembers, membersWithRole, namesOf, roleMemberCounts, searchMembersWithoutRole, setMemberRole, shuinHistory, type MemberListQuery } from '../services/members.js';
 import { goenOf, goshuinchoOf } from '../services/shuin.js';
-import { validEmaCountOf, emaMessagesOf } from '../services/ema.js';
+import { validEmaCountOf, emaMessagesOf, emaEntriesOf, revokeEma } from '../services/ema.js';
 import { highestRank } from '../domain/ranks.js';
-import { emaStepFrom } from '../domain/ema.js';
+import { emaStepFrom, EMA_TIER_LABEL } from '../domain/ema.js';
 import { jstDate, recentActivity } from '../services/activity.js';
 import { adminGrant, adminTake, currentMemberIds, grantJoinBonusToAll, recentCoinTx, validAdminAmount, walletOf } from '../services/economy.js';
 import { checkTarget, clearYaku, giveYaku, instantBan, isBannedByEvents, kickMember, unbanMember, writeMemo, type Actor, type Denied, type ModCtx } from '../services/moderation.js';
@@ -1055,6 +1055,8 @@ export function createWebApp(deps: WebDeps) {
     // 🎐 絵馬は、その人の「次の段」の票を数える（参拝者=氏子の票／氏子=世話役の票／世話役=総代の票）
     const emaTier = emaStepFrom(highestRank(cfg.ranks, member.roleIds)?.key, cfg.emaThresholds)?.tier ?? 'ujiko';
     const [emaCount, emaMessages] = await Promise.all([validEmaCountOf(db, id, undefined, emaTier), emaMessagesOf(db, id, undefined, emaTier)]);
+    // 🎐 宮司だけ：取り消し用に、受け取った絵馬を全部（贈った人の名前は出さない）
+    const emaEntries = session.level === 'guji' ? await emaEntriesOf(db, id, now()) : undefined;
     const names = await namesOf(db, [
       ...goenRows.flatMap((r) => [r.grantedBy, r.revokedBy ?? '']),
       ...history.received.map((r) => r.other),
@@ -1074,6 +1076,7 @@ export function createWebApp(deps: WebDeps) {
         member={member}
         card={card}
         ema={{ count: emaCount, messages: emaMessages }}
+        emaEntries={emaEntries}
         history={history}
         events={events}
         audits={audits}
@@ -3027,6 +3030,23 @@ export function createWebApp(deps: WebDeps) {
     await audit(db, { actorId: by, targetId: id, action: 'goen.special_revoke', detail: { id: gid, amount: row.amount, reason: row.reason, goen }, via: 'web' });
     await goenLog(specialGoenLog('revoke', id, by, row.amount, row.reason, goen));
     return goenBack(c, id, 'goen_revoked');
+  });
+
+  // 🎐 絵馬（評価の票）を取り消す（宮司のみ）。荒らしの一言・不正な票を外す。贈った人はメンバーには匿名のまま
+  const emaBack = (c: Context<Env>, id: string, msg: string) => c.redirect(`/members/${id}?msg=${msg}#sec-ema`);
+  app.post('/members/:id/ema-revoke', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.notFound();
+    if (!gujiOnly(c)) return emaBack(c, id, 'ema_forbidden');
+    const body = await c.req.parseBody();
+    const giverId = typeof body.giverId === 'string' ? body.giverId : '';
+    const tier = body.tier;
+    if (!validId(giverId) || (tier !== 'ujiko' && tier !== 'sewayaku' && tier !== 'sodai')) return emaBack(c, id, 'ema_not_found');
+    const by = c.get('session').userId;
+    if (!(await revokeEma(db, giverId, id, now(), tier))) return emaBack(c, id, 'ema_not_found');
+    await audit(db, { actorId: by, targetId: id, action: 'ema.revoke', detail: { giverId, tier }, via: 'web' });
+    if (cfg.channels.log) await deps.discord.sendMessage(cfg.channels.log, { content: `🎐 <@${id}> さんの絵馬（${EMA_TIER_LABEL[tier]}）を1枚取り消しました（操作: <@${by}>）。`, allowed_mentions: { parse: [] } }).catch((err: unknown) => logger.warn({ err }, 'ema revoke log failed'));
+    return emaBack(c, id, 'ema_revoked');
   });
 
   // 🎴 勝負の御籤の品（見た目の品・お試し券）を渡す・取り上げる（宮司のみ）

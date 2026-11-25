@@ -1,3 +1,24 @@
+## 2026年11月25日：ゴール「完璧にスタートできるように」— ローンチ安全化（Claude・本番反映予定）
+- 本人 /goal「完璧にスタートできるようにすすめて」。後詰め（枚数UI・維持DM・手順書）は 6779e77 で push 済み（全テスト3109通過）。
+- ローンチ当日を再生して見つけた穴を修正：
+  - H1（バグ）⑦節目特典が③ON→④リセットのすき間に旧ご縁で一斉に払われ、受け取り記録で新制度の節目が二度と貰えなくなる。→ resetAllShuin が settings `new_system_started` を立て、undo で消す。checkGoenPerks は newSystemStartedAt 必須。
+  - H1'（同種）⑥招待の結び補填（ご縁）もすき間で付くとリセットで消え nonce だけ残る。→ 結び補填も newSystemStartedAt 必須（評価期間延長は③のまま）。
+  - H2（設計の抜け）設計§2の結び（重み 参拝者1/氏子1/世話役2・1回きり）が④で未実装だった。→ domain/musubi.ts、giveFlow が newSystemStartedAt で重み切替＋giveShuin の once（押し直しで差額なし・取り消し後は結び直し可）、通話一覧の ✅ も結びは取り消していなければ結んだ扱い。総代以上は2（たたき台）。
+  - H3（治安）匿名の一言をプロフィールに飾るのに取り消す道具が無かった。→ メンバーのページ「🎐 絵馬の取り消し（宮司だけ）」・POST /members/:id/ema-revoke・audit ema.revoke・#記録。贈った人は画面に出さない。
+  - H4（④c呼び名）は登録コマンド名（ids.ts 右クリック・commands.ts）に関わるため、実行時の自動切替はやめて当日の手順に残す。手順書に作業メモ（変える場所の一覧）を追記。
+- 手順書 docs/launch-new-system.md を更新（④で切り替わるもの・③OFF後の戻し方の注意・絵馬の取り消し・維持DMの止め方）。
+- さらに当日の見え方を整備：
+  - 昇格の通知の連打：③ON直後に絵馬がたまっていた人がいっぺんに上がり、1人ずつ役職の通知が鳴る。→ 4人以上なら個別カードは通知なし＋まとめ1回（EMA_PROMOTION_BURST=3・promotionBurstAnnouncement）。
+  - /浮上 が「氏子の条件の縁側時間 X/20時間」を出し続ける → ③ON なら出さず「絵馬で決まる」と案内。
+  - #お参り判定 のカードが「ご縁 X/20」→ ③ON なら「絵馬（氏子の票）X/5 枚」。
+  - 掲示の {役職一覧} が「ご縁◯で昇格」→ 新しい差し込み {役職一覧（絵馬）} 等を追加（③では自動で書き換わらないので当日に差し替え。手順書7）。手順書に、しきたりの段の「掲示の書き換え文（たたき台）」をコピペ用に追加。
+  - お参り期間の延長DMが「ご縁を結んで」→ ③ON なら「絵馬（氏子の票）を◯枚もらうと氏子」。
+  - 枚数の編集で「維持 > 参拝者→氏子」を拒否（上がった瞬間に維持不足になるため）。
+  - 掲示の差し込みは全掲示で使うので、cfg.emaThresholds が無い形でも既定値で止まらないように。
+- 自己レビュー：reset で旧行は全部取り消し→once は新時代の結びだけに効く／undo は結び直した行に触れない／module const の TDZ なし／loadOverrides は自分のキーだけ読む（new_system_started と干渉しない）。
+- テスト：shuin（印の立ち/消え・結びの重み・1回きり）・invites（リセット前は補填なし）・app（節目特典は④後の新ご縁だけ）・web（絵馬の取り消し）。型チェック・該当テスト通過。全テスト実行中。
+- 残り（本人の決め待ち）：⑦の③解放の中身・特別ご縁を今後使うか。④cは当日。
+
 ## 2026年11月25日：新制度の後詰め（枚数の編集UI＋維持警告DM）を実装（Claude・本番反映予定）
 - 本人「後詰めれるところある？」→ 棚卸し提示→「維持警告のDM・枚数の編集UI・ローンチ準備」を選択。まず前2つ（コードを足すだけ）を実装。
 - 枚数編集UI：config emaThresholds（ujikoPromote5/ujikoKeep3/sewayakuPromote3/sodaiPromote3）＋settings override（applyOverrides・60秒で反映）。domain/ema.ts は EMA_STEPS→emaSteps(th)・emaStepFrom(key, th)（既定 EMA_DEFAULT_THRESHOLDS）。emaPromotable/ujikoBelowKeep/card/web member/評価ページ表示が cfg.emaThresholds を見る。評価ページに「🎐 絵馬の枚数」編集（4つの number）＋POST /evaluation/ema-thresholds（宮司・CSRF・audit ema.thresholds_edit）。

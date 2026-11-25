@@ -7,6 +7,7 @@ import { walletOf } from '../src/services/economy.js';
 import { countUnknownInviters, STAFF_NO_INVITER, UNKNOWN_INVITER, markUnknownInviters, assignUnknownInviter, reconcileInviteRewards, rewardInviteRanks, inviteRewardRows, inviteActiveTick, inviteCountOf, inviterOf, recordInvite, rewardInviter } from '../src/services/invites.js';
 import { recordJoin } from '../src/services/members.js';
 import { setEmaPromotion } from '../src/services/emaPromotion.js';
+import { resetAllShuin } from '../src/services/shuin.js';
 import { specialGoenOf } from '../src/services/specialGoen.js';
 import { startOmairi, getOmairi, extendOmairiByInvite } from '../src/services/applications.js';
 import { inviteGoenTier } from '../src/domain/invitePerks.js';
@@ -61,8 +62,19 @@ describe('🤝 新制度⑥：結び補填と評価期間の延長', () => {
     expect(await specialGoenOf(db, INVITER)).toBe(0);
   });
 
+  it('ONでも④ご縁のリセット前は結び補填しない（リセットで消えて1回きりの印だけ残るのを防ぐ）。評価期間はのばす', async () => {
+    await setEmaPromotion(db, true, 'guji'); // ③ON だけ（まだ④リセットしていない）
+    await db.update(members).set({ roleIds: [ROLE.sanpaisha] }).where(eq(members.id, INVITER));
+    await startOmairi(db, INVITER, 14, T0);
+    await recordInvite(db, NEW, INVITER);
+    await rewardInviter(ctx(), NEW, T0);
+    expect(await specialGoenOf(db, INVITER)).toBe(0); // ご縁は足さない
+    expect(ext(await getOmairi(db, INVITER))).toBe(17); // 評価期間は +3（ご縁とは別）
+  });
+
   it('ONのとき、参拝者になった招待で招待主へ結び補填（氏子は+2）', async () => {
     await setEmaPromotion(db, true, 'guji');
+    await resetAllShuin(db, 'guji', T0); // ④ご縁のリセット＝新制度のご縁の時代が始まる
     await db.update(members).set({ roleIds: [ROLE.ujiko] }).where(eq(members.id, INVITER));
     await recordInvite(db, NEW, INVITER);
     await rewardInviter(ctx(), NEW, T0);
@@ -74,6 +86,7 @@ describe('🤝 新制度⑥：結び補填と評価期間の延長', () => {
 
   it('ONのとき、参拝者の招待主は評価期間が+3日のびる（お参り中）', async () => {
     await setEmaPromotion(db, true, 'guji');
+    await resetAllShuin(db, 'guji', T0);
     await db.update(members).set({ roleIds: [ROLE.sanpaisha] }).where(eq(members.id, INVITER));
     await startOmairi(db, INVITER, 14, T0);
     await recordInvite(db, NEW, INVITER);

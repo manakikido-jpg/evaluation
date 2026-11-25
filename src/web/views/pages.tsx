@@ -538,6 +538,8 @@ export function MemberPage(props: {
   member: Member;
   card: GoshuinchoData;
   ema?: { count: number; messages: { message: string; createdAt: Date }[] };
+  /** 🎐 宮司だけ：受け取った絵馬の一覧（取り消し用）。贈った人の名前は出さない */
+  emaEntries?: { giverId: string; tier: 'ujiko' | 'sewayaku' | 'sodai'; message: string; createdAt: Date; valid: boolean }[];
   history: { received: ShuinRow[]; given: ShuinRow[] };
   events: MemberEvent[];
   audits: AuditLog[];
@@ -633,6 +635,30 @@ export function MemberPage(props: {
           ) : (
             <p class="muted">一言はまだありません（票だけ）。</p>
           )}
+        </section>
+      )}
+
+      {props.emaEntries && props.emaEntries.length > 0 && (
+        <section class="card" id="sec-ema">
+          <h2>🎐 絵馬の取り消し（宮司だけ）</h2>
+          <p class="muted">荒らしの一言や、不正な票（なれあい・頼まれて贈ったものなど）を取り消せます。取り消すと一言は飾られなくなり、票の数からも外れます（役職はそのまま・自動降格はしません）。贈った人は出しません。</p>
+          <ul class="ema-admin">
+            {props.emaEntries.map((x) => (
+              <li>
+                <span class="ema-msg">{x.message.trim() || '（一言なし）'}</span>{' '}
+                <small class="muted">
+                  {x.tier === 'ujiko' ? '氏子の票' : x.tier === 'sewayaku' ? '世話役の票' : '総代の票'}・{fmtDate(x.createdAt)}
+                  {x.valid ? '' : '・失効ずみ'}
+                </small>
+                <form method="post" action={`/members/${m.id}/ema-revoke`} class="inline">
+                  <input type="hidden" name="_csrf" value={props.session.csrfToken} />
+                  <input type="hidden" name="giverId" value={x.giverId} />
+                  <input type="hidden" name="tier" value={x.tier} />
+                  <button type="submit" class="danger">取り消す</button>
+                </form>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

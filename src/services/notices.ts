@@ -12,6 +12,8 @@ import { DEFAULT_GUIDES, DEFAULT_NOTICES, EMA_GUIDE, REQUEST_WINDOW_TEMPLATE, PR
 import { notifyReady, pingRoleIds } from './notify.js';
 import { describeStreakRewards, omikujiRange } from './omikuji.js';
 import { coreTimeRate, describeCoreTime } from './coreTime.js';
+import { emaSteps, EMA_DEFAULT_THRESHOLDS, EMA_TIER_LABEL } from '../domain/ema.js';
+import { musubiWeight } from '../domain/musubi.js';
 
 /**
  * 掲示: #鳥居・#しきたり などに BOT が投稿する文面。
@@ -204,6 +206,19 @@ export function noticeVariables(cfg: GuildConfig): NoticeVariable[] {
     const how = !r.auto ? (r.key === 'guji' ? '鯖主' : '運営') : r === firstAuto ? '入ったとき' : `ご縁 ${r.requiredGoen}`;
     return `- ${r.emoji} **${r.name}** … ${how} ・ 格 ${r.weight}`;
   };
+  // 🎐 新制度（絵馬での昇格）の役職一覧：上がり方は絵馬の枚数（宮司が変えた枚数に合わせて差し込む）・結びの重み
+  // 掲示の差し込みは全部の掲示で使うので、枚数の設定がない形の設定でも止まらないようにする
+  const th = cfg.emaThresholds ?? EMA_DEFAULT_THRESHOLDS;
+  const steps = emaSteps(th);
+  const emaRankLine = (r: (typeof ranks)[number]) => {
+    const step = steps.find((s) => s.to === r.key);
+    const how = !r.auto ? (r.key === 'guji' ? '鯖主' : '運営') : r === firstAuto ? '入ったとき' : step ? `絵馬（${EMA_TIER_LABEL[step.tier]}）${step.promote} 枚` : `ご縁 ${r.requiredGoen}`;
+    return `- ${r.emoji} **${r.name}** … ${how} ・ 結び ${musubiWeight(r.key)}`;
+  };
+  const emaSummary = steps
+    .filter((s) => ranks.some((r) => r.key === s.to))
+    .map((s) => `${ranks.find((r) => r.key === s.from)?.name ?? s.from}→${ranks.find((r) => r.key === s.to)?.name ?? s.to}は${EMA_TIER_LABEL[s.tier]} ${s.promote} 枚`)
+    .join('／');
   return [
     { name: '通貨', value: e.currencyName, note: '通貨の名前' },
     { name: '通貨絵文字', value: e.currencyEmoji, note: '通貨の絵文字' },
@@ -228,6 +243,12 @@ export function noticeVariables(cfg: GuildConfig): NoticeVariable[] {
     ...ranks.filter((r) => r.auto).map((r) => ({ name: `${r.name}のご縁`, value: String(r.requiredGoen), note: '昇格に必要なご縁' })),
     ...ranks.map((r) => ({ name: `${r.name}の格`, value: String(r.weight), note: '朱印 1 回のご縁' })),
     { name: '役職一覧', value: [...ranks].map(rankLine).join('\n'), note: '役職・昇格ライン・格の箇条書き' },
+    { name: '役職一覧（絵馬）', value: [...ranks].map(emaRankLine).join('\n'), note: '新制度：役職・絵馬での上がり方・結びの重みの箇条書き（ローンチ時に {役職一覧} と差し替える）' },
+    { name: '絵馬の昇格', value: emaSummary, note: '新制度：絵馬での昇格の決まり（1行）' },
+    { name: '氏子の絵馬', value: String(th.ujikoPromote), note: '新制度：参拝者→氏子に要る氏子の票' },
+    { name: '世話役の絵馬', value: String(th.sewayakuPromote), note: '新制度：氏子→世話役に要る世話役の票' },
+    { name: '総代の絵馬', value: String(th.sodaiPromote), note: '新制度：世話役→総代に要る総代の票' },
+    { name: '維持の絵馬', value: String(th.ujikoKeep), note: '新制度：氏子の維持に要る氏子の票（これ未満で注意）' },
     { name: 'コマンド一覧', value: commandsText(), note: 'メンバーが使えるコマンドの箇条書き（コマンドを足すと自動で増える）' },
   ];
 }

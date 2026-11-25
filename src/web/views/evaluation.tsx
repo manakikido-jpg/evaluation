@@ -102,7 +102,7 @@ export function EvaluationPage({ session, data, filter, page, emaPromotion = fal
     {session.level === 'guji' && <section class="card">
       <h2>🎐 絵馬の枚数（新制度③・⑧）</h2>
       {emaThresholdsFlash === 'saved' && <p class="flash ok" role="status">絵馬の枚数を保存しました。</p>}
-      {emaThresholdsFlash === 'invalid' && <p class="flash warn" role="alert">1〜100 の数で入れてください（維持は0でもかまいません）。</p>}
+      {emaThresholdsFlash === 'invalid' && <p class="flash warn" role="alert">1〜100 の数で入れてください（維持は0でもかまいません）。維持は「参拝者→氏子」の枚数以下にしてください。</p>}
       <p>昇格・維持に要る絵馬（票）の枚数です。「🎐 絵馬での昇格」が ON のときに効きます。変えると次の見回り（1分ほど）から新しい枚数で判定します。</p>
       <form method="post" action="/evaluation/ema-thresholds" class="ema-thresholds-form">
         <input type="hidden" name="_csrf" value={session.csrfToken}/>

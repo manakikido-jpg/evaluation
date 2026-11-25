@@ -289,6 +289,14 @@ export function promotionAnnouncement(userId: string, promotion: Promotion, goen
   };
 }
 
+/** #慶事：大勢がいっぺんに昇格したときの、まとめの通知（1回だけ役職に知らせる。1人ずつのカードは通知なしで上に出ている） */
+export function promotionBurstAnnouncement(count: number, roleIds: readonly string[]): MessageCreateOptions {
+  return {
+    content: `${roleIds.map((id) => `<@&${id}>`).join(' ')} 🌸 新しく **${count} 名**の方が昇格されました（上の発表をご覧ください）。新しい仲間をお迎えください。`.trim(),
+    allowedMentions: { parse: [], users: [], roles: [...roleIds] },
+  };
+}
+
 /** #記録 用のログ */
 export function giveLog(giverId: string, giverRank: Rank, receiverId: string, weight: number, goen: number, addedGoen: number): string {
   return `🌸 朱印 ${mention(giverId)}（${giverRank.name}・格 ${weight}）→ ${mention(receiverId)}　ご縁 ${goen}（+${addedGoen}）`;
