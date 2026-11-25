@@ -41,6 +41,7 @@ import type { Db } from '../db/client.js';
 import { currentAutoRank, decidePromotion, highestRank, voiceCapPercentOf, voicePercentOf, type Promotion } from '../domain/ranks.js';
 import { EMA_UJIKO_PROMOTE } from '../domain/ema.js';
 import { emaPromotableSanpaisha, emaPromotionEnabled } from '../services/emaPromotion.js';
+import { grantGoenPerks } from '../services/goenPerks.js';
 import { KeyedLock } from '../lib/lock.js';
 import { logger } from '../lib/logger.js';
 import { giveFlow, revokeFlow, type MemberInfo } from '../services/flows.js';
@@ -295,6 +296,7 @@ export class ShuinApp {
       }));
     await recordPresence(this.db, presence, now).catch((err) => logger.warn({ err }, 'voice presence record failed'));
     await this.checkEvaluationPromotions(guild, now).catch(err => logger.warn({ err }, 'evaluation promotion check failed'));
+    await this.checkGoenPerks(guild, now).catch(err => logger.warn({ err }, 'goen perk check failed'));
     await awardLongVoiceBonuses(this.db, this.cfg, now).catch(err => logger.warn({ err }, 'long voice bonus tick failed'));
     await notifyLongVoiceBonuses(this.db, this.cfg, { sendMessage: async (channelId, body) => {
       const ch = await this.client.channels.fetch(channelId);
@@ -631,6 +633,27 @@ export class ShuinApp {
 
   private async ensurePromotion(member: GuildMember, now = new Date(), alreadyMet = false): Promise<void> {
     await this.promoteIfNeeded(member, await goenOf(this.db, member.id), now, alreadyMet);
+  }
+
+  private checkingGoenPerks = false;
+  /** 🎁 ご縁の節目特典（新制度⑦）: 絵馬での昇格が ON のときだけ。節目に届いた人へ銭・称号ロールを 1 回ずつ。 */
+  async checkGoenPerks(guild: Guild, now = new Date()): Promise<void> {
+    if (guild.id !== this.cfg.guildId || this.checkingGoenPerks) return;
+    if (!(await emaPromotionEnabled(this.db))) return;
+    this.checkingGoenPerks = true;
+    try {
+      const grants = await grantGoenPerks(this.db, this.cfg, now);
+      const e = this.cfg.economy;
+      for (const g of grants) {
+        if (g.roleId) {
+          const member = await guild.members.fetch(g.memberId).catch(() => undefined);
+          if (member) await member.roles.add(g.roleId, `ご縁 ${g.goen} の特典`).catch((err) => logger.warn({ err, memberId: g.memberId }, 'goen perk role add failed'));
+        }
+        const parts = [g.coins > 0 ? `${e.currencyEmoji}${g.coins}${e.currencyName}` : '', g.roleId ? g.label || '称号' : ''].filter(Boolean).join('・');
+        await this.client.users.fetch(g.memberId).then((u) => u.send({ content: `🎁 ご縁 ${g.goen} に届きました。おめでとうございます！${parts ? `（${parts}）` : ''}`, allowedMentions: { parse: [] as never[] } })).catch(() => undefined);
+        await this.log(`🎁 ご縁の節目特典 <@${g.memberId}>（ご縁 ${g.goen}）${parts ? `：${parts}` : ''}`);
+      }
+    } finally { this.checkingGoenPerks = false; }
   }
 
   private checkingEvaluationPromotions = false;

@@ -670,6 +670,26 @@ describe('ShuinApp：絵馬を贈る（新制度②）', () => {
     expect([...members.get(SA)!.roles.cache.keys()]).not.toContain(ROLE.ujiko);
   });
 
+  it('🎁 ご縁の節目特典：絵馬での昇格がONのとき節目でもらえる・OFFなら渡さない', async () => {
+    const { setEmaPromotion } = await import('../src/services/emaPromotion.js');
+    const { shuin } = await import('../src/db/schema.js');
+    const { recordJoin } = await import('../src/services/members.js');
+    const RCV = '400000000000000055';
+    await recordJoin(db, { id: RCV, username: 'r', displayName: 'r', avatarUrl: null, roleIds: [], isBot: false, joinedAt: new Date() });
+    add(RCV);
+    await db.insert(shuin).values({ giverId: '401000000000000001', receiverId: RCV, weight: 30, giverRank: 'sanpaisha' });
+    // OFF：渡さない
+    await app.checkGoenPerks(guild as never, new Date());
+    expect((await walletOf(db, RCV)).balance).toBe(0);
+    // ON：ご縁30 → 25の節目で 500
+    await setEmaPromotion(db, true, 'guji');
+    await app.checkGoenPerks(guild as never, new Date());
+    expect((await walletOf(db, RCV)).balance).toBe(500);
+    // 冪等：もう一度動かしても増えない
+    await app.checkGoenPerks(guild as never, new Date());
+    expect((await walletOf(db, RCV)).balance).toBe(500);
+  });
+
   it('🧵 自分の御朱印帳に結びのコレクションが出て、まだ結んでいない人を結べる', async () => {
     await seedMembers();
     const viewer = members.get(GU)!;

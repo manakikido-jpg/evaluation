@@ -1,3 +1,10 @@
+## 2026年11月25日：新制度⑦（ご縁の節目特典・銭＋称号）を実装（Claude・本番反映予定）
+- 本人「例でいい」。割引不採用→特典。config goenPerks（節目/銭/roleId?/label）既定 ご縁25=500/50=1000/100=2000/200=5000（銭のみ）。
+- 実装：services/goenPerks.ts grantGoenPerks（全員のご縁=朱印weight+特別ご縁を算出、未claim節目に銭＋称号ロール、goen_perk_claims・移行0170、冪等）。app.ts everyMinute で checkGoenPerks（ema_promotion ON のときだけ・ロール付与＋DM＋#記録）。economy CoinReason に goen_perk。
+- テスト：goenPerks.test.ts 2・app.test.ts 1（ON/OFF・冪等）。型チェック・該当テスト通過。
+- 残り：宮司が節目・銭・称号ロールを編集する社務所WebのUI（いまはconfig既定の銭のみ＝称号ロールは未設定）、③解放（中身未定）。⑧世話役・総代、④c呼び名（ローンチ時）。
+- 次：型チェック・全テストを通し fetch＆merge して本番へpush。周知none。
+
 ## 2026年11月25日：⑦ご縁特典は方向性のみ決定（実装はまだ・Claude）
 - 本人確認：割引は不採用。ご縁の特典は①称号/ロール②ごほうび（銭・券・物）③解放の3本立て。具体（節目・中身・解放先）は相談中＝実装せず。
 - 設計書6/9節と user-decisions に記録。コード変更なし（ドキュメントのみ）。

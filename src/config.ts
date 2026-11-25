@@ -344,6 +344,26 @@ export const omikujiStreakSchema = z.object({
       { days: 30, repeat: true, coins: 300, ticket: 'gacha_free', tickets: 3 },
     ]),
 });
+
+/** 🎁 ご縁の節目特典（新制度⑦）。ご縁がこの数に届いたら、1 回だけ銭・称号ロールをあげる */
+export const goenPerkSchema = z.object({
+  goen: z.number().int().positive().max(100000),
+  coins: z.number().int().min(0).max(1_000_000).default(0),
+  /** 称号・飾りのロール（宮司が選ぶ。なければ付けない） */
+  roleId: snowflake.optional(),
+  /** 表示用の名前（任意） */
+  label: z.string().max(40).default(''),
+});
+export type GoenPerk = z.infer<typeof goenPerkSchema>;
+export const goenPerksSchema = z
+  .array(goenPerkSchema)
+  .max(30)
+  .default([
+    { goen: 25, coins: 500, label: '' },
+    { goen: 50, coins: 1000, label: '' },
+    { goen: 100, coins: 2000, label: '' },
+    { goen: 200, coins: 5000, label: '' },
+  ]);
 export type OmikujiStreakConfig = z.infer<typeof omikujiStreakSchema>;
 
 /** 🎴 運営吉（おみくじでまれに出る、運営の特別な運勢）。絵は社務所Web で入れる（omikuji-1〜4） */
@@ -820,6 +840,8 @@ export const guildConfigSchema = z
     economy: economySchema.default(economySchema.parse({})),
     otoshidama: otoshidamaSchema.default(otoshidamaSchema.parse({})),
     omikujiStreak: omikujiStreakSchema.default(omikujiStreakSchema.parse({})),
+    /** 🎁 ご縁の節目特典（新制度⑦。絵馬での昇格が ON のときだけ効く） */
+    goenPerks: goenPerksSchema,
     omikujiSpecial: omikujiSpecialSchema.default(omikujiSpecialSchema.parse({})),
     omikujiTexts: omikujiTextsSchema.default(omikujiTextsSchema.parse({})),
     notify: notifySchema.default({}),

@@ -525,6 +525,18 @@ export const soudanMessages = pgTable(
 );
 
 /** 管理画面から変えた設定（config/guild.json の値を上書きする） */
+/** 🎁 ご縁の節目特典を、もう渡した記録（新制度⑦。1 人・節目ごとに 1 回） */
+export const goenPerkClaims = pgTable(
+  'goen_perk_claims',
+  {
+    memberId: text('member_id').notNull(),
+    /** ご縁の節目（この数に届いたときの特典） */
+    goen: integer('goen').notNull(),
+    claimedAt: timestamp('claimed_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.memberId, t.goen] })],
+);
+
 export const settings = pgTable('settings', {
   key: text('key').primaryKey(),
   value: jsonb('value').$type<unknown>().notNull(),

@@ -19,6 +19,7 @@ export type CoinReason =
   | 'menzaifu'
   | 'omikuji'
   | 'omikuji_streak'
+  | 'goen_perk'
   | 'join_bonus'
   | 'onboarding'
   | 'invite'
