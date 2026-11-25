@@ -1,3 +1,8 @@
+## 2026年11月25日：⑦ご縁特典は方向性のみ決定（実装はまだ・Claude）
+- 本人確認：割引は不採用。ご縁の特典は①称号/ロール②ごほうび（銭・券・物）③解放の3本立て。具体（節目・中身・解放先）は相談中＝実装せず。
+- 設計書6/9節と user-decisions に記録。コード変更なし（ドキュメントのみ）。
+- 次：⑦の具体をたたき台提案→本人と詰めてから実装。もしくは⑧世話役・総代（これも昇格条件が未定）や、ローンチ準備。
+
 ## 2026年11月25日：新制度⑥（招待の結び補填＋評価期間延長）を実装（Claude・本番反映予定）
 - 本人「6」。ema_promotion ON のときだけ効く（新制度liveの合図）。既定OFF＝今まで通り（銭報酬のみ）。
 - 実装：domain/invitePerks.ts（inviteGoenTier＝階級ごとの amount/cap・INVITE_OMAIRI_EXT_DAYS=3/CAP=14）。invites.ts applyInvitePerks を rewardInviter の sanpaisha 段で呼ぶ：結び補填＝specialGoen（reason「🤝 結び補填（招待）」・nonce invite_goen:inviter:invitee で1人1回・prior count で cap）、評価期間＝applications.ts extendOmairiByInvite（omairi.invite_ext_days を足し+14で頭打ち・ongoingのみ・移行0169）。銭報酬は不変。
