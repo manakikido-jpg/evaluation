@@ -100,6 +100,24 @@ export async function extendOmairi(db: Db, memberId: string, days: number, now: 
   return row;
 }
 
+/**
+ * 🤝 招待で評価期間をのばす（新制度⑥）。1 人 perInvite 日・招待での合計は capDays 日まで。
+ * ongoing のお参り中の人だけ。のばせたら true。氏子以上などお参り中でない人は何もしない。
+ */
+export async function extendOmairiByInvite(db: Db, memberId: string, perInvite: number, capDays: number, now: Date): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    const [o] = await tx.select().from(omairi).where(and(eq(omairi.memberId, memberId), eq(omairi.status, 'ongoing'))).for('update');
+    if (!o) return false;
+    const add = Math.min(perInvite, capDays - o.inviteExtDays);
+    if (add <= 0) return false;
+    await tx
+      .update(omairi)
+      .set({ endsAt: sql`greatest(${omairi.endsAt}, ${now.toISOString()}::timestamptz) + (${add} * interval '1 day')`, inviteExtDays: sql`${omairi.inviteExtDays} + ${add}` })
+      .where(eq(omairi.memberId, memberId));
+    return true;
+  });
+}
+
 /** お参り期間を終える（promoted: 氏子になった / review: 神職の判定待ち / removed: 退出） */
 export async function setOmairiStatus(
   db: Db,

@@ -1184,6 +1184,13 @@
       "when": 1795244606453,
       "tag": "0168_known_sentinels",
       "breakpoints": true
+    },
+    {
+      "idx": 169,
+      "version": "7",
+      "when": 1795585063835,
+      "tag": "0169_complete_sabretooth",
+      "breakpoints": true
     }
   ]
 }

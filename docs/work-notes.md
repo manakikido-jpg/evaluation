@@ -1,3 +1,10 @@
+## 2026年11月25日：新制度⑥（招待の結び補填＋評価期間延長）を実装（Claude・本番反映予定）
+- 本人「6」。ema_promotion ON のときだけ効く（新制度liveの合図）。既定OFF＝今まで通り（銭報酬のみ）。
+- 実装：domain/invitePerks.ts（inviteGoenTier＝階級ごとの amount/cap・INVITE_OMAIRI_EXT_DAYS=3/CAP=14）。invites.ts applyInvitePerks を rewardInviter の sanpaisha 段で呼ぶ：結び補填＝specialGoen（reason「🤝 結び補填（招待）」・nonce invite_goen:inviter:invitee で1人1回・prior count で cap）、評価期間＝applications.ts extendOmairiByInvite（omairi.invite_ext_days を足し+14で頭打ち・ongoingのみ・移行0169）。銭報酬は不変。
+- テスト：invites.test.ts に5件（tier・extendByInvite cap・OFFは無効・ON氏子+2・ON参拝者は+2ご縁＋omairi+3）。型チェック・該当テスト通過。
+- ⑥完了。残り：⑦ ご縁割引・倍率、⑧ 世話役・総代、④c 呼び名（ローンチ時）。
+- 次：型チェック・全テストを通し fetch＆merge して本番へpush。周知none。
+
 ## 2026年11月25日：新制度⑤の宿ゲートを実装（Claude・本番反映予定）
 - 「Aでも反映はリリース時から」＝同じ perk_ujiko フラグ（既定OFF）で宿も氏子からに。宮司がONにして初めて効く。
 - 実装：rooms.ts onCreated（通話入室の宿坊・シクレ＝部屋代を取る前に meetsUjiko 確認→本人へDM＋close、opts.stayは除外）。tempVoice.ts openStay に roleIds を渡し、staffでなく perk ON かつ非氏子なら rank_too_low（24時間/1時間の宿・パネルで案内）。運営(staff)は素通り。

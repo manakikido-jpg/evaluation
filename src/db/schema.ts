@@ -478,6 +478,8 @@ export const omairi = pgTable('omairi', {
   startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
   endsAt: timestamp('ends_at', { withTimezone: true }).notNull(),
   extendedCount: integer('extended_count').notNull().default(0),
+  /** 🤝 招待でのばした評価期間の合計（日。新制度⑥。上限まで。手動の延長とは別に数える） */
+  inviteExtDays: integer('invite_ext_days').notNull().default(0),
   /** ongoing / promoted / review / removed */
   status: text('status').notNull().default('ongoing'),
   decidedBy: text('decided_by'),

@@ -1,0 +1,1 @@
+ALTER TABLE "omairi" ADD COLUMN "invite_ext_days" integer DEFAULT 0 NOT NULL;
