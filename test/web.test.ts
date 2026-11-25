@@ -407,6 +407,22 @@ describe('厄・BAN・キック・メモ（管理画面）', () => {
     expect(await perkUjikoEnabled(db)).toBe(false);
   });
 
+  it('🎁 ご縁の節目特典の編集: 宮司だけ・保存できる・おかしな書き方は拒否', async () => {
+    const { loadOverrides } = await import('../src/services/settings.js');
+    const g = await login(GUJI);
+    const gcsrf = await csrfOf(g);
+    const s = await login(STAFF);
+    const scsrf = await csrfOf(s);
+    // 神職は403
+    expect((await post('/evaluation/goen-perks', s, { _csrf: scsrf, perks: '25 500' })).status).toBe(403);
+    // おかしな書き方は拒否
+    expect((await post('/evaluation/goen-perks', g, { _csrf: gcsrf, perks: 'あ い' })).headers.get('location')).toBe('/evaluation?gp=invalid');
+    // 宮司が保存（銭だけ・銭＋ロール＋称号名）
+    expect((await post('/evaluation/goen-perks', g, { _csrf: gcsrf, perks: '30 700\n100 2000 790000000000000001 ご縁上手' })).headers.get('location')).toBe('/evaluation?gp=saved');
+    const o = await loadOverrides(db);
+    expect(o.goenPerks).toEqual([{ goen: 30, coins: 700, label: '' }, { goen: 100, coins: 2000, roleId: '790000000000000001', label: 'ご縁上手' }]);
+  });
+
   it('🔄 ご縁のリセット: 宮司だけ・絵馬昇格ONと合言葉が要る・元に戻せる', async () => {
     const { goenOf, giveShuin } = await import('../src/services/shuin.js');
     const { setEmaPromotion } = await import('../src/services/emaPromotion.js');

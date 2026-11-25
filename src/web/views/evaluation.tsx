@@ -12,11 +12,12 @@ export function evaluationQuery(filter: EvaluationFilter, selectedIds: string[],
   return query.toString();
 }
 
-export function EvaluationPage({ session, data, filter, page, emaPromotion = false, keepWarnings = [], names, saved, resetFlash, resetUndoable, perkUjiko = false, perkFlash }: {
+export function EvaluationPage({ session, data, filter, page, emaPromotion = false, keepWarnings = [], names, saved, resetFlash, resetUndoable, perkUjiko = false, perkFlash, goenPerksText = '', goenPerksFlash }: {
   session: AdminSession; data: EvaluationData; filter: EvaluationFilter; page: number;
   emaPromotion?: boolean; keepWarnings?: { id: string; count: number }[]; names?: Map<string, string>; saved?: string;
   resetFlash?: string; resetUndoable?: { at: Date; remaining: number; specialRemaining: number };
   perkUjiko?: boolean; perkFlash?: string;
+  goenPerksText?: string; goenPerksFlash?: string;
 }) {
   const pageSize = 100, pages = Math.max(1, Math.ceil(data.rows.length / pageSize));
   const current = Math.min(page, pages), rows = data.rows.slice((current - 1) * pageSize, current * pageSize);
@@ -81,6 +82,20 @@ export function EvaluationPage({ session, data, filter, page, emaPromotion = fal
         <button type="submit">{perkUjiko ? '参拝者から（今までどおり）に戻す' : 'カジノ・宿を氏子以上だけにする'}</button>
       </form>
       <p class="note">ONにすると、カジノは氏子以上の方だけが入れます（参拝者は「氏子になると入れます」と案内）。宿（宿坊など部屋代のかかる部屋）を氏子からにする分は準備中です。</p>
+    </section>}
+    {session.level === 'guji' && <section class="card">
+      <h2>🎁 ご縁の節目特典（新制度⑦）</h2>
+      {goenPerksFlash === 'saved' && <p class="flash ok" role="status">ご縁の節目特典を保存しました。</p>}
+      {goenPerksFlash === 'invalid' && <p class="flash warn" role="alert">書き方を確認してください（1行＝「ご縁 銭 ロールID（任意） 称号名（任意）」）。</p>}
+      <p>ご縁（出会った人の数）が節目に届いたら、銭や称号（飾りのロール）をあげます。「🎐 絵馬での昇格」が ON のときだけ効きます（1人・節目ごとに1回）。</p>
+      <form method="post" action="/evaluation/goen-perks" class="goen-perks-form">
+        <input type="hidden" name="_csrf" value={session.csrfToken}/>
+        <label>節目（1行に1つ：<strong>ご縁 銭 [ロールID] [称号名]</strong>）
+          <textarea name="perks" rows={6} spellcheck={false}>{goenPerksText}</textarea>
+        </label>
+        <button type="submit">ご縁の節目特典を保存</button>
+      </form>
+      <p class="note">例：「25 500」＝ご縁25で500銭。「100 2000 123456789012345678 ご縁上手」＝ご縁100で2000銭＋そのロール（称号）を付ける。ロールIDと称号名は省けます。銭だけなら「ご縁 銭」。ロールは宮司がロールのIDを入れたときだけ付きます。</p>
     </section>}
     <section class="card">
       <h2>ご縁40 ＋ 縁側の合計20時間</h2><p><strong>参拝者時間の計測開始：{EVALUATION_START_LABEL}から</strong><br/>ミュート除外に対応した反映後の分は、マイク・スピーカーの両方が非ミュートと確認できた時間だけを加算します。過去分は控除後の合計を使います。</p>

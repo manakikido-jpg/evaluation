@@ -1,3 +1,10 @@
+## 2026年11月25日：⑦の仕上げ（宮司が編集するUI）を実装（Claude・本番反映予定）
+- 本人「7の仕上げ作って」。評価ページに宮司だけの「🎁 ご縁の節目特典」編集（textarea・1行＝goen coins [roleId] [label]）を追加。これで称号ロールも設定可能に。
+- settings override に goenPerks（配列）追加＋applyOverrides でマージ。POST /evaluation/goen-perks（宮司・CSRF・parseGoenPerks で検証・audit goen.perks_edit）。評価ページに goenPerksToText で現在値を表示。
+- テスト：web.test.ts に1件（宮司だけ・保存・おかしな書き方は拒否・override反映）。型チェック・該当テスト通過。
+- 残り：③解放（中身未定）。⑧世話役・総代、④c呼び名（ローンチ時）。
+- 次：型チェック・全テストを通し fetch＆merge して本番へpush。周知none。
+
 ## 2026年11月25日：新制度⑦（ご縁の節目特典・銭＋称号）を実装（Claude・本番反映予定）
 - 本人「例でいい」。割引不採用→特典。config goenPerks（節目/銭/roleId?/label）既定 ご縁25=500/50=1000/100=2000/200=5000（銭のみ）。
 - 実装：services/goenPerks.ts grantGoenPerks（全員のご縁=朱印weight+特別ご縁を算出、未claim節目に銭＋称号ロール、goen_perk_claims・移行0170、冪等）。app.ts everyMinute で checkGoenPerks（ema_promotion ON のときだけ・ロール付与＋DM＋#記録）。economy CoinReason に goen_perk。

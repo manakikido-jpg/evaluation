@@ -7,7 +7,33 @@ import { ujikoRatingRows, ujikoRatingXlsx } from '../services/ujikoRating.js';
 import { emaPromotionEnabled, setEmaPromotion, ujikoBelowKeep } from '../services/emaPromotion.js';
 import { resetAllShuin, undoAllShuinReset, lastAllShuinReset } from '../services/shuin.js';
 import { perkUjikoEnabled, setPerkUjiko } from '../services/perkGate.js';
+import { loadOverrides, saveOverrides } from '../services/settings.js';
+import { goenPerkSchema, type GoenPerk } from '../config.js';
 import { namesOf } from '../services/members.js';
+
+/** テキスト（1行＝「ご縁 銭 [ロールID] [称号名]」）→ ご縁の節目特典。おかしな行があれば null */
+function parseGoenPerks(text: string): GoenPerk[] | null {
+  const out: GoenPerk[] = [];
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    const t = line.split(/\s+/);
+    const goen = Number(t[0]);
+    const coins = t[1] === undefined ? 0 : Number(t[1]);
+    if (!Number.isInteger(goen) || goen <= 0 || !Number.isInteger(coins) || coins < 0) return null;
+    const hasRole = t[2] !== undefined && /^\d{17,20}$/.test(t[2]);
+    const roleId = hasRole ? t[2] : undefined;
+    const label = t.slice(hasRole ? 3 : 2).join(' ').slice(0, 40);
+    const parsed = goenPerkSchema.safeParse({ goen, coins, ...(roleId ? { roleId } : {}), label });
+    if (!parsed.success) return null;
+    out.push(parsed.data);
+  }
+  if (out.length > 30) return null;
+  return out.sort((a, b) => a.goen - b.goen);
+}
+export function goenPerksToText(perks: readonly GoenPerk[]): string {
+  return perks.map((p) => [p.goen, p.coins, ...(p.roleId ? [p.roleId] : []), ...(p.label ? [p.label] : [])].join(' ')).join('\n');
+}
 import { audit } from '../services/audit.js';
 import { evaluationDeductionPage,saveEvaluationDeduction,EvaluationDeductionError } from '../services/evaluationDeductions.js';
 import { EvaluationDeductionsPage } from './views/evaluationDeductions.js';
@@ -34,7 +60,7 @@ export function mountEvaluation(app: Hono<Env>, db: Db, cfg: () => GuildConfig, 
       const names = keepWarnings.length ? await namesOf(db, keepWarnings.map((w) => w.id)) : new Map<string, string>();
       const resetUndoable = session.level === 'guji' ? await lastAllShuinReset(db) : undefined;
       const perkUjiko = await perkUjikoEnabled(db);
-      return c.html(<EvaluationPage session={session} data={data} filter={filter} page={page} emaPromotion={emaPromotion} keepWarnings={keepWarnings} names={names} saved={c.req.query('ema') ?? undefined} resetFlash={c.req.query('reset') ?? undefined} resetUndoable={resetUndoable} perkUjiko={perkUjiko} perkFlash={c.req.query('perk') ?? undefined}/>);
+      return c.html(<EvaluationPage session={session} data={data} filter={filter} page={page} emaPromotion={emaPromotion} keepWarnings={keepWarnings} names={names} saved={c.req.query('ema') ?? undefined} resetFlash={c.req.query('reset') ?? undefined} resetUndoable={resetUndoable} perkUjiko={perkUjiko} perkFlash={c.req.query('perk') ?? undefined} goenPerksText={goenPerksToText(cfg().goenPerks)} goenPerksFlash={c.req.query('gp') ?? undefined}/>);
     } catch (error) {
       if (!(error instanceof EvaluationSelectionError)) throw error;
       return c.text(error.message, 400);
@@ -83,6 +109,18 @@ export function mountEvaluation(app: Hono<Env>, db: Db, cfg: () => GuildConfig, 
     if (body.confirm !== 'yes' || body.phrase !== 'リセット') return c.redirect('/evaluation?reset=confirm', 303);
     const r = await resetAllShuin(db, session.userId, now());
     return c.redirect(`/evaluation?reset=done&members=${r.members}`, 303);
+  });
+  // 🎁 ご縁の節目特典の編集（宮司だけ・新制度⑦）
+  app.post('/evaluation/goen-perks', async (c) => {
+    c.header('Cache-Control', 'private, no-store');
+    const session = c.get('session');
+    if (session.level !== 'guji') return c.text('ご縁の節目特典の編集は宮司だけです。', 403);
+    const body = await c.req.parseBody();
+    const perks = parseGoenPerks(typeof body.perks === 'string' ? body.perks : '');
+    if (!perks) return c.redirect('/evaluation?gp=invalid', 303);
+    await saveOverrides(db, { ...(await loadOverrides(db)), goenPerks: perks }, session.userId);
+    await audit(db, { actorId: session.userId, action: 'goen.perks_edit', detail: { count: perks.length }, via: 'web' });
+    return c.redirect('/evaluation?gp=saved', 303);
   });
   app.post('/evaluation/goen-reset-undo', async (c) => {
     c.header('Cache-Control', 'private, no-store');
