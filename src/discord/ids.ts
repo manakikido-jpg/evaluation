@@ -1,9 +1,9 @@
 /** ボタンの customId。形式: shuin:<action>:<相手のユーザー ID> */
-export type ShuinAction = 'give' | 'revoke' | 'card' | 'list' | 'vc' | 'unmet';
+export type ShuinAction = 'give' | 'revoke' | 'card' | 'list' | 'vc' | 'unmet' | 'goen';
 
 const PREFIX = 'shuin';
 /** vc: 通話のチャットのボタン（ID は通話のチャンネル ID）／unmet: まだ結んでいない人（結びのコレクション） */
-const ACTIONS: readonly ShuinAction[] = ['give', 'revoke', 'card', 'list', 'vc', 'unmet'];
+const ACTIONS: readonly ShuinAction[] = ['give', 'revoke', 'card', 'list', 'vc', 'unmet', 'goen'];
 
 export function shuinId(action: ShuinAction, userId: string): string {
   return `${PREFIX}:${action}:${userId}`;
@@ -17,7 +17,7 @@ export function parseShuinId(customId: string): { action: ShuinAction; userId: s
 }
 
 /** 🎐 絵馬（評価の票）のボタン・モーダルの customId。形式: ema:<kind>:<相手のユーザー ID>（vote は世話役の投票） */
-export type EmaIdKind = 'give' | 'modal' | 'vote';
+export type EmaIdKind = 'give' | 'modal' | 'vote' | 'card';
 const EMA_PREFIX = 'ema';
 
 /** プロフィールの「絵馬を贈る」ボタン（押すと一言のモーダルが出る） */
@@ -32,9 +32,13 @@ export function emaModalId(userId: string): string {
 export function sewayakuVoteId(userId: string): string {
   return `${EMA_PREFIX}:vote:${userId}`;
 }
+/** 🎐 その人の絵馬（/絵馬 と同じカード）を開くボタン */
+export function emaCardId(userId: string): string {
+  return `${EMA_PREFIX}:card:${userId}`;
+}
 export function parseEmaId(customId: string): { kind: EmaIdKind; userId: string } | undefined {
   const [prefix, kind, userId] = customId.split(':');
-  if (prefix !== EMA_PREFIX || (kind !== 'give' && kind !== 'modal' && kind !== 'vote') || !userId || !/^\d{17,20}$/.test(userId)) return undefined;
+  if (prefix !== EMA_PREFIX || (kind !== 'give' && kind !== 'modal' && kind !== 'vote' && kind !== 'card') || !userId || !/^\d{17,20}$/.test(userId)) return undefined;
   return { kind, userId };
 }
 
@@ -48,4 +52,6 @@ export const COMMAND = {
   goshuin: 'goshuin',
   /** 🗳 世話役の投票（候補と自分の選挙権を見る） */
   sewayaku: 'sewayaku',
+  /** 🎐 絵馬（頂いた絵馬と、絵馬で上がる段の条件を見る） */
+  ema: 'ema',
 } as const;

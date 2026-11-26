@@ -812,6 +812,8 @@ export const guildConfigSchema = z
       applications: snowflake.optional(),
       /** #お参り判定: お参り期間が終わっても氏子に届かなかった人の通知（運営のみ） */
       omairi: snowflake.optional(),
+      /** #世話役選挙: 世話役の選挙の投稿と投票ボタン（省略時は「世話役選挙」という名前のチャンネル、なければ #慶事） */
+      sewayakuElection: snowflake.optional(),
       /** #相談窓口: 匿名相談が届く（運営のみ） */
       soudan: snowflake.optional(),
       /** #番付: ご縁のランキングを BOT が貼る（省略時は「番付」という名前のチャンネル） */

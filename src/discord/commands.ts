@@ -54,7 +54,7 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .setName(COMMAND.goshuin)
       .setNameLocalizations({ ja: w('御朱印帳', 'ご縁帳') })
       .setDescription('Show a goshuincho (shuin, goen and rank)')
-      .setDescriptionLocalizations({ ja: w('プロフィール（御朱印帳・自己紹介・ご縁）を見る。ここから朱印を押せる', 'ご縁帳（自己紹介・ご縁・絵馬）を見る。ここから結べる') })
+      .setDescriptionLocalizations({ ja: w('プロフィール（御朱印帳・自己紹介・ご縁）を見る。ここから朱印を押せる', 'ご縁帳（ご縁・結んでくれた人・結びのコレクション）を見る。ここから結べる') })
       .setContexts(InteractionContextType.Guild)
       .addUserOption((o) =>
         o
@@ -70,6 +70,16 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
           .setDescription('Post it so everyone can see')
           .setDescriptionLocalizations({ ja: 'チャンネルのみんなに見せる（省略すると自分だけ）' }),
       )
+      .toJSON(),
+
+    new SlashCommandBuilder()
+      .setName(COMMAND.ema)
+      .setNameLocalizations({ ja: '絵馬' })
+      .setDescription('Show ema (votes) and what is needed for the next rank')
+      .setDescriptionLocalizations({ ja: '頂いた絵馬（評価の票）と、絵馬で次の役職に上がる条件を見る' })
+      .setContexts(InteractionContextType.Guild)
+      .addUserOption((o) => o.setName('user').setNameLocalizations({ ja: '相手' }).setDescription('Whose ema (default: yourself)').setDescriptionLocalizations({ ja: '誰の絵馬を見るか（省略すると自分）' }))
+      .addBooleanOption((o) => o.setName('public').setNameLocalizations({ ja: '公開' }).setDescription('Post it so everyone can see').setDescriptionLocalizations({ ja: 'チャンネルのみんなに見せる（省略すると自分だけ）' }))
       .toJSON(),
 
     new SlashCommandBuilder()

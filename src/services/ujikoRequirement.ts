@@ -92,6 +92,8 @@ export type UjikoProgress = {
   until: Date;
   /** お参り期間で数えたか（false＝お参り期間がないので直近 14 日で数えた） */
   inOmairi: boolean;
+  /** お参り期間の終わり（お参り期間で数えたときだけ） */
+  endsAt?: Date;
   met: boolean;
 };
 
@@ -110,5 +112,5 @@ export async function ujikoProgress(db: Db, cfg: GuildConfig, memberId: string, 
   const inviteCount = Number(i?.n ?? 0);
   const inviteUsed = Math.min(inviteCount, cfg.emaThresholds.inviteSubstituteMax);
   const total = votes + inviteUsed;
-  return { week, active, required, votes, invites: inviteCount, inviteUsed, total, since, until, inOmairi, met: total >= required };
+  return { week, active, required, votes, invites: inviteCount, inviteUsed, total, since, until, inOmairi, ...(inOmairi ? { endsAt: o!.endsAt } : {}), met: total >= required };
 }

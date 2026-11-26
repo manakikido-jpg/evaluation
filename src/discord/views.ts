@@ -19,8 +19,10 @@ import type { GiveDenied, GiveOutcome } from '../services/flows.js';
 import type { RevokeResult, GoshuinchoData } from '../services/shuin.js';
 import type { GiveEmaResult } from '../services/ema.js';
 import { EMA_DAYS_TOGETHER, EMA_MESSAGE_MAX, EMA_MINUTES_TOGETHER, EMA_TIER_LABEL } from '../domain/ema.js';
-import { emaGiveId, emaModalId, sewayakuVoteId, shuinId } from './ids.js';
+import { emaCardId, emaGiveId, emaModalId, sewayakuVoteId, shuinId } from './ids.js';
 import type { CandidateStatus, VoterStatus, VoteResult } from '../services/sewayakuElection.js';
+import type { UjikoProgress } from '../services/ujikoRequirement.js';
+import type { EmaThresholdCounts } from '../domain/ema.js';
 import { w } from '../domain/terms.js';
 
 /** 朱色 */
@@ -47,9 +49,14 @@ const listButton = (userId: string) =>
 /** 🎐 絵馬（評価の票）を贈るボタン。氏子以上だけが贈れる（押したときに確かめる） */
 const emaGiveButton = (userId: string) =>
   new ButtonBuilder().setCustomId(emaGiveId(userId)).setLabel('絵馬を贈る').setEmoji('🎐').setStyle(ButtonStyle.Secondary);
-/** 🗳 世話役の投票ボタン（氏子のご縁帳に。押したときに選挙権・被選挙権を確かめる） */
-const sewayakuVoteButton = (userId: string, voted: boolean) =>
-  new ButtonBuilder().setCustomId(sewayakuVoteId(userId)).setLabel(voted ? '世話役の投票を取り消す' : 'お世話役になってほしい').setEmoji('🗳').setStyle(voted ? ButtonStyle.Secondary : ButtonStyle.Primary);
+/** 🗳 世話役の選挙の投票ボタン（#世話役選挙 の投稿に。押すと投票・もう一度で取り消し） */
+const sewayakuVoteButton = (userId: string) =>
+  new ButtonBuilder().setCustomId(sewayakuVoteId(userId)).setLabel('お世話役になってほしい').setEmoji('🗳').setStyle(ButtonStyle.Primary);
+/** プロフィールから、ご縁帳・絵馬を開くボタン */
+const goenCardButton = (userId: string) =>
+  new ButtonBuilder().setCustomId(shuinId('goen', userId)).setLabel(w('御朱印帳', 'ご縁帳')).setEmoji('📕').setStyle(ButtonStyle.Secondary);
+const emaCardButton = (userId: string) =>
+  new ButtonBuilder().setCustomId(emaCardId(userId)).setLabel('絵馬').setEmoji('🎐').setStyle(ButtonStyle.Secondary);
 /** 🧵 まだ結んでいない人（結びのコレクション）。自分のプロフィールにだけ出す */
 const unmetButton = (userId: string) =>
   new ButtonBuilder().setCustomId(shuinId('unmet', userId)).setLabel('まだ結んでいない人').setEmoji('🧵').setStyle(ButtonStyle.Secondary);
@@ -156,17 +163,90 @@ const jDay = (d: Date) => d.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo'
 const lastDay = (endsAt: Date) => jDay(new Date(endsAt.getTime() - 1));
 const hoursOf = (m: number) => Math.floor(m / 60);
 
-/** ご縁帳の「次の段」：氏子 → 世話役（選挙） */
-function sewayakuNextText(info: SewayakuCardInfo): string {
-  const e = info.election;
-  if (e?.status === 'open') return `（世話役の選挙中：${lastDay(e.endsAt)} まで・投票は下のボタン）`;
-  if (e?.status === 'scheduled') return `（世話役の選挙：${jDay(e.startsAt)}〜${lastDay(e.endsAt)}）`;
-  const c = info.status;
-  if (c.reason === 'months' && c.keptAt) return `（世話役の選挙の候補まで：氏子を ${jDay(c.keptAt)} まで続ける・縁側 あと ${hoursOf(Math.max(0, c.need - c.minutes) + 59)} 時間）`;
-  if (c.reason === 'time') return `（世話役の選挙の候補まで：縁側 あと ${hoursOf(Math.max(0, c.need - c.minutes) + 59)} 時間）`;
-  if (c.reason === 'retry' && c.retry) return `（世話役の選挙にもう一度：縁側 あと ${hoursOf(Math.max(0, c.retry.need - c.retry.minutes) + 59)} 時間）`;
-  if (c.ok) return '（世話役の選挙の候補です。まもなく選挙の日が決まります）';
-  return '';
+const SEWAYAKU_VOTER_KEYS_VIEW: readonly string[] = ['ujiko', 'sewayaku', 'sodai'];
+const rankName = (ranks: readonly Rank[], key: string) => {
+  const r = ranks.find((x) => x.key === key);
+  return r ? rankLabel(r) : key;
+};
+const rate = (p: number) => (p % 10 === 0 ? `${p / 10}割` : `${p}%`);
+
+/** ご縁帳の「⬆️ 次の役職」：参拝者→氏子（絵馬）／氏子→世話役（選挙）／世話役→総代（絵馬）の条件を全部 */
+function nextRankLines(
+  ranks: readonly Rank[],
+  ema: { count: number; step?: { toName: string; need: number; have?: number; inPeriod?: boolean }; sewayaku?: SewayakuCardInfo; ujiko?: UjikoProgress; th?: EmaThresholdCounts },
+): string[] {
+  const th = ema.th;
+  // 参拝者 → 氏子
+  if (ema.ujiko && th) {
+    const u = ema.ujiko;
+    const left = Math.max(0, u.required - u.total);
+    return [
+      `**${rankName(ranks, 'ujiko')}まで：絵馬（氏子の票） ${left ? `あと ${left} 枚` : 'そろいました'}**（いま ${u.total} / ${u.required} 枚）`,
+      u.inOmairi && u.endsAt ? `・期間：お参り期間（${jDay(u.since)}〜${jDay(u.endsAt)}）にもらった絵馬だけ数えます` : '・お参り期間がないので、直近14日にもらった絵馬で数えています',
+      `・要る数：${u.required} 枚（${u.week.slice(5).replace('-', '/')} からの週の数。前の7日間に縁側に${hoursOf(th.ujikoActiveMinutes)}時間以上いた氏子以上 ${u.active} 人の${rate(th.ujikoPercent)}・切り上げ・最低${th.ujikoMin}枚）`,
+      `・期間中にもらった絵馬：${u.votes} 枚`,
+      `・招待の補い：${u.inviteUsed} / ${th.inviteSubstituteMax}（招待した人が参拝者になると1つ。お参り期間も1日のびます）`,
+    ];
+  }
+  // 氏子 → 世話役（選挙）
+  if (ema.sewayaku && th) {
+    const info = ema.sewayaku;
+    const head = `**${rankName(ranks, 'sewayaku')}まで：選挙**`;
+    const e = info.election;
+    if (e?.status === 'open') return [head, `・🗳 選挙中：${lastDay(e.endsAt)} 23:59 まで（投票できる人の${rate(th.sewayakuVotePercent)}を超えたら世話役）`];
+    if (e?.status === 'scheduled') return [head, `・選挙の日：${jDay(e.startsAt)}〜${lastDay(e.endsAt)}（投票できる人の${rate(th.sewayakuVotePercent)}を超えたら世話役）`];
+    if (e?.status === 'closing') return [head, '・選挙を締めています'];
+    const c = info.status;
+    if (c.reason === 'not_started') return [head, '・新制度が始まってから数えます'];
+    if (c.reason === 'rank' || c.reason === 'not_member') return [head, '・氏子になってから数えます'];
+    const lines = [head];
+    lines.push(c.keptAt && c.keptAt > new Date() ? `・氏子を${th.sewayakuCandidateMonths}か月：${jDay(c.keptAt)} から` : `・氏子を${th.sewayakuCandidateMonths}か月：✅`);
+    lines.push(`・氏子になってから縁側：${hoursOf(c.minutes)} / ${hoursOf(c.need)} 時間${c.minutes >= c.need ? ' ✅' : ''}`);
+    if (c.retry) lines.push(`・前の選挙のあとの縁側：${hoursOf(c.retry.minutes)} / ${hoursOf(c.retry.need)} 時間${c.retry.minutes >= c.retry.need ? ' ✅' : ''}（届くと、また選挙）`);
+    lines.push(c.ok ? '・条件がそろいました。まもなく選挙の日（金・土・日）が決まります' : '・そろうと、その週の金・土・日（金曜より後なら次の週）に選挙があります');
+    return lines;
+  }
+  // 世話役 → 総代（絵馬）
+  if (ema.step && !ema.step.inPeriod) {
+    const have = ema.step.have ?? ema.count;
+    const left = Math.max(0, ema.step.need - have);
+    return [`**${ema.step.toName}まで：絵馬（総代の票） ${left ? `あと ${left} 枚` : 'そろいました'}**（いま ${have} / ${ema.step.need} 枚）`, '・総代と運営が贈れます（失効しません）'];
+  }
+  return [];
+}
+
+/** 🗳 世話役の選挙の投票権（直近30日の縁側） */
+function voterLine(v: VoterStatus, th: EmaThresholdCounts): string {
+  const need = hoursOf(th.sewayakuVoterMinutes);
+  return v.ok
+    ? `✅ 投票できます（直近30日の縁側 ${hoursOf(v.minutes)} 時間・${need}時間を超えると投票できます）\n-# 選挙がはじまる金曜0時の時点で決まります`
+    : `直近30日の縁側 ${hoursOf(v.minutes)} / ${need} 時間（超えると投票できます）\n-# 選挙がはじまる金曜0時の時点で決まります`;
+}
+
+/** 🗳 #世話役選挙：選挙がはじまったときの投稿（投票ボタンつき・通知なし） */
+export function sewayakuElectionPost(candidateId: string, endsAt: Date, voters: number, th: { sewayakuVotePercent: number; sewayakuVoterMinutes: number }): MessageCreateOptions {
+  const embed = new EmbedBuilder()
+    .setColor(SAKURA)
+    .setTitle('🗳 世話役の選挙')
+    .setDescription(`${mention(candidateId)} さまを、世話役に推しますか？`)
+    .addFields(
+      { name: '期間', value: `${lastDay(endsAt)} 23:59 まで`, inline: true },
+      { name: '投票できる人', value: `${voters} 人`, inline: true },
+      { name: '決まり方', value: `投票できる人の ${th.sewayakuVotePercent}% を超える「お世話役になってほしい」が集まったら世話役になります。投票は匿名で、もう一度押すと取り消せます。` },
+      { name: '投票できる人', value: `選挙がはじまった金曜0時に、直近30日の縁側の浮上が ${hoursOf(th.sewayakuVoterMinutes)} 時間を超えていた氏子・世話役・総代の方` },
+    )
+    .setFooter({ text: '咲楽ノ宮・世話役選挙' });
+  return { embeds: [embed.toJSON()], components: [row(sewayakuVoteButton(candidateId))], allowedMentions: { parse: [], users: [] } };
+}
+
+/** 🗳 #世話役選挙：締めたあとの投稿（ボタンを外す。届かなかったときは票の数を出さない） */
+export function sewayakuElectionResultPost(candidateId: string, passed: boolean, votes: number, voters: number): { embeds: APIEmbed[]; components: [] } {
+  const embed = new EmbedBuilder()
+    .setColor(passed ? SAKURA : SHU)
+    .setTitle('🗳 世話役の選挙（締め切りました）')
+    .setDescription(passed ? `${mention(candidateId)} さまは、${voters} 人中 ${votes} 票で **世話役** になられました。` : `${mention(candidateId)} さまの選挙を締め切りました。今回は世話役にはなりませんでした。`)
+    .setFooter({ text: '咲楽ノ宮・世話役選挙' });
+  return { embeds: [embed.toJSON()], components: [] };
 }
 
 /** 🗳 世話役の選挙の投票の結果（本人だけに表示） */
@@ -207,7 +287,7 @@ export function sewayakuInfoReply(
     content: [
       '🗳 **世話役の選挙（匿名）**',
       `氏子を ${th.sewayakuCandidateMonths} か月つづけて、氏子になってから縁側に ${hoursOf(th.sewayakuCandidateMinutes)} 時間いた氏子が候補になり、その週の金・土・日が選挙です。票が「投票できる人」の ${th.sewayakuVotePercent}% を超えると世話役になります（落ちたら、縁側 ${hoursOf(th.sewayakuRetryMinutes)} 時間でもう一度）。`,
-      '投票のしかた：候補の方のご縁帳（右クリック →「アプリ」→ プロフィール、または /ご縁帳）の「🗳 お世話役になってほしい」を押す。もう一度押すと取り消せます。',
+      '投票のしかた：#世話役選挙 の、その方の投稿の「🗳 お世話役になってほしい」を押す。もう一度押すと取り消せます。',
       right,
       '**投票中の選挙**',
       openLines,
@@ -250,45 +330,31 @@ export type ProfileExtra = {
 const jstDay = (d: Date) => new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: 'long', day: 'numeric' }).format(d);
 
 /** プロフィール（御朱印帳）。ここから朱印を押せる */
+export type CardMode = 'profile' | 'goen' | 'ema';
+
 export function goshuinchoReply(
   ranks: readonly Rank[],
   owner: { id: string; displayName: string; avatarUrl?: string; roleIds: string[] },
   data: GoshuinchoData,
   coins?: { emoji: string; name: string; balance: number },
   profile: ProfileExtra = {},
-  ema?: { count: number; messages: { message: string; createdAt: Date }[]; promoteMode?: boolean; step?: { toName: string; need: number; have?: number; inPeriod?: boolean }; sewayaku?: SewayakuCardInfo },
+  ema?: { count: number; messages: { message: string; createdAt: Date }[]; promoteMode?: boolean; step?: { toName: string; need: number; have?: number; inPeriod?: boolean }; sewayaku?: SewayakuCardInfo; ujiko?: UjikoProgress; voter?: VoterStatus; th?: EmaThresholdCounts; tierLabel?: string },
   collection?: { total: number; met: number },
+  view: { mode?: CardMode; perkNext?: { goen: number; label: string } } = {},
 ): Reply {
+  const mode = view.mode ?? 'profile';
   const rank = highestRank(ranks, owner.roleIds);
   const auto = currentAutoRank(ranks, owner.roleIds);
   const next = auto ? nextAutoRank(ranks, data.goen, auto) : undefined;
-  // 🎐 絵馬での昇格が ON のときは「次の段」を絵馬の枚数で案内する。OFF のときは従来どおりご縁で。
-  let nextText = '';
-  if (auto) {
-    if (ema?.promoteMode && ema.step) {
-      const have = ema.step.have ?? ema.count;
-      nextText = ema.step.inPeriod
-        ? `（${ema.step.toName}の条件：お参り期間中に絵馬 ${ema.step.need} 枚・いま ${have} 枚・あと ${Math.max(0, ema.step.need - have)} 枚）`
-        : `（${ema.step.toName}の条件：絵馬 ${ema.step.need} 枚・あと ${Math.max(0, ema.step.need - have)} 枚）`;
-    } else if (ema?.promoteMode && ema.sewayaku) {
-      nextText = sewayakuNextText(ema.sewayaku);
-    } else if (!ema?.promoteMode && auto.key === 'sanpaisha') {
-      nextText = '（氏子の条件：ご縁40＋縁側20時間）';
-    } else if (!ema?.promoteMode && next) {
-      nextText = `（${next.rank.name}まで あと ${next.remaining}）`;
-    }
-  }
+  // 🎐 絵馬（評価の票）は参拝者・氏子・世話役にだけ出す
+  const emaRelevant = rank?.key === 'sanpaisha' || rank?.key === 'ujiko' || rank?.key === 'sewayaku';
+  const promoteMode = Boolean(ema?.promoteMode);
+  if (mode === 'ema') return emaCardReply(ranks, owner, rank, emaRelevant, profile, ema);
 
   const received = data.receivedCount
     ? `${data.receivedCount} 人\n${breakdownLine(ranks, data.byRank)}`
     : 'まだありません';
   const recent = data.recentGiverIds.length ? data.recentGiverIds.map((id) => `${mention(id)} さま`).join('、') : '—';
-
-  const embed = new EmbedBuilder()
-    .setColor(SHU)
-    .setTitle(w(`📕 ${owner.displayName} さまのプロフィール`, `📕 ${owner.displayName} さまのご縁帳`))
-    .setDescription(`${rankLabel(rank)} ・ ご縁 **${data.goen}**${nextText}`);
-  // 性別・DM・フレンド（あるものだけ）
   const about = [
     ...(profile.gender ? [{ name: '性別', value: profile.gender, inline: true }] : []),
     ...(profile.dm ? [{ name: 'DM', value: profile.dm, inline: true }] : []),
@@ -296,34 +362,104 @@ export function goshuinchoReply(
     ...(profile.titles?.length ? [{ name: '称号', value: profile.titles.join('・'), inline: true }] : []),
     ...(profile.joinedAt ? [{ name: '参拝した日', value: jstDay(profile.joinedAt), inline: true }] : []),
   ];
-  if (about.length) embed.addFields(about);
-  embed.addFields({
+  const introField = {
     name: '自己紹介',
     value: profile.intro ? `${profile.intro.excerpt ? `${profile.intro.excerpt}\n` : ''}[📝 自己紹介を見る](${profile.intro.url})` : 'まだありません',
-  });
-  embed.addFields(
+  };
+  const goenFields = [
     { name: w('頂いた朱印', '結んでくれた人'), value: received },
     { name: w('最近の朱印', '最近結んでくれた人'), value: recent },
     { name: w('押した朱印', '結んだ人'), value: `${data.givenCount} 人`, inline: true },
-  );
-  // 🧵 結びのコレクション（自分のプロフィールだけ）
-  if (profile.self && collection) embed.addFields({ name: '🧵 結びのコレクション', value: `${collection.met} / ${collection.total} 人${collection.met < collection.total ? '（下の「まだ結んでいない人」から結べます）' : '（コンプリート！）'}`, inline: true });
-  // 🎐 絵馬（評価の票）。参拝者・氏子・世話役にだけ出す（匿名の一言と有効な枚数・次の段の票）
-  const emaRelevant = rank?.key === 'sanpaisha' || rank?.key === 'ujiko' || rank?.key === 'sewayaku';
-  if (ema && emaRelevant) embed.addFields({ name: '🎐 頂いた絵馬', value: emaField(ema) });
+  ];
+  const collectionField = profile.self && collection
+    ? { name: '🧵 結びのコレクション', value: `${collection.met} / ${collection.total} 人${collection.met < collection.total ? '（下の「まだ結んでいない人」から結べます）' : '（コンプリート！）'}`, inline: true }
+    : undefined;
+  const embed = new EmbedBuilder().setColor(SHU);
+  if (owner.avatarUrl) embed.setThumbnail(owner.avatarUrl);
+
+  // ── 絵馬での昇格が OFF のあいだは、今までどおり1枚のカード ──
+  if (!promoteMode) {
+    let nextText = '';
+    if (auto?.key === 'sanpaisha') nextText = '（氏子の条件：ご縁40＋縁側20時間）';
+    else if (auto && next) nextText = `（${next.rank.name}まで あと ${next.remaining}）`;
+    embed.setTitle(w(`📕 ${owner.displayName} さまのプロフィール`, `📕 ${owner.displayName} さまのご縁帳`)).setDescription(`${rankLabel(rank)} ・ ご縁 **${data.goen}**${nextText}`);
+    if (about.length) embed.addFields(about);
+    embed.addFields(introField, ...goenFields);
+    if (collectionField) embed.addFields(collectionField);
+    if (ema && emaRelevant) embed.addFields({ name: '🎐 頂いた絵馬', value: emaField(ema) });
+    if (coins) embed.addFields({ name: coins.name, value: `${coins.emoji} ${coins.balance}`, inline: true });
+    if (profile.tickets) embed.addFields({ name: '🎟 券', value: profile.tickets });
+    if (profile.bannerUrl) embed.setImage(profile.bannerUrl);
+    const buttons = [
+      ...(profile.self ? [] : [giveButton(owner.id)]),
+      ...(profile.self || !emaRelevant ? [] : [emaGiveButton(owner.id)]),
+      ...(profile.self ? [unmetButton(owner.id)] : []),
+      listButton(owner.id),
+    ];
+    return { embeds: [embed.toJSON()], components: [row(...buttons)] };
+  }
+
+  // ── /ご縁帳：ご縁のことだけ ──
+  if (mode === 'goen') {
+    const perk = view.perkNext ? `\n次の節目：ご縁 ${view.perkNext.goen}（${view.perkNext.label}）まで あと **${Math.max(0, view.perkNext.goen - data.goen)}**` : '';
+    embed.setTitle(w(`📕 ${owner.displayName} さまの御朱印帳`, `📕 ${owner.displayName} さまのご縁帳`)).setDescription(`ご縁 **${data.goen}**（結ぶとたまる・節目でごほうび。役職には使いません）${perk}`);
+    embed.addFields(...goenFields);
+    if (collectionField) embed.addFields(collectionField);
+    const buttons = [
+      ...(profile.self ? [unmetButton(owner.id)] : [giveButton(owner.id)]),
+      listButton(owner.id),
+    ];
+    return { embeds: [embed.toJSON()], components: [row(...buttons)] };
+  }
+
+  // ── プロフィール：まとめ ──
+  embed.setTitle(`📕 ${owner.displayName} さまのプロフィール`).setDescription(`${rankLabel(rank)} ・ ご縁 **${data.goen}**${emaRelevant && ema ? ` ・ 絵馬 **${ema.count}** 枚` : ''}`);
+  if (about.length) embed.addFields(about);
+  if (ema) {
+    const nextLines = nextRankLines(ranks, ema);
+    if (nextLines.length) embed.addFields({ name: '⬆️ 次の役職', value: nextLines.join('\n').slice(0, 1024) });
+    if (ema.voter && ema.th && SEWAYAKU_VOTER_KEYS_VIEW.includes(rank?.key ?? '')) embed.addFields({ name: '🗳 世話役の選挙の投票権', value: voterLine(ema.voter, ema.th) });
+  }
+  embed.addFields(introField);
   if (coins) embed.addFields({ name: coins.name, value: `${coins.emoji} ${coins.balance}`, inline: true });
   if (profile.tickets) embed.addFields({ name: '🎟 券', value: profile.tickets });
-  if (owner.avatarUrl) embed.setThumbnail(owner.avatarUrl);
   if (profile.bannerUrl) embed.setImage(profile.bannerUrl);
-
   const buttons = [
     ...(profile.self ? [] : [giveButton(owner.id)]),
     ...(profile.self || !emaRelevant ? [] : [emaGiveButton(owner.id)]),
-    ...(!profile.self && ema?.promoteMode && ema.sewayaku?.showVote ? [sewayakuVoteButton(owner.id, ema.sewayaku.voted)] : []),
-    ...(profile.self ? [unmetButton(owner.id)] : []),
-    listButton(owner.id),
+    goenCardButton(owner.id),
+    emaCardButton(owner.id),
   ];
   return { embeds: [embed.toJSON()], components: [row(...buttons)] };
+}
+
+/** /絵馬：絵馬のことだけ（頂いた絵馬・匿名の一言・絵馬で上がる段の条件） */
+function emaCardReply(
+  ranks: readonly Rank[],
+  owner: { id: string; displayName: string; avatarUrl?: string },
+  rank: Rank | undefined,
+  emaRelevant: boolean,
+  profile: ProfileExtra,
+  ema: Parameters<typeof goshuinchoReply>[5],
+): Reply {
+  const embed = new EmbedBuilder().setColor(SHU).setTitle(`🎐 ${owner.displayName} さまの絵馬`).setDescription(rankLabel(rank));
+  if (owner.avatarUrl) embed.setThumbnail(owner.avatarUrl);
+  if (!emaRelevant || !ema) {
+    embed.addFields({ name: '🎐 絵馬', value: '絵馬（評価の票）は、参拝者・氏子・世話役の方に贈られます。' });
+    return { embeds: [embed.toJSON()] };
+  }
+  embed.addFields({ name: `🎐 頂いた絵馬${ema.tierLabel ? `（${ema.tierLabel}）` : ''}`, value: emaField(ema) });
+  if (ema.promoteMode) {
+    if (rank?.key === 'ujiko') {
+      const keep = ema.th?.ujikoKeep ?? 0;
+      embed.addFields({ name: '⬆️ 絵馬と役職', value: [`氏子の票は、氏子でいるための目安です${keep ? `（${keep} 枚あると安心）` : ''}。`, '世話役は絵馬ではなく **選挙** で決まります（#世話役選挙・/世話役の投票）。'].join('\n') });
+    } else {
+      const lines = nextRankLines(ranks, ema);
+      if (lines.length) embed.addFields({ name: '⬆️ 絵馬で次の役職へ', value: lines.join('\n').slice(0, 1024) });
+    }
+  }
+  const buttons = profile.self ? [] : [emaGiveButton(owner.id)];
+  return { embeds: [embed.toJSON()], ...(buttons.length ? { components: [row(...buttons)] } : {}) };
 }
 
 /** 🎐 絵馬の欄（有効な枚数＋匿名の一言を新しい順に少しだけ）。1024 字をこえないようにする */

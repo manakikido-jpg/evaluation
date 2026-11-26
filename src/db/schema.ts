@@ -77,6 +77,9 @@ export const sewayakuElections = pgTable(
     voterIds: jsonb('voter_ids').$type<string[]>(),
     votes: integer('votes'),
     closedAt: timestamp('closed_at', { withTimezone: true }),
+    /** #世話役選挙 に出した投稿（締めたら結果に書きかえる） */
+    channelId: text('channel_id'),
+    messageId: text('message_id'),
   },
   (t) => [index('sewayaku_elections_candidate_idx').on(t.candidateId, t.endsAt), index('sewayaku_elections_status_idx').on(t.status, t.startsAt)],
 );

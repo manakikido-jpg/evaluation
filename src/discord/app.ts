@@ -42,7 +42,8 @@ import { currentAutoRank, decidePromotion, highestRank, voiceCapPercentOf, voice
 import { emaStepFrom, EMA_PROMOTION_BURST, EMA_TIER_LABEL } from '../domain/ema.js';
 import { w } from '../domain/terms.js';
 import { collectEmaKeepWarnings, emaPromotable, emaPromotionEnabled, emaStepProgress } from '../services/emaPromotion.js';
-import { candidateStatus, closeDueSewayakuElections, currentElectionOf, finishSewayakuElection, hasSewayakuVote, listSewayakuElections, openSewayakuElections, scheduleSewayakuElections, toggleSewayakuVote, voterStatus } from '../services/sewayakuElection.js';
+import { ujikoProgress } from '../services/ujikoRequirement.js';
+import { candidateStatus, closeDueSewayakuElections, currentElectionOf, finishSewayakuElection, hasSewayakuVote, listSewayakuElections, openSewayakuElections, scheduleSewayakuElections, setSewayakuElectionMessage, toggleSewayakuVote, voterStatus } from '../services/sewayakuElection.js';
 import { grantGoenPerks } from '../services/goenPerks.js';
 import { KeyedLock } from '../lib/lock.js';
 import { logger } from '../lib/logger.js';
@@ -72,6 +73,9 @@ import {
   promotionBurstAnnouncement,
   sewayakuInfoReply,
   type SewayakuCardInfo,
+  type CardMode,
+  sewayakuElectionPost,
+  sewayakuElectionResultPost,
   sewayakuVoteReply,
   promotionLog,
   revokeLog,
@@ -362,7 +366,12 @@ export class ShuinApp {
       } else if (interaction.isChatInputCommand() && interaction.commandName === COMMAND.goshuin) {
         const target = interaction.options.getUser('user') ?? interaction.user;
         const isPublic = interaction.options.getBoolean('public') ?? false;
-        return await this.card(interaction, target.id, isPublic);
+        // ③ON のときは /ご縁帳＝ご縁だけ（まとめは右クリックの「プロフィール」）
+        return await this.card(interaction, target.id, isPublic, 'goen');
+      } else if (interaction.isChatInputCommand() && interaction.commandName === COMMAND.ema) {
+        const target = interaction.options.getUser('user') ?? interaction.user;
+        const isPublic = interaction.options.getBoolean('public') ?? false;
+        return await this.card(interaction, target.id, isPublic, 'ema');
       } else if (interaction.isChatInputCommand() && interaction.commandName === COMMAND.sewayaku) {
         return await this.sewayakuInfo(interaction);
       } else if (interaction.isButton() && interaction.customId === SHUIN_PICK_ID) {
@@ -379,6 +388,7 @@ export class ShuinApp {
         const parsed = parseEmaId(interaction.customId);
         if (parsed?.kind === 'give') return await this.emaGive(interaction, parsed.userId);
         if (parsed?.kind === 'vote') return await this.sewayakuVote(interaction, parsed.userId);
+        if (parsed?.kind === 'card') return await this.card(interaction, parsed.userId, false, 'ema');
       } else if (interaction.isModalSubmit() && interaction.customId.startsWith('ema:')) {
         const parsed = parseEmaId(interaction.customId);
         if (parsed?.kind === 'modal') return await this.emaSubmit(interaction, parsed.userId);
@@ -398,6 +408,8 @@ export class ShuinApp {
             return await this.vcList(interaction, parsed.userId);
           case 'unmet':
             return await this.unmetPick(interaction, parsed.userId);
+          case 'goen':
+            return await this.card(interaction, parsed.userId, false, 'goen');
         }
       }
     } catch (err) {
@@ -579,11 +591,10 @@ export class ShuinApp {
         }
       }
       for (const e of await openSewayakuElections(this.db, this.cfg, now)) {
-        await this.send(this.cfg.channels.keiji, {
-          content: `🗳 **世話役の選挙**がはじまりました：<@${e.candidateId}> さま（${day(new Date(e.endsAt.getTime() - 1))} 23:59 まで）\n投票できる方（直近30日の縁側の浮上が ${Math.floor(th.sewayakuVoterMinutes / 60)} 時間を超えている氏子・世話役・総代）は、その方のご縁帳の「🗳 お世話役になってほしい」から匿名で投票できます。くわしくは /世話役の投票`,
-          allowedMentions: { parse: [], users: [] },
-        });
-        await this.log(`🗳 世話役の選挙をはじめました：<@${e.candidateId}>（投票できる人 ${e.voterIds?.length ?? 0} 人）`);
+        const channelId = this.sewayakuElectionChannel(guild);
+        const msg = channelId ? await this.sendAndGet(channelId, sewayakuElectionPost(e.candidateId, e.endsAt, e.voterIds?.length ?? 0, th)) : undefined;
+        if (channelId && msg) await setSewayakuElectionMessage(this.db, e.id, channelId, msg.id);
+        await this.log(`🗳 世話役の選挙をはじめました：<@${e.candidateId}>（投票できる人 ${e.voterIds?.length ?? 0} 人）${channelId ? ` <#${channelId}>` : ''}`);
       }
       const to = this.cfg.ranks.find((r) => r.key === 'sewayaku');
       for (const c of await closeDueSewayakuElections(this.db, this.cfg, now)) {
@@ -600,6 +611,14 @@ export class ShuinApp {
           }
         }
         await finishSewayakuElection(this.db, c.election.id, ok ? 'passed' : 'failed', now);
+        // #世話役選挙 の投稿を結果に書きかえる（ボタンを外す。届かなかったときは票の数を出さない）
+        if (c.election.channelId && c.election.messageId) {
+          const ch = await this.client.channels.fetch(c.election.channelId).catch(() => null);
+          if (ch?.isTextBased?.() && 'messages' in ch) {
+            const m = await ch.messages.fetch(c.election.messageId).catch(() => undefined);
+            await m?.edit(sewayakuElectionResultPost(id, ok, c.votes, c.voters)).catch((err) => logger.warn({ err, electionId: c.election.id }, 'sewayaku election post edit failed'));
+          }
+        }
         await this.log(
           `🗳 世話役の選挙を締めました：<@${id}> ${c.votes} 票／投票できる人 ${c.voters} 人（${th.sewayakuVotePercent}% を超えたら昇格）→ ${ok ? '世話役に昇格' : c.passes ? '票は届いたが昇格できず（役職を確かめてください）' : c.voters < th.sewayakuMinVoters ? `不成立（投票できる人が ${th.sewayakuMinVoters} 人未満）` : `届かず（縁側 ${Math.floor(th.sewayakuRetryMinutes / 60)} 時間でまた候補）`}`,
         );
@@ -629,7 +648,7 @@ export class ShuinApp {
     });
   }
 
-  private async card(interaction: Repliable, ownerId: string, isPublic: boolean): Promise<void> {
+  private async card(interaction: Repliable, ownerId: string, isPublic: boolean, mode: CardMode = 'profile'): Promise<void> {
     await interaction.deferReply(isPublic ? {} : { flags: MessageFlags.Ephemeral });
     const owner = await this.fetchMember(interaction, ownerId);
     if (!owner) {
@@ -662,19 +681,19 @@ export class ShuinApp {
           inPeriod: ownerStep.from === 'sanpaisha',
         }
       : undefined;
-    // 🗳 氏子のご縁帳：世話役の選挙（候補までの道のり・決まった選挙・投票中なら投票ボタン）
-    const ownerIsUjiko = highestRank(this.cfg.ranks, owner.roles.cache.keys())?.key === 'ujiko';
+    // 🗳 氏子：世話役の選挙（候補までの道のり・決まった選挙）。投票は #世話役選挙 の投稿のボタンで
+    const ownerKey = highestRank(this.cfg.ranks, owner.roles.cache.keys())?.key;
     let sewayakuInfo: SewayakuCardInfo | undefined;
-    if (emaMode && ownerIsUjiko) {
+    if (emaMode && ownerKey === 'ujiko') {
       const [cand, election] = await Promise.all([candidateStatus(this.db, this.cfg, ownerId), currentElectionOf(this.db, ownerId)]);
-      const isOpen = election?.status === 'open';
-      sewayakuInfo = {
-        status: cand,
-        ...(election ? { election: { status: election.status, startsAt: election.startsAt, endsAt: election.endsAt } } : {}),
-        showVote: isOpen && interaction.user.id !== ownerId,
-        voted: isOpen && election && interaction.user.id !== ownerId ? await hasSewayakuVote(this.db, election.id, interaction.user.id) : false,
-      };
+      sewayakuInfo = { status: cand, ...(election ? { election: { status: election.status, startsAt: election.startsAt, endsAt: election.endsAt } } : {}), showVote: false, voted: false };
     }
+    // 参拝者：お参り期間・毎週の数・招待の補いをくわしく／氏子・世話役・総代：世話役の選挙の投票権
+    const ujiko = emaMode && ownerKey === 'sanpaisha' ? await ujikoProgress(this.db, this.cfg, ownerId) : undefined;
+    const voter = emaMode && (ownerKey === 'ujiko' || ownerKey === 'sewayaku' || ownerKey === 'sodai') ? await voterStatus(this.db, this.cfg, ownerId) : undefined;
+    // 次のご縁の節目（ご縁帳）
+    const nextPerk = [...this.cfg.goenPerks].sort((a, b) => a.goen - b.goen).find((p) => p.goen > data.goen);
+    const perkNext = nextPerk ? { goen: nextPerk.goen, label: nextPerk.label || `${nextPerk.coins} ${this.cfg.economy.currencyName}` } : undefined;
     const ticketText = tickets ? allTicketsLine(tickets, await customHoldingsOf(this.db, ownerId)) : undefined;
     // 🧵 結びのコレクションは自分のプロフィールだけ
     const collection = interaction.user.id === ownerId ? await metCollection(this.db, ownerId) : undefined;
@@ -692,8 +711,12 @@ export class ShuinApp {
         data,
         wallet ? { emoji: e.currencyEmoji, name: e.currencyName, balance: wallet.balance } : undefined,
         { ...(await this.profileOf(owner, interaction.user.id === ownerId)), ...(ticketText ? { tickets: ticketText } : {}) },
-        { count: emaCount, messages: emaMessages, promoteMode: emaMode, ...(emaStepInfo ? { step: emaStepInfo } : {}), ...(sewayakuInfo ? { sewayaku: sewayakuInfo } : {}) },
+        {
+          count: emaCount, messages: emaMessages, promoteMode: emaMode, th: this.cfg.emaThresholds, tierLabel: EMA_TIER_LABEL[emaTier],
+          ...(emaStepInfo ? { step: emaStepInfo } : {}), ...(sewayakuInfo ? { sewayaku: sewayakuInfo } : {}), ...(ujiko ? { ujiko } : {}), ...(voter ? { voter } : {}),
+        },
         collection ? { total: collection.total, met: collection.met } : undefined,
+        { mode, ...(perkNext ? { perkNext } : {}) },
       ),
     );
   }
@@ -935,6 +958,24 @@ export class ShuinApp {
     // お参り期間中なら完了にする
     await setOmairiStatus(this.db, member.id, 'promoted', 'system').catch((err) => logger.warn({ err }, 'omairi close failed'));
     return true;
+  }
+
+  /** 🗳 #世話役選挙：設定 → 「世話役選挙」という名前のチャンネル → #慶事 */
+  private sewayakuElectionChannel(guild: Guild): string | undefined {
+    if (this.cfg.channels.sewayakuElection) return this.cfg.channels.sewayakuElection;
+    const byName = guild.channels?.cache?.find((c) => c.isTextBased?.() && !c.isThread?.() && c.name.includes('世話役選挙'));
+    return byName?.id ?? this.cfg.channels.keiji;
+  }
+
+  /** 投稿して、その投稿を返す（書きかえ用） */
+  private async sendAndGet(channelId: string, message: MessageCreateOptions): Promise<{ id: string } | undefined> {
+    try {
+      const channel = await this.client.channels.fetch(channelId);
+      if (channel?.isSendable()) return await channel.send(message);
+    } catch (err) {
+      logger.warn({ err, channelId }, 'send failed');
+    }
+    return undefined;
   }
 
   private async log(content: string): Promise<void> {

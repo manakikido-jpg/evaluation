@@ -237,3 +237,8 @@ export async function finishSewayakuElection(db: Db, electionId: number, status:
 export async function listSewayakuElections(db: Db, statuses: readonly string[], limit = 50): Promise<SewayakuElection[]> {
   return db.select().from(sewayakuElections).where(inArray(sewayakuElections.status, [...statuses])).orderBy(desc(sewayakuElections.startsAt), desc(sewayakuElections.id)).limit(limit);
 }
+
+/** #世話役選挙 に出した投稿を覚える（締めたら書きかえる） */
+export async function setSewayakuElectionMessage(db: Db, electionId: number, channelId: string, messageId: string): Promise<void> {
+  await db.update(sewayakuElections).set({ channelId, messageId }).where(eq(sewayakuElections.id, electionId));
+}
