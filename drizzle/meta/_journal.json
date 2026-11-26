@@ -1226,6 +1226,13 @@
       "when": 1795678321684,
       "tag": "0174_great_leper_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 175,
+      "version": "7",
+      "when": 1795678527207,
+      "tag": "0175_loose_the_executioner",
+      "breakpoints": true
     }
   ]
 }

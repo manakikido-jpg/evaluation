@@ -2920,3 +2920,22 @@ export const ticketNotices = pgTable('ticket_notices', {
   dedupe: text('dedupe').notNull(), kind: text('kind').notNull(), body: text('body').notNull(), target: text('target').$type<'user'|'owner'|'admin'|'channel'>().notNull(),
   sentAt: timestamp('sent_at', { withTimezone: true }), attempts: integer('attempts').notNull().default(0), nextTryAt: timestamp('next_try_at', { withTimezone: true }).notNull().defaultNow(), leaseUntil: timestamp('lease_until', { withTimezone: true }),
 }, t => [uniqueIndex('ticket_notices_dedupe_idx').on(t.ticketId,t.cycle,t.dedupe), index('ticket_notices_pending_idx').on(t.sentAt,t.nextTryAt)]);
+/** 議事録から作る資料。原文は作成時の写し、本文は編集可能な下書き。 */
+export const minutesDocuments = pgTable('minutes_documents', {
+  id: text('id').primaryKey(),
+  guildId: text('guild_id').notNull(),
+  nonce: text('nonce').notNull(),
+  title: text('title').notNull(),
+  source: text('source').notNull(),
+  body: jsonb('body').$type<import('../services/documents/model.js').DocumentBody>().notNull(),
+  revision: integer('revision').notNull().default(1),
+  status: text('status').notNull().default('draft'),
+  generationId: text('generation_id'),
+  generationStartedAt: timestamp('generation_started_at',{withTimezone:true}),
+  generatedAt: timestamp('generated_at',{withTimezone:true}),
+  createdBy: text('created_by').notNull(),
+  updatedBy: text('updated_by').notNull(),
+  createdAt: timestamp('created_at',{withTimezone:true}).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at',{withTimezone:true}).notNull().defaultNow(),
+},t=>[uniqueIndex('minutes_documents_nonce_idx').on(t.guildId,t.nonce),index('minutes_documents_updated_idx').on(t.guildId,t.updatedAt)]);
+export type MinutesDocument = typeof minutesDocuments.$inferSelect;
