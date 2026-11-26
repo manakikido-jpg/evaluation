@@ -168,7 +168,7 @@ function ThemeChoice() {
   </label>;
 }
 
-export function Layout(props: { title: string; session?: SessionView; nav?: Nav; scripts?: ('editor.js' | 'perms.js' | 'charts.js' | 'invite-selection.js' | 'guide.js' | 'org.js' | 'nav-order.js' | 'recordings.js' | 'home-voice.js' | 'copy-text.js')[]; /** 画面の横いっぱいに使う（大きな表のページ） */ wide?: boolean; children: Child }) {
+export function Layout(props: { title: string; session?: SessionView; nav?: Nav; inplace?: boolean; scripts?: ('editor.js' | 'perms.js' | 'charts.js' | 'invite-selection.js' | 'guide.js' | 'org.js' | 'nav-order.js' | 'recordings.js' | 'home-voice.js' | 'cast-register.js' | 'copy-text.js')[]; /** 画面の横いっぱいに使う（大きな表のページ） */ wide?: boolean; children: Child }) {
   const { session, nav } = props;
   const unseen = session?.updatesUnseen ?? 0;
   const consoleTheme=!['casinotest','keibatest'].includes(nav??'');
@@ -283,7 +283,7 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
             <label for="nav-toggle" class="backdrop" aria-hidden="true"></label>
           </>
         )}
-        <main id="main-content" tabindex={-1} data-office-inplace={session && !props.scripts?.length ? "" : undefined} class={props.wide ? 'wide' : undefined}>
+        <main id="main-content" tabindex={-1} data-office-inplace={session && (props.inplace || !props.scripts?.length) ? "" : undefined} class={props.wide ? 'wide' : undefined}>
           {session && nav && PAGE_HINTS[nav] && (
             <details class="page-hint" data-page-hint>
               <summary>❓ このページの使い方</summary>

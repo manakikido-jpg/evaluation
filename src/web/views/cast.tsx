@@ -41,6 +41,7 @@ export const CAST_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> =
   role_failed: { text: 'ロールを作れませんでした（BOT の「ロールの管理」の権限）。', kind: 'warn' },
   paid: { text: 'キャストに渡しました。', kind: 'ok' },
   refunded: { text: 'お客に戻しました。', kind: 'ok' },
+  registered_partial: { text: '登録は保存しましたが、ロール付与か本人へのDMが届きませんでした。Discordの権限・本人のDM設定を確認してください。', kind: 'warn' },
   registered: { text: '🎀 キャストに登録しました（ロールを付けて、メニューに並べました。本人に DM で知らせました）。写真は下の一覧から保存できます。', kind: 'ok' },
   no_member: { text: 'その人が見つかりません。名前を入れて、出てきた候補から選んでください（鯖にいる人だけ）。', kind: 'warn' },
   reg_not_adult: { text: 'キャストに登録できるのは、18 歳以上（宵参りのロールか、年齢区分が大人）の人だけです。', kind: 'warn' },
@@ -212,55 +213,102 @@ function MenuList(props: { items: CastMenuItem[]; base: string; session: AdminSe
 }
 
 /** メニューの欄（内容・説明・時間・値段・寝落ち）。登録とメニューを足すで使う */
-function MenuFields(props: { c: CastConfig; optional?: boolean }) {
+export type CastRegistrationDraft = Record<string, string | string[]>;
+
+function MenuFields(props: { c: CastConfig; optional?: boolean; draft?: CastRegistrationDraft }) {
+  const value = (key: string) => typeof props.draft?.[key] === "string" ? props.draft[key] as string : "";
   const pair = (n: '' | '2' | '3', first: boolean) => (
     <>
       <label class="field">
         <span>時間{n ? ` ${n}` : ''}（分。{MENU_MINUTES.min}〜{MENU_MINUTES.max}・0 で時間フリー）</span>
-        <input type="number" name={`menuMinutes${n}`} min={0} max={MENU_MINUTES.max} step={5} placeholder={first ? '30' : n === '2' ? '60' : ''} />
+        <input type="number" name={`menuMinutes${n}`} value={value(`menuMinutes${n}`)} min={0} max={MENU_MINUTES.max} step={5} placeholder={first ? '30' : n === '2' ? '60' : ''} />
       </label>
       <label class="field">
         <span>値段{n ? ` ${n}` : ''}（{props.c.priceMin.toLocaleString('ja-JP')} 枚から・上限なし）</span>
-        <input type="number" name={`menuPrice${n}`} min={props.c.priceMin} max={props.c.priceMax} />
+        <input type="number" name={`menuPrice${n}`} value={value(`menuPrice${n}`)} min={props.c.priceMin} max={props.c.priceMax} />
       </label>
     </>
   );
-  return (
-    <>
-      <label class="field">
-        <span>内容（30 文字まで）</span>
-        <input type="text" name="menuName" maxlength={30} required={!props.optional} placeholder="ツーショット・寝かしつけ など" />
-      </label>
-      <label class="field">
-        <span>説明（なくてもよい・100 文字まで）</span>
-        <input type="text" name="menuNote" maxlength={100} />
-      </label>
-      {pair('', true)}
-      {pair('2', false)}
-      {pair('3', false)}
-      <p class="note">同じ内容で 30 分と 1 時間など、時間と値段の組を 3 つまで一度に足せます（使わない組は空のまま）。</p>
+  const kinds = <>
       <label class="field check">
-        <input type="checkbox" name="menuNight" value="yes" />
+        <input type="checkbox" name="menuNight" checked={value("menuNight") === "yes"} value="yes" />
         <span>🌙 寝落ち（朝 7 時まで。値段は 1 つめだけ・18 歳以上だけ）</span>
       </label>
       <label class="field check">
-        <input type="checkbox" name="menuConsult" value="yes" />
+        <input type="checkbox" name="menuConsult" checked={value("menuConsult") === "yes"} value="yes" />
         <span>💬 内容により相談（時間と値段は入れない。お客がお願いを書き、キャストがそのつど時間と値段を出す・18 歳以上だけ）</span>
       </label>
       <label class="field check">
-        <input type="checkbox" name="menuDelivery" value="yes" />
+        <input type="checkbox" name="menuDelivery" checked={value("menuDelivery") === "yes"} value="yes" />
         <span>📦 納品（シチュエーションボイスなど。通話しない。時間は入れず、値段は 1 つめだけ・18 歳以上だけ。キャストが1週間（7日）以内に納品し、お客の「受け取った」で渡す）</span>
       </label>
       <label class="field">
         <span>🎰 ガチャの中身（納品のときだけ。1 行に 1 つ・{DELIVERY.gachaMax} こまで。空ならふつうの納品。どれか 1 つが同じ確率で出る）</span>
-        <textarea name="menuGacha" rows={3} placeholder={'おはようボイス\nおやすみボイス\n応援ボイス'} />
+        <textarea name="menuGacha" rows={3} placeholder={'おはようボイス\nおやすみボイス\n応援ボイス'}>{value("menuGacha")}</textarea>
       </label>
+  </>;
+  return (
+    <>
+      <label class="field">
+        <span>内容（30 文字まで）</span>
+        <input type="text" name="menuName" value={value("menuName")} maxlength={30} required={!props.optional} placeholder="ツーショット・寝かしつけ など" />
+      </label>
+      <label class="field">
+        <span>説明（なくてもよい・100 文字まで）</span>
+        <input type="text" name="menuNote" value={value("menuNote")} maxlength={100} />
+      </label>
+      {pair('', true)}
+      {props.optional ? <details class="cast-extra" open={!!(value('menuMinutes2') || value('menuPrice2') || value('menuMinutes3') || value('menuPrice3'))}><summary>追加の時間・値段（任意）</summary><div class="fields">{pair('2', false)}{pair('3', false)}</div></details> : <>{pair('2', false)}{pair('3', false)}</>}
+      <p class="note">同じ内容で 30 分と 1 時間など、時間と値段の組を 3 つまで一度に足せます（使わない組は空のまま）。</p>
+      {props.optional ? <details class="cast-extra" open={['menuNight','menuConsult','menuDelivery','menuGacha'].some(k=>!!value(k))}><summary>寝落ち・相談・納品など（必要なときだけ）</summary>{kinds}</details> : kinds}
     </>
   );
 }
 
+/** 本人をIDで選び、入力の失敗でも内容を残す。JSなしでも登録できる。 */
+function CastRegistration(props: { session: AdminSession; config: CastConfig; members: {id: string; name: string}[]; template: CastMenuItem[]; registration?: {draft: CastRegistrationDraft; error: string} }) {
+  const draft=props.registration?.draft;
+  const value=(key:string)=>typeof draft?.[key]==='string'?draft[key] as string:'';
+  const template=draft?value('useTemplate')==='yes':props.template.length>0;
+  const chosen=draft ? (Array.isArray(draft.tpl)?draft.tpl:typeof draft.tpl==='string'?[draft.tpl]:[]) : props.template.map(m=>m.id);
+  return <form method="post" action="/cast/register#cast-register" class="card anchor cast-register" id="cast-register" data-native-submit>
+    <Csrf session={props.session}/><h2>キャストを登録</h2>
+    <p class="note">18歳以上の人を選び、はじめのメニューを決めます。登録するとロールとメニューに反映し、本人にDMでお知らせします。</p>
+    {props.registration && <p class="flash warn" id="cast-registration-error" role="alert" tabindex={-1}>{CAST_FLASH[props.registration.error]?.text ?? '入力を確かめてください。'} 入力した内容は残っています。</p>}
+    <fieldset><legend>1. 登録する人</legend>
+      <label class="field cast-member-search" hidden><span>名前・IDで絞り込む</span><input type="search" data-cast-search autocomplete="off" placeholder="例：さくら、DiscordのID"/></label>
+      <label class="field"><span>登録する本人 <span class="tag">必須</span></span><select name="member" required data-cast-member aria-describedby="cast-member-help">
+        <option value="">人を選んでください</option>
+        {props.members.map(m=><option value={m.id} selected={value('member')===m.id}>{m.name}（ID: {m.id}）</option>)}
+      </select></label>
+      <p class="note" id="cast-member-help">同じ名前の人はIDで確認してください。18歳以上かは登録時にも確かめます。</p>
+      <p class="note" data-cast-search-status role="status"></p>
+    </fieldset>
+    <fieldset><legend>2. はじめのメニュー</legend>
+      <div class="cast-menu-choice">
+        <label class="check"><input type="radio" name="useTemplate" value="yes" checked={template} disabled={!props.template.length}/>共通テンプレから選ぶ</label>
+        <label class="check"><input type="radio" name="useTemplate" value="no" checked={!template}/>個別に作る</label>
+      </div>
+      {!props.template.length && <p class="note">共通テンプレがありません。個別に作るか、下の「テンプレ」で先に用意してください。</p>}
+      <fieldset data-cast-template><legend>入れる品を選ぶ</legend><input type="hidden" name="tplPicked" value="yes"/>
+        {props.template.map(m=><label class="check"><input type="checkbox" name="tpl" value={m.id} checked={chosen.includes(m.id)}/>{menuLabel(m)} ・ {menuPriceText(m)}</label>)}
+        <p class="note">テンプレを使う場合は1つ以上選んでください。</p>
+      </fieldset>
+      <fieldset class="fields" data-cast-custom><legend>個別のメニュー</legend><MenuFields c={props.config} optional draft={draft}/></fieldset>
+    </fieldset>
+    <details open={!!draft} class="cast-profile"><summary>3. 紹介・得意なことなど（あとから編集できます）</summary><div class="fields">
+      <label class="field"><span>紹介（300文字まで）</span><textarea name="bio" maxlength={300} rows={3}>{value('bio')}</textarea></label>
+      <label class="field"><span>得意なこと（「、」で区切って7つまで）</span><input name="tags" maxlength={120} value={value('tags')} placeholder="雑談、ゲーム、寝落ち"/></label>
+      <GenderSelect value={value('gender')}/>
+      <label class="field check"><input type="checkbox" name="minorOk" value="yes" checked={!draft || value('minorOk')==='yes'}/><span>18歳未満の人の雑談も受ける（公開の部屋だけ）</span></label>
+    </div></details>
+    <div class="cast-register-submit"><p class="note">登録後、一覧で写真やメニューを追加できます。</p><button type="submit" class="ok">登録して本人へ知らせる</button><span data-cast-submit-status role="status"></span></div>
+  </form>;
+}
+
 export function CastPage(props: {
   session: AdminSession;
+  registration?: { draft: CastRegistrationDraft; error: string };
   /** ランキングに名前を出さないキャスト */
   rankingHidden?: ReadonlySet<string>;
   config: CastConfig;
@@ -300,7 +348,7 @@ export function CastPage(props: {
   const disputed = props.sessions.filter((s) => s.status === 'disputed');
   const stat = (id: string) => props.stats.find((s) => s.castId === id);
   return (
-    <Layout title="キャスト" session={session} nav="cast">
+    <Layout title="キャスト" session={session} nav="cast" inplace scripts={["cast-register.js"]}>
       <div class="page-head">
         <h1>🎀 キャスト</h1>
         <a href="/cast-office/login" class="btn">キャスト本人の編集用ログイン</a>
@@ -422,43 +470,7 @@ export function CastPage(props: {
         )}
       </section>
 
-      <form method="post" action="/cast/register" class="card anchor" id="cast-register">
-        <Csrf session={session} />
-        <h2>➕ キャストを登録</h2>
-        <p class="note">登録するとすぐキャストになり、ロールが付いてメニューに並びます（本人に DM）。18 歳以上（宵参りのロールか、年齢区分が大人）の人だけです。メニュー（内容・時間・値段）はキャストごとに決めます。</p>
-        <div class="fields">
-          <label class="field">
-            <span>登録する人（名前か ID）</span>
-            <input type="text" name="member" list="cast-members" required autocomplete="off" placeholder="名前を入れると候補が出ます" />
-            <datalist id="cast-members">
-              {props.members.map((m) => (
-                <option value={m.name}>{m.id}</option>
-              ))}
-            </datalist>
-          </label>
-          <label class="field">
-            <span>紹介（300 文字まで）</span>
-            <textarea name="bio" maxlength={300} rows={3}></textarea>
-          </label>
-          <label class="field">
-            <span>得意なこと（「、」で区切る。7 つまで）</span>
-            <input type="text" name="tags" maxlength={120} placeholder="雑談、ゲーム、寝落ち" />
-          </label>
-          <GenderSelect />
-          <label class="field check">
-            <input type="checkbox" name="useTemplate" value="yes" checked />
-            <span>📋 テンプレのメニューで登録する（外すと、下で入れたメニューで登録）</span>
-          </label>
-          <TemplatePicks items={props.template} />
-          <p class="note">テンプレを使わないときの、はじめのメニュー（あとから一覧でいくつでも足せます）</p>
-          <MenuFields c={c} optional />
-          <label class="field check">
-            <input type="checkbox" name="minorOk" value="yes" checked />
-            <span>18 歳未満の人の雑談も受ける（公開の部屋だけ）</span>
-          </label>
-        </div>
-        <button type="submit" class="ok">登録する</button>
-      </form>
+      <CastRegistration session={session} config={c} members={props.members} template={props.template} registration={props.registration} />
 
       <section class="card ch-group anchor" id="cast-list">
         <div class="ch-cat">
