@@ -1,8 +1,8 @@
 import { ChannelType, type Guild } from 'discord.js';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../db/client.js';
-import { settings } from '../db/schema.js';
+import { guideReceptions, settings } from '../db/schema.js';
 import { guideDuty, hasGuideRole, type GuideConfig } from '../services/guideReception.js';
 import { logger } from '../lib/logger.js';
 
@@ -46,6 +46,11 @@ export class GuideWaitingNames {
         }
         if (!waiting && uncertain) waiting = undefined;
       }
+      const assigned = await this.db.select().from(guideReceptions).where(and(eq(guideReceptions.status, 'assigned'), isNull(guideReceptions.departedAt)));
+      const occupied = new Set(assigned.filter(r => {
+        const ch = guild.channels.cache.get(r.channelId);
+        return ch?.type === ChannelType.GuildVoice && r.guideId && ch.members?.has(r.visitorId) && ch.members.has(r.guideId);
+      }).map(r => r.channelId));
       const save = () => this.db.insert(settings).values({ key: KEY, value: state, updatedBy: 'system' }).onConflictDoUpdate({ target: settings.key, set: { value: state, updatedBy: 'system', updatedAt: new Date(now) } });
       for (const id of new Set([...config.voiceChannelIds, ...Object.keys(state)])) {
         // 別用途の「案内担当」の名前とは競合させない。
@@ -64,8 +69,8 @@ export class GuideWaitingNames {
           entry.managed = ch.name;
           await save();
         }
-        const suffix = open ? SUFFIX : ABSENT_SUFFIX;
-        const base = entry.base.replace(/（(?:入室⭕|案内人不在)）$/, '');
+        const suffix = occupied.has(id) ? '（案内中・入室停止）' : open ? SUFFIX : ABSENT_SUFFIX;
+        const base = entry.base.replace(/（(?:入室⭕|案内人不在|案内中・入室停止)）$/, '');
         const target = configured ? `${base.slice(0, 100 - suffix.length)}${suffix}` : entry.base;
         if (ch.name === target) continue;
         entry.attempts = entry.attempts.filter(at => now - at < 10 * 60_000 + 1000);

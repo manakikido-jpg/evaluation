@@ -1,3 +1,4 @@
+import { GuideEntryLocks } from './guideEntryLock.js';
 import { GuideWaitingNames } from './guideWaitingName.js';
 import { emojiPath } from '../services/reactionRoles.js';
 import { GUIDE_HOLD_ROLE_NAME, watchReason } from '../services/inviteGuard.js';
@@ -10,7 +11,7 @@ import type { Db } from '../db/client.js';
 import type { GuildConfig } from '../config.js';
 import type { DiscordActions, MessageBody } from '../lib/discordRest.js';
 import { guideEmployees, guideReceptions } from '../db/schema.js';
-import { addGuidePanelChannel, guidePanelChannels, assignGuide, completeGuide, leaveGuideReception, loadGuideConfig, openGuideReception, registerGuide, setGuideWaiting, activeGuides, listedGuides, setGuideDuty, guideDuty, guideDutySince, guideDutyChannelName, guideRoleIdsFor, hasGuideRole, guideRoleMentions, type GuideConfig } from '../services/guideReception.js';
+import { addGuidePanelChannel, guidePanelChannels, attachGuidePanel, moveGuideReception, movedGuidePanels, forgetMovedGuidePanel, assignGuide, completeGuide, leaveGuideReception, loadGuideConfig, openGuideReception, registerGuide, setGuideWaiting, activeGuides, listedGuides, setGuideDuty, guideDuty, guideDutySince, guideDutyChannelName, guideRoleIdsFor, hasGuideRole, guideRoleMentions, type GuideConfig } from '../services/guideReception.js';
 import { guideRoleOf } from './guidePending.js';
 import { autoRanks } from '../domain/ranks.js';
 import { audit } from '../services/audit.js';
@@ -48,13 +49,15 @@ const heldGuide = (m: { roles?: { cache?: { values?: () => Iterable<{ name?: str
 
 export class GuideReceptionApp {
   private ticking = false;
+  private tickRequested = false;
+  private readonly entryLocks: GuideEntryLocks;
   private readonly waitingNames: GuideWaitingNames;
   private visitorMessages = new Set<string>();
   private panelChannels = new Set<string>();
   private panelLoadedAt = 0;
   private readonly timers = new Map<string, NodeJS.Timeout>();
   private readonly queue = new Map<string, Promise<void>>();
-  constructor(private db: Db, private cfg: () => GuildConfig, private discord: DiscordActions, private presence = false) { this.waitingNames = new GuideWaitingNames(db, presence); }
+  constructor(private db: Db, private cfg: () => GuildConfig, private discord: DiscordActions, private presence = false) { this.waitingNames = new GuideWaitingNames(db, presence); this.entryLocks = new GuideEntryLocks(db, cfg); }
   private async options(guild: Guild) {
     const c = await loadGuideConfig(this.db);
     // 案内人のロール（階級などで分かれていても、どれか 1 つがあれば案内人）
@@ -136,6 +139,10 @@ export class GuideReceptionApp {
     if (before.channelId === after.channelId || after.guild.id !== this.cfg().guildId || after.member?.user.bot) return;
     try {
       const c = await this.options(after.guild);
+      if (before.channelId && after.channelId && c.voiceChannelIds.includes(before.channelId) && c.voiceChannelIds.includes(after.channelId)) {
+        const moved = await moveGuideReception(this.db, after.id, before.channelId, after.channelId);
+        if (moved) { await this.tick(after.guild); return; }
+      }
       if (before.channelId && c.voiceChannelIds.includes(before.channelId)) {
         for (const r of await leaveGuideReception(this.db, after.id)) await this.refresh(r, c).catch(err => logger.warn({ err }, 'guide exit display failed'));
       }
@@ -146,22 +153,28 @@ export class GuideReceptionApp {
           const log = this.cfg().channels.log;
           const why = watch ? `${watch.why === 'alert' ? '警戒中の人' : '見張る人'}（<@${watch.inviterId}>）の招待` : '「案内停止」ロール';
           if (log) await this.discord.sendMessage(log, { content: `👁 要注意の <@${after.id}> さんが案内所（<#${after.channelId}>）に入りました（${why}）。案内人には知らせていません。運営で対応してください。`, allowed_mentions: { parse: [] } }).catch(() => undefined);
+          await this.entryLocks.sync(after.guild, c);
           return;
         }
-        if (!this.isVisitor(after.member, c)) return;
-        await openGuideReception(this.db, after.id, after.channelId);
-        await this.tick(after.guild);
+        if (this.isVisitor(after.member, c)) {
+          await openGuideReception(this.db, after.id, after.channelId);
+          await this.tick(after.guild);
+        }
       }
+      await this.entryLocks.sync(after.guild, c);
+      await this.waitingNames.sync(after.guild, c);
     } catch (err) { logger.warn({ err }, 'guide voice event failed'); }
   }
   /** 未通知の受付を再送する。再起動時の在室者も確認する */
   async tick(guild: Guild) {
-    if (this.ticking || guild.id !== this.cfg().guildId) return;
+    if (guild.id !== this.cfg().guildId) return;
+    if (this.ticking) { this.tickRequested = true; return; }
     this.ticking = true;
     try {
       const c = await this.options(guild);
       await this.waitingNames.sync(guild, c).catch(err => logger.warn({ err }, 'guide waiting sync failed'));
-      if (!c.voiceChannelIds.length) return;
+      await this.removeMovedPanels();
+      if (!c.voiceChannelIds.length) { await this.entryLocks.sync(guild, c); return; }
       for (const channelId of c.voiceChannelIds) {
         const ch = guild.channels.cache.get(channelId);
         if (ch?.type !== ChannelType.GuildVoice) continue;
@@ -174,6 +187,10 @@ export class GuideReceptionApp {
       this.visitorMessages = new Set([...this.visitorMessages].filter(id => activeMessages.has(id)));
       for (let r of rows) {
         const visitor = guild.members.cache.get(r.visitorId);
+        if (visitor?.voice.channelId && visitor.voice.channelId !== r.channelId && c.voiceChannelIds.includes(visitor.voice.channelId) && ['waiting', 'assigned'].includes(r.status)) {
+          r = await moveGuideReception(this.db, r.visitorId, r.channelId, visitor.voice.channelId) ?? r;
+          await this.removeMovedPanels();
+        }
         if (!c.voiceChannelIds.includes(r.channelId) || visitor?.voice.channelId !== r.channelId || (r.status === 'waiting' && !this.isVisitor(visitor, c))) {
           for (const left of await leaveGuideReception(this.db, r.visitorId)) await this.refresh(left, c).catch(() => undefined);
           continue;
@@ -182,7 +199,9 @@ export class GuideReceptionApp {
         try {
           if (!r.messageId) {
             const message = await this.discord.sendMessage(r.channelId, guideVisitorPanel(r, c));
-            [r] = await this.db.update(guideReceptions).set({ messageId: message.id }).where(eq(guideReceptions.id, r.id)).returning() as [typeof r];
+            const attached = await attachGuidePanel(this.db, r.id, r.channelId, message.id);
+            if (!attached) { await this.removeMovedPanels(); continue; }
+            r = attached;
             this.visitorMessages.add(message.id);
             // ✅ 済・💴 銭・⭕ など、案内人が押して使うリアクションを先に付けておく
             for (const e of c.panelReactions) await this.discord.addReaction?.(r.channelId, message.id, emojiPath(e)).catch((err: unknown) => logger.warn({ err, emoji: e }, 'guide panel reaction failed'));
@@ -196,7 +215,7 @@ export class GuideReceptionApp {
             const visitorUser = guild.members?.cache?.get(r.visitorId)?.user;
             const fresh = visitorUser?.createdAt instanceof Date ? isNewAccount(visitorUser.createdAt, this.cfg().security?.newAccountDays ?? 0) : false;
             await this.discord.sendMessage(c.staffChannelId, { content: `${guideRoleMentions(c.guideRoleIds)}\n<@${r.visitorId}> さんが <#${r.channelId}> に来ました。${watched ? '\n🛡 **要注意リストの人です。** 案内人はロールを付けられません。神職・宮司に知らせてください。' : ''}${fresh ? '\n🐣 作ったばかりのアカウントです。サブアカウントや荒らしでないか気をつけてください。' : ''}\nhttps://discord.com/channels/${guild.id}/${r.channelId}/${r.messageId}`, allowed_mentions: { parse: [], roles: c.guideRoleIds } });
-            await this.db.update(guideReceptions).set({ notifiedAt: new Date() }).where(eq(guideReceptions.id, r.id));
+            await this.db.update(guideReceptions).set({ notifiedAt: new Date() }).where(and(eq(guideReceptions.id, r.id), eq(guideReceptions.channelId, r.channelId), eq(guideReceptions.messageId, r.messageId!)));
             const employees = await this.db.select().from(guideEmployees).where(and(eq(guideEmployees.status, 'active'), eq(guideEmployees.waiting, true)));
             for (const e of employees) {
               const member = await guild.members.fetch({ user: e.memberId, force: true }).catch(() => undefined);
@@ -205,8 +224,24 @@ export class GuideReceptionApp {
           }
         } catch (err) { logger.warn({ err, receptionId: r.id }, 'guide notification failed'); }
       }
-    } finally { this.ticking = false; }
+      await this.entryLocks.sync(guild, c);
+    } finally {
+      this.ticking = false;
+      if (this.tickRequested) { this.tickRequested = false; await this.tick(guild); }
+    }
   }
+  private async removeMovedPanels() {
+    for (const row of await movedGuidePanels(this.db)) {
+      if (!row.key.startsWith('guide.moved_panel:')) continue;
+      const value = row.value as { channelId?: string; messageId?: string };
+      if (typeof value?.channelId !== 'string' || typeof value?.messageId !== 'string') continue;
+      try {
+        await this.discord.deleteMessage(value.channelId, value.messageId).catch((err: { code?: number }) => { if (err?.code !== 10008) throw err; });
+        await forgetMovedGuidePanel(this.db, row.key);
+      } catch (err) { logger.warn({ err }, 'guide moved panel cleanup failed'); }
+    }
+  }
+
   /** パネルのチャンネルで書きこみがあったら、少し待ってパネルをいちばん下に置き直す */
   async onMessage(msg: Message) {
     if (!msg.inGuild() || msg.guildId !== this.cfg().guildId) return;
@@ -413,6 +448,7 @@ export class GuideReceptionApp {
       if (!Number.isSafeInteger(id) || id <= 0) return void await i.editReply('受付が見つかりません。');
       const [r] = await this.db.select().from(guideReceptions).where(eq(guideReceptions.id, id));
       if (!r) return void await i.editReply('受付が見つかりません。');
+      if (i.channelId && i.channelId !== r.channelId) return void await i.editReply(`案内所が変わりました。<#${r.channelId}> の新しいパネルを使ってください。`);
       const visitor = await i.guild.members.fetch({ user: r.visitorId, force: true }).catch(() => undefined);
       if (visitor?.voice.channelId !== r.channelId || member.voice.channelId !== r.channelId) return void await i.editReply('案内を受ける人と担当者が、同じ案内VCにいるときに操作してください。');
       if (!c.voiceChannelIds.includes(r.channelId)) return void await i.editReply('この部屋は現在、案内VCに設定されていません。');
@@ -430,16 +466,22 @@ export class GuideReceptionApp {
       if (action === 'claim') {
         if (!this.isVisitor(visitor, c)) return void await i.editReply('案内待ちロールの人だけ案内を開始できます。');
         const assigned = await assignGuide(this.db, id, i.user.id, { roleVerified: true });
+        let lockWarning = '';
         if (assigned) {
+          const failed = await this.entryLocks.sync(i.guild, c);
+          await this.waitingNames.sync(i.guild, c).catch(err => logger.warn({ err }, 'guide waiting sync failed'));
+          if (failed.has(assigned.channelId)) lockWarning = '\n⚠️ 入室制限に失敗しました。BOTのチャンネル権限を確認してください。毎分再試行します。';
           await this.refresh(assigned, c).catch(() => undefined);
           if (c.staffChannelId) await this.discord.sendMessage(c.staffChannelId, { content: `案内開始：<@${i.user.id}> さん → <@${assigned.visitorId}> さん\n場所：<#${assigned.channelId}>`, allowed_mentions: { parse: [] } }).catch(err => logger.warn({ err }, 'guide start notice failed'));
         }
-        return void await i.editReply(assigned ? '案内を開始しました。あなたを担当者として記録しました。終わったら「案内完了」を押してください。' : '担当済み、または退出済みです。');
+        return void await i.editReply(assigned ? '案内を開始しました。あなたを担当者として記録しました。終わったら「案内完了」を押してください。' + lockWarning : '担当済み、または退出済みです。');
       }
       if (action === 'done') {
         const done = await completeGuide(this.db, id, i.user.id);
         if (!done) return void await i.editReply('完了済み、またはあなたの担当ではありません。');
         // 案内が終わったら、VC のチャットに出した案内リンクのメッセージを消す（消せなければ「案内完了」に書きかえる）
+        await this.entryLocks.sync(i.guild, c);
+        await this.waitingNames.sync(i.guild, c).catch(err => logger.warn({ err }, 'guide waiting sync failed'));
         const rr = done.reception;
         if (rr.messageId) await Promise.resolve().then(() => this.discord.deleteMessage(rr.channelId, rr.messageId!)).catch(() => this.refresh(rr, c).catch(() => undefined));
         const message = `案内完了：<@${i.user.id}> さん → <@${r.visitorId}> さん\n給与：${done.amount}銭${done.amount ? '（支払済み）' : '（給与停止中、または同じ利用者の本日分は支払済み）'}`;
