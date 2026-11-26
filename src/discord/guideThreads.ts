@@ -1,9 +1,10 @@
+import { hideIdleGuideThread } from './guideThreadIdle.js';
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, type Guild, type GuildMember, type Interaction, type ThreadChannel } from 'discord.js';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { logger } from '../lib/logger.js';
 import { guideRoleIdsFor, guideRoleMentions, loadGuideConfig } from '../services/guideReception.js';
-import { setScheduleMessage, bookSlot, closeThread, guideThreadConfig, openSlots, openThreads, recordThread, takeDueReminders, threadById, threadOf, threadsByIds, validSlot, type GuideThreadConfig } from '../services/guideThreads.js';
+import { touchGuideThread, setScheduleMessage, bookSlot, closeThread, guideThreadConfig, openSlots, openThreads, recordThread, takeDueReminders, threadById, threadOf, threadsByIds, validSlot, type GuideThreadConfig } from '../services/guideThreads.js';
 import { watchReason } from '../services/inviteGuard.js';
 import { guideRoleOf, scheduleChannelOf } from './guidePending.js';
 
@@ -30,6 +31,7 @@ export function guideThreadMessage(c: GuideThreadConfig, memberId: string, now =
 export class GuideThreadApp {
   private ticking = false;
   private nextReconcileAt = 0;
+  private nextIdleAt = 0;
   constructor(private db: Db, private cfg: () => GuildConfig) {}
 
   /** @案内人 のロール（案内の設定のロールと、名前に「案内人」が入るロール。階級などで分かれていれば全部） */
@@ -100,15 +102,18 @@ export class GuideThreadApp {
         const date = parts[2] ?? '', time = parts.slice(3).join(':');
         const c = await guideThreadConfig(this.db);
         if (!validSlot(c, date, time)) return void await i.editReply('その時間は、もう選べません。いまのボタンから選び直してください。');
+        await touchGuideThread(this.db, thread.id);
         await bookSlot(this.db, row.memberId, date, time);
         const label = `${Number(date.slice(5, 7))}月${Number(date.slice(8, 10))}日 ${time}`;
         await this.notify(thread, row.watched, row.memberId, `**${label}** を希望しました`);
         await i.editReply(`${label} で受け付けました。その時間に ${await this.lobby()} へお越しください（10 分前にお知らせします）。`);
       } else if (i.isButton() && parts[1] === 'now') {
+        await touchGuideThread(this.db, thread.id);
         await this.notify(thread, row.watched, row.memberId, '**今から** のご案内を希望しています');
         await i.editReply(`${await this.lobby()} に入ってお待ちください。案内人が来ます。`);
       } else if (i.isModalSubmit() && parts[1] === 'otherform') {
         const when = i.fields.getTextInputValue('when').trim().slice(0, 200);
+        await touchGuideThread(this.db, thread.id);
         await this.notify(thread, row.watched, row.memberId, `ほかの日時を希望しています：「${when}」`);
         // 📅 #案内希望日程 にも、名前と希望の日時を出す（要注意の人は出さない）
         if (!row.watched) await this.postSchedule(thread, row.memberId, row.scheduleMessageId, when).catch(err => logger.warn({ err }, 'guide schedule post failed'));
@@ -162,6 +167,8 @@ export class GuideThreadApp {
     this.ticking = true;
     try {
       const pending = guideRoleOf(this.cfg(), guild.roles.cache.values());
+      const checkIdle = +now >= this.nextIdleAt;
+      if (checkIdle) this.nextIdleAt = +now + 5 * 60_000;
       const rows = new Map((await openThreads(this.db)).map(row => [row.threadId, row]));
       // 起動直後と5分ごと。以前DBだけ終了したものを、全履歴の巡回なしで回収する。
       if (now.getTime() >= this.nextReconcileAt) {
@@ -174,14 +181,21 @@ export class GuideThreadApp {
       for (const row of rows.values()) {
         try {
           if (!row.closedAt) {
-            // 案内待ちロールを特定できないときは、推測で閉じない。
-            if (!pending) continue;
             let member = guild.members.cache.get(row.memberId);
             if (!member) member = await guild.members.fetch(row.memberId).catch((err: { code?: number }) => {
               if (err?.code === 10007) return undefined;
               throw err;
             });
-            if (member?.roles.cache.has(pending)) continue;
+            const cfg = this.cfg();
+            const approved = member && ((cfg.ranks ?? []).some(r => member.roles.cache.has(r.roleId)) || Boolean(cfg.roles.emaPending && member.roles.cache.has(cfg.roles.emaPending)));
+            // 案内待ちが不明でも、承認を確認できない人を完了にはしない。
+            if (member && !approved && (!pending || member.roles.cache.has(pending))) {
+              if (checkIdle) {
+                const thread = await guild.channels.fetch(row.threadId);
+                if (thread?.isThread()) await hideIdleGuideThread(this.db, row, thread, now);
+              }
+              continue;
+            }
           }
           await this.archiveThread(guild, row.threadId, '案内が終わった、またはサーバーを抜けた');
           await this.removeSchedule(guild, row.scheduleMessageId);

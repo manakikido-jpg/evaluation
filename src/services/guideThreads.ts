@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, isNull, lte } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../db/client.js';
 import { guideThreads, settings, type GuideThread } from '../db/schema.js';
@@ -19,6 +19,7 @@ export const DEFAULT_GUIDE_MESSAGE = [
   '・来られる時間のボタンを押してください。その時間に案内所へお越しください。',
   '・「今から」を押すと、待っている案内人を呼びます。',
   '・ボタンの時間以外がよいときは「時間外」を押して、ご希望の日時を書いてください。',
+  '・3日間やりとりがないと一覧から外れます。履歴は残り、投稿すると再開できます。',
 ].join('\n');
 export const guideThreadConfigSchema = z.object({
   enabled: z.boolean().default(false),
@@ -85,7 +86,7 @@ export async function threadById(db: Db, threadId: string): Promise<GuideThread 
 }
 /** 作ったスレッドを覚える（入りなおした人は、新しいスレッドに置きかえる） */
 export async function recordThread(db: Db, memberId: string, threadId: string, watched: boolean, now = new Date()) {
-  const values = { memberId, threadId, watched, scheduleMessageId: null, slotAt: null, slotLabel: null, reminded: false, createdAt: now, closedAt: null };
+  const values = { memberId, threadId, watched, scheduleMessageId: null, slotAt: null, slotLabel: null, reminded: false, createdAt: now, closedAt: null, lastActivityAt: null };
   await db.insert(guideThreads).values(values).onConflictDoUpdate({ target: guideThreads.memberId, set: values });
 }
 export async function bookSlot(db: Db, memberId: string, date: string, time: string) {
@@ -107,4 +108,10 @@ export async function setScheduleMessage(db: Db, memberId: string, messageId: st
 }
 export async function closeThread(db: Db, memberId: string, now = new Date(), expectedThreadId?: string) {
   await db.update(guideThreads).set({ closedAt: now }).where(and(eq(guideThreads.memberId, memberId), isNull(guideThreads.closedAt), expectedThreadId ? eq(guideThreads.threadId, expectedThreadId) : undefined));
+}
+
+/** 本人の日程操作も、再起動後まで活動として覚える。古いスレッドの操作は新しい記録へ当てない。 */
+export async function touchGuideThread(db: Db, threadId: string, now = new Date()) {
+  await db.update(guideThreads).set({ lastActivityAt: sql`greatest(coalesce(${guideThreads.lastActivityAt}, ${now.toISOString()}::timestamptz), ${now.toISOString()}::timestamptz)` })
+    .where(and(eq(guideThreads.threadId, threadId), isNull(guideThreads.closedAt)));
 }
