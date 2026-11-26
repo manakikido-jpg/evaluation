@@ -920,7 +920,7 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     app = createWebApp({ db, cfg: () => store.current, fileCfg: cfg, onSettingsSaved: () => store.refresh(), api: fakeApi, discord: fakeActions, baseUrl: BASE, now: () => clock });
     const g = await login(GUJI);
     const page = await (await get('/settings', g)).text();
-    expect(page).toContain('免罪符の値段');
+    expect(page).toContain('厄祓いの値段');
     expect(page).toContain('7時間の浮上ボーナス');
     expect(page).toContain('name="roomCoreTimeMultiplier"');
     expect(page).toContain('name="longVoiceBonusChannel"');
@@ -993,7 +993,7 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     expect(store.current.casino.slotMachines).toEqual([3, 'random']);
     expect(store.current.omikujiStreak.rewards).toEqual([{ days: 5, repeat: false, coins: 9, ticket: 'none', tickets: 0 }]);
     expect(store.current.omikujiSpecial.list.map((x) => x.name)).toEqual(['小林吉']);
-    expect((await listAudit(db, { action: 'settings.update' }))[0]?.detail).toMatchObject({ economy: { menzaifuPrice: [300, 800] } });
+    expect((await listAudit(db, { action: 'settings.update' }))[0]?.detail).toMatchObject({ economy: { menzaifuPrice: [10000, 800] } });
     await post('/settings',g,{...form,_csrf:await csrfOf(g),roomCoreTimeMultiplier:'3'});
     expect(store.current.rooms.coreTimeMultiplier).toBe(3);
     await post('/settings', g, { ...form, _csrf: await csrfOf(g), longVoiceBonusAmount: '600', longVoiceBonusChannel: '910000000000000003' });
@@ -1097,7 +1097,7 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
 
     const reset = await post('/settings/reset', g, { _csrf: await csrfOf(g) });
     expect(reset.headers.get('location')).toBe('/settings?msg=saved');
-    expect(store.current.economy.menzaifuPrice).toBe(300);
+    expect(store.current.economy.menzaifuPrice).toBe(10000);
   });
 
   it('🏮 設定のブースト: だれが何回ブーストしているか', async () => {
@@ -1572,9 +1572,9 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     const page = await (await get('/notices', g)).text();
     expect(page).toContain('#しきたり');
     expect(page).toContain('未反映の 6 件をすべて反映');
-    // プレビューは差し込み済み（{#しきたり} → #しきたり、{免罪符の値段} → 300）
+    // プレビューは差し込み済み（{#しきたり} → #しきたり、{免罪符の値段} → 10000）
     expect(page).toContain('1. #しきたり を読む');
-    expect(page).toContain('300 枚・1 人 1 回まで');
+    expect(page).toContain('10000 枚・1 人 1 回まで');
 
     const all = await post('/notices/publish-all', g, { _csrf: await csrfOf(g) });
     expect(all.headers.get('location')).toBe('/notices?msg=published_all');
@@ -1585,7 +1585,7 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     const edit = await (await get(`/notices/${first!.id}`, g)).text();
     expect(edit).toContain('差し込める値');
     const preview = await (await post('/notices/preview', g, { _csrf: await csrfOf(g), body: '値段 {免罪符の値段} {なぞ}' })).text();
-    expect(preview).toContain('値段 300');
+    expect(preview).toContain('値段 10000');
     expect(preview).toContain('置き換えられない名前');
     actions = [];
     const saved = await post(`/notices/${first!.id}`, g, { _csrf: await csrfOf(g), title: 'ようこそ', body: 'ようこそ！', then: 'publish' });
@@ -1663,7 +1663,7 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     app = createWebApp({ db, cfg: () => store.current, fileCfg: cfg, onSettingsSaved: () => store.refresh(), api: fakeApi, discord: fakeActions, baseUrl: BASE, now: () => clock });
     const g = await login(GUJI);
     await post('/notices', g, { _csrf: await csrfOf(g), channelId: '910000000000000003', title: '値段', body: '免罪符は {免罪符の値段} 枚', then: 'publish' });
-    expect(actions.at(-1)).toBe('send 910000000000000003 免罪符は 300 枚');
+    expect(actions.at(-1)).toBe('send 910000000000000003 免罪符は 10000 枚');
 
     const form: Record<string, string> = {
       _csrf: await csrfOf(g),

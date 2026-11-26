@@ -125,6 +125,13 @@ function button(userId: string, roleIds: string[], customId: string) {
     async followUp(p: Reply) {
       replies.push(p);
     },
+    async reply(p: Reply) {
+      replies.push(p);
+    },
+    async deferReply() {
+      i.deferred = true;
+    },
+    message: { content: '🙏 厄祓いの申し込み', edit: async () => undefined },
   };
   return { i, replies };
 }

@@ -84,7 +84,7 @@ describe('ショップの見た目', () => {
     expect(color.value).toContain('✅ 受けている（10/5 まで）');
     expect(m.embeds[2]!.fields![0]!.value).toContain('あと 2,000 枚');
     expect(m.embeds[3]!.fields![0]!.value).toContain('**好きな量**');
-    expect(m.embeds[4]!.fields![0]!.value).toContain(`**${cfg.economy.menzaifuPrice} 枚**`);
+    expect(m.embeds[4]!.fields![0]!.value).toContain(`**${cfg.economy.menzaifuPrice.toLocaleString('ja-JP')} 枚**`);
     // 種類ごとの選ぶメニュー
     expect(m.components.map((r) => r.components[0]!.custom_id)).toEqual(['shop:pick:color', 'shop:pick:title', 'shop:pick:gift', 'shop:pick:menzaifu', 'diary:open']);
     const select = m.components[0]!.components[0]!;

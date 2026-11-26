@@ -286,13 +286,13 @@ export class StaffApp {
     await i.deferReply(EPHEMERAL);
     if (!(await yakubaraiWaiting(this.db, targetId))) {
       await i.message.edit({ components: [] }).catch(() => undefined);
-      return void (await i.editReply('この方の厄祓いは、もう終わっています（面接待ちではありません）。'));
+      return void (await i.editReply({ content: 'この方の厄祓いは、もう終わっています（面接待ちではありません）。', allowedMentions: NO_MENTIONS }));
     }
     const r = await clearYaku(this.ctx, actor, targetId, '厄祓い（面接のあと）');
-    if (r.status === 'denied') return void (await i.editReply(DENIED[r.reason]));
-    if (r.status === 'none') return void (await i.editReply('祓う厄がありませんでした。'));
+    if (r.status === 'denied') return void (await i.editReply({ content: DENIED[r.reason], allowedMentions: NO_MENTIONS }));
+    if (r.status === 'none') return void (await i.editReply({ content: '祓う厄がありませんでした。', allowedMentions: NO_MENTIONS }));
     await i.message.edit({ content: `${i.message.content}\n✅ ${mention(actor.id)} が面接して祓いました（残りの厄: ${r.remaining}）`, components: [], allowedMentions: NO_MENTIONS }).catch(() => undefined);
-    await i.editReply(`🙏 ${mention(targetId)} さまの厄を祓いました。${r.remaining ? `残りの厄: ${r.remaining}` : '厄年は外れました。'}`);
+    await i.editReply({ content: `🙏 ${mention(targetId)} さまの厄を祓いました。${r.remaining ? `残りの厄: ${r.remaining}` : '厄年は外れました。'}`, allowedMentions: NO_MENTIONS });
   }
 
   /** モデレーションの記録を #記録 へ。宮司が行った分は、ほかの運営の目に触れないよう #記録 には残さない（社務所Web の記録には残る）。 */

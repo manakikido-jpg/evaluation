@@ -333,13 +333,13 @@ describe('相談', () => {
 describe('設定', () => {
   it('上書きを保存して読み直すと反映される', async () => {
     const store = new ConfigStore(db, cfg);
-    expect(store.current.economy.menzaifuPrice).toBe(300);
+    expect(store.current.economy.menzaifuPrice).toBe(10000);
     await saveOverrides(db, overridesSchema.parse({ economy: { menzaifuPrice: 500 }, ranks: { ujiko: { requiredGoen: 30 } } }), GUJI);
     await store.refresh();
     expect(store.current.economy.menzaifuPrice).toBe(500);
     expect(store.current.ranks.find((r) => r.key === 'ujiko')?.requiredGoen).toBe(30);
     // ファイルの設定は変わらない
-    expect(store.fileConfig.economy.menzaifuPrice).toBe(300);
+    expect(store.fileConfig.economy.menzaifuPrice).toBe(10000);
   });
 
   it('おかしな組み合わせ（昇格ラインの重複）はエラー', () => {
