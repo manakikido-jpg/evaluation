@@ -40,14 +40,14 @@ describe('⌨ コマンドのまとめ', () => {
     expect(newbie).toContain('プロフィール');
     expect(newbie).not.toContain('`/残高`');
     expect(newbie).toContain('入鯖が承認されると、使えるコマンドが増えます');
-    // 承認後: 残高・物御籤など。免罪符は厄年だけ
+    // 承認後: 残高・物御籤など。厄祓いは厄年だけ
     const member = helpEmbeds(list, { member: true, yakudoshi: false, staff: false, rankLabel: '🍃 氏子' });
     expect(member.length).toBe(1);
     expect(member[0]!.description).toContain('あなた: 🍃 氏子');
     expect(member[0]!.description).toContain('`/残高`');
-    expect(member[0]!.description).not.toContain('`/免罪符`');
+    expect(member[0]!.description).not.toContain('`/厄祓い`');
     expect(member[0]!.description).not.toContain('`/議事録`');
-    expect(text({ member: true, yakudoshi: true, staff: false })).toContain('`/免罪符`');
+    expect(text({ member: true, yakudoshi: true, staff: false })).toContain('`/厄祓い`');
     // 運営: 運営のコマンドも
     const staff = helpEmbeds(list, { member: false, yakudoshi: false, staff: true });
     expect(staff.length).toBe(2);

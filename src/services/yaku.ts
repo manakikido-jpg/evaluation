@@ -1,12 +1,13 @@
 import { and, count, desc, eq, isNull, sql } from 'drizzle-orm';
 import type { EconomyConfig } from '../config.js';
 import type { Db } from '../db/client.js';
-import { members, memos, yaku, type Yaku } from '../db/schema.js';
+import { members, memos, yaku, yakubaraiRequests, type Yaku } from '../db/schema.js';
 import { spendWithin } from './economy.js';
 
 /**
  * 厄（警告）のデータ操作。Discord への反映（ロール・DM・BAN）は moderation.ts が行う。
- * ルール: 1 つ目は注意（厄年）、2 つ目で BAN。免罪符で 1 つ祓える（1 人 1 回まで）。重大な違反は一発 BAN。
+ * ルール: 1 つ目は注意（厄年）、2 つ目で BAN。重大な違反は一発 BAN。
+ * 厄祓い（授与所で買う）: 買うと面接待ちになり、運営が面接して祓う（1 人 menzaifuMaxUses 回まで）。
  */
 
 /** この人の処理を 1 つずつにする（2 人の神職が同時に厄を付けても数え間違えない） */
@@ -77,12 +78,36 @@ export async function recordInstantBan(db: Db, input: { memberId: string; reason
 export async function clearYakuByStaff(
   db: Db,
   input: { memberId: string; by: string; note: string },
-): Promise<{ cleared: boolean; remaining: number }> {
+): Promise<{ cleared: boolean; remaining: number; yakubarai?: true }> {
   return db.transaction(async (tx) => {
     await lockMember(tx, input.memberId);
-    const cleared = await clearLatest(tx, input.memberId, input.by, 'staff', input.note);
-    return { cleared, remaining: await countActive(tx, input.memberId) };
+    // 厄祓いの面接待ちなら、運営の取り消しで厄祓いが終わったことにする
+    const waiting = await waitingOf(tx, input.memberId);
+    const cleared = await clearLatest(tx, input.memberId, input.by, waiting ? 'menzaifu' : 'staff', input.note);
+    if (cleared && waiting) await finishRequest(tx, waiting.id, input.by, 'done');
+    const remaining = await countActive(tx, input.memberId);
+    if (remaining === 0) await closeWaiting(tx, input.memberId, input.by);
+    return { cleared, remaining, ...(cleared && waiting ? { yakubarai: true } : {}) };
   });
+}
+
+async function waitingOf(tx: Db, memberId: string) {
+  const [w] = await tx
+    .select()
+    .from(yakubaraiRequests)
+    .where(and(eq(yakubaraiRequests.memberId, memberId), eq(yakubaraiRequests.status, 'waiting')))
+    .limit(1);
+  return w;
+}
+
+async function finishRequest(tx: Db, id: number, by: string, status: 'done' | 'closed'): Promise<void> {
+  await tx.update(yakubaraiRequests).set({ status, doneAt: sql`now()`, doneBy: by }).where(eq(yakubaraiRequests.id, id));
+}
+
+/** 厄がなくなったのに残っている面接待ちを閉じる */
+async function closeWaiting(tx: Db, memberId: string, by: string): Promise<void> {
+  const w = await waitingOf(tx, memberId);
+  if (w) await finishRequest(tx, w.id, by, 'closed');
 }
 
 async function clearLatest(tx: Db, memberId: string, by: string, reason: 'staff' | 'menzaifu' | 'unban', note: string | null): Promise<boolean> {
@@ -107,34 +132,58 @@ export async function clearYakuForUnban(
       if (!(await clearLatest(tx, input.memberId, input.by, 'unban', input.note || null))) break;
       cleared++;
     }
-    return { cleared, remaining: await countActive(tx, input.memberId) };
+    const remaining = await countActive(tx, input.memberId);
+    if (remaining === 0) await closeWaiting(tx, input.memberId, input.by);
+    return { cleared, remaining };
   });
 }
 
+/** 厄祓いを使った回数（祓い終わった分＋面接待ち。前の免罪符で祓った分も数える） */
 export async function menzaifuUsed(db: Db, memberId: string): Promise<number> {
-  const [r] = await db
-    .select({ n: count() })
-    .from(yaku)
-    .where(and(eq(yaku.memberId, memberId), eq(yaku.clearedReason, 'menzaifu')));
-  return r?.n ?? 0;
+  const [[r], [w]] = await Promise.all([
+    db.select({ n: count() }).from(yaku).where(and(eq(yaku.memberId, memberId), eq(yaku.clearedReason, 'menzaifu'))),
+    db.select({ n: count() }).from(yakubaraiRequests).where(and(eq(yakubaraiRequests.memberId, memberId), eq(yakubaraiRequests.status, 'waiting'))),
+  ]);
+  return Number(r?.n ?? 0) + Number(w?.n ?? 0);
+}
+
+/** 厄祓いの面接待ちか */
+export async function yakubaraiWaiting(db: Db, memberId: string): Promise<{ id: number; createdAt: Date; price: number } | undefined> {
+  const w = await waitingOf(db, memberId);
+  return w ? { id: w.id, createdAt: w.createdAt, price: w.price } : undefined;
+}
+
+/** 面接待ちの人の一覧（古い順） */
+export async function yakubaraiWaitingList(db: Db) {
+  return db
+    .select({ memberId: yakubaraiRequests.memberId, createdAt: yakubaraiRequests.createdAt, price: yakubaraiRequests.price })
+    .from(yakubaraiRequests)
+    .where(eq(yakubaraiRequests.status, 'waiting'))
+    .orderBy(yakubaraiRequests.createdAt);
 }
 
 export type MenzaifuResult =
-  | { status: 'ok'; remaining: number; price: number }
+  /** 支払って面接待ちになった（厄はまだ祓われていない） */
+  | { status: 'ok'; price: number }
   | { status: 'no_yaku' }
+  | { status: 'waiting' }
   | { status: 'used_up'; max: number }
   | { status: 'insufficient'; price: number; balance: number };
 
-/** 免罪符を買って厄を 1 つ祓う。支払いと祓いは同じトランザクション（どちらか片方だけにはならない） */
+/**
+ * 厄祓いを買う。支払いと面接待ちの記録は同じトランザクション（どちらか片方だけにはならない）。
+ * 厄はまだ祓わない（運営が面接して、取り消しで祓う）。面接待ちは 1 人 1 つだけ。
+ */
 export async function buyMenzaifu(db: Db, economy: EconomyConfig, memberId: string, balanceOf: (tx: Db) => Promise<number>): Promise<MenzaifuResult> {
   return db.transaction(async (tx) => {
     await lockMember(tx, memberId);
     if ((await countActive(tx, memberId)) === 0) return { status: 'no_yaku' };
+    if (await waitingOf(tx, memberId)) return { status: 'waiting' };
     if ((await menzaifuUsed(tx, memberId)) >= economy.menzaifuMaxUses) return { status: 'used_up', max: economy.menzaifuMaxUses };
     const paid = await spendWithin(tx, memberId, economy.menzaifuPrice, 'menzaifu');
     if (!paid) return { status: 'insufficient', price: economy.menzaifuPrice, balance: await balanceOf(tx) };
-    await clearLatest(tx, memberId, memberId, 'menzaifu', null);
-    return { status: 'ok', remaining: await countActive(tx, memberId), price: economy.menzaifuPrice };
+    await tx.insert(yakubaraiRequests).values({ memberId, price: economy.menzaifuPrice });
+    return { status: 'ok', price: economy.menzaifuPrice };
   });
 }
 

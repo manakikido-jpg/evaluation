@@ -189,8 +189,8 @@ describe('神職用コマンド', () => {
   });
 });
 
-describe('/menzaifu', () => {
-  it('厄があって花びらが足りれば購入ボタン → 祓える', async () => {
+describe('/厄祓い（menzaifu）', () => {
+  it('厄があって銭が足りれば申し込みボタン → 面接待ち → 運営が #記録 のボタンで祓う', async () => {
     const give = command(STAFF, [ROLE.shinshoku], 'yaku', { sub: 'add', user: USER, strings: { reason: '誹謗中傷' } });
     await staff.onInteraction(give.i as never);
     await addCoins(db, USER, cfg.economy.menzaifuPrice, 'adjust');
@@ -201,10 +201,28 @@ describe('/menzaifu', () => {
 
     const buy = button(USER, [ROLE.ujiko, ROLE.yakudoshi], 'menzaifu:buy');
     await staff.onInteraction(buy.i as never);
-    expect(buy.replies.at(-1)?.content).toContain('厄を 1 つ祓いました');
-    expect(await activeYakuCount(db, USER)).toBe(0);
+    expect(buy.replies.at(-1)?.content).toContain('面接');
+    expect(await activeYakuCount(db, USER)).toBe(1);
     expect((await walletOf(db, USER)).balance).toBe(0);
+    expect(calls).not.toContain(`removeRole ${USER} ${ROLE.yakudoshi}`);
+
+    // 本人は押せない
+    const self = button(USER, [ROLE.ujiko, ROLE.yakudoshi], `yakubarai:done:${USER}`);
+    await staff.onInteraction(self.i as never);
+    expect(self.replies.at(-1)?.content).toContain('神職・宮司のみ');
+    expect(await activeYakuCount(db, USER)).toBe(1);
+
+    // 神職が面接して祓う
+    const done = button(STAFF, [ROLE.shinshoku], `yakubarai:done:${USER}`);
+    await staff.onInteraction(done.i as never);
+    expect(done.replies.at(-1)?.content).toContain('厄を祓いました');
+    expect(await activeYakuCount(db, USER)).toBe(0);
     expect(calls).toContain(`removeRole ${USER} ${ROLE.yakudoshi}`);
+
+    // もう一度押しても、なにもしない
+    const again = button(STAFF, [ROLE.shinshoku], `yakubarai:done:${USER}`);
+    await staff.onInteraction(again.i as never);
+    expect(again.replies.at(-1)?.content).toContain('もう終わっています');
   });
 
   it('花びらが足りなければボタンは出ない', async () => {

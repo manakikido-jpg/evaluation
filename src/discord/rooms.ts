@@ -45,6 +45,7 @@ import {
 } from '../services/rooms.js';
 import { OWNER_ALLOW } from './tempVoice.js';
 import { perkUjikoEnabled, meetsUjiko } from '../services/perkGate.js';
+import { isYakudoshi, YAKU_BLOCKED } from '../services/yakuGate.js';
 import { KeyedLock } from '../lib/lock.js';
 import { ROOM_MODES, roomKnockConfig, roomKnockState, type RoomMode } from '../services/roomKnock.js';
 import { closeRoomNow, extendStayRoom, stayDayPrice, STAY_MS } from '../services/tempVoice.js';
@@ -299,6 +300,15 @@ export class RoomApp {
     const row = await roomOf(this.db, channelId);
     if (!row || planOf(cfg, row.hubId) === 'none') return;
     const ch = this.voice(channelId);
+    // 👹 厄のあいだは宿を開けない（部屋代を取る前に部屋を消して知らせる）。24時間の宿はパネル側で確かめる。
+    if (!opts.stay) {
+      const opener = this.guild?.members.cache.get(ownerId) ?? (await this.guild?.members.fetch(ownerId).catch(() => undefined));
+      if (opener && isYakudoshi(cfg, opener.roles.cache.keys())) {
+        await opener.send(YAKU_BLOCKED).catch(() => undefined);
+        await this.close(channelId);
+        return;
+      }
+    }
     // 🎁 宿（部屋代のかかる部屋）を氏子からに（新制度⑤・既定OFF）。24時間の宿はパネル側で確かめる。
     // 参拝者が通話入口・シクレで開こうとしたら、部屋代を取る前に部屋を消して知らせる。
     if (!opts.stay && (await perkUjikoEnabled(this.db))) {

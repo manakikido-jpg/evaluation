@@ -43,16 +43,16 @@ export async function getItem(db: Db, id: number): Promise<ShopItem | undefined>
   return row;
 }
 
-/** 奉納（ブースト）割引が効く品物（免罪符・贈り物・お年玉袋の手数料はのぞく） */
+/** 奉納（ブースト）割引が効く品物（厄祓い・贈り物・お年玉袋の手数料はのぞく） */
 export const discountable = (item: ShopItem) => kobanValue(item.kind) === undefined && item.kind !== 'menzaifu' && item.kind !== 'gift' && item.kind !== 'otoshidama';
 
-/** 払う値段（免罪符は設定の値段。奉納している人は割引、絵馬の奉納は無料。1 枚未満は切り上げ） */
+/** 払う値段（厄祓いは設定の値段。奉納している人は割引、絵馬の奉納は無料。1 枚未満は切り上げ） */
 export const priceOf = (item: ShopItem, economy: EconomyConfig, booster = false) => {
   const value = kobanValue(item.kind);
   if (value !== undefined) return kobanPrice(value);
   const base = item.kind === 'menzaifu' ? economy.menzaifuPrice : item.price;
   if (booster && item.kind === 'ema_pin') return 0;
-  // 期間限定の授与品セール（免罪符・贈り物はのぞく）
+  // 期間限定の授与品セール（厄祓い・贈り物はのぞく）
   const onSale = item.kind === 'menzaifu' || item.kind === 'gift' || item.kind === 'otoshidama' ? base : salePrice(base, economy.shopSalePercent);
   if (!booster || !discountable(item) || economy.boostDiscountPercent <= 0) return onSale;
   return Math.ceil((onSale * (100 - economy.boostDiscountPercent)) / 100);
@@ -120,7 +120,7 @@ export async function seedDefaultItems(
     { kind: 'gift', name: '旧・自由額送金', emoji: '🎁', description: '銭は /送金 から直接送れます', price: 0, enabled: false },
     { kind: 'ema_pin', name: '絵馬の奉納', emoji: '📌', description: '自分の自己紹介（#絵馬-男性・#絵馬-女性）を 7 日間ピン留め', price: 800, durationDays: 7 },
     { kind: 'omikuji_extra', name: 'おみくじ もう 1 回', emoji: '🎟', description: 'その日のおみくじを、もう 1 回引ける（1 日 1 回まで）', price: 100 },
-    { kind: 'menzaifu', name: '免罪符', emoji: '🧾', description: '厄を 1 つ祓う（1 人 1 回まで。値段は設定の値）', price: 0 },
+    { kind: 'menzaifu', name: '厄祓い', emoji: '🙏', description: '厄を祓う申し込み（買うと面接待ちになり、運営との面接のあとに祓われます）', price: 0 },
   ];
   singles.push(
     { kind: 'otoshidama', name: 'お年玉袋', emoji: '🧧', description: '銭を入れた袋をチャンネルに置くと、通話中の人が先着でボタンから受け取れる（量は運しだい）', price: 0 },

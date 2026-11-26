@@ -5,7 +5,7 @@ import { listAudit } from '../src/services/audit.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
 import { eventsOf, recordJoin } from '../src/services/members.js';
 import { clearYaku, giveYaku, instantBan, isBannedByEvents, kickMember, purchaseMenzaifu, unbanMember, writeMemo, type Actor, type ModCtx } from '../src/services/moderation.js';
-import { activeYakuCount, memosOf, membersWithYaku, yakuHistory } from '../src/services/yaku.js';
+import { activeYakuCount, clearYakuForUnban, memosOf, membersWithYaku, menzaifuUsed, yakubaraiWaiting, yakuHistory } from '../src/services/yaku.js';
 import { cfg, makeDb, ROLE } from './helpers.js';
 
 const STAFF = '820000000000000001';
@@ -43,7 +43,10 @@ beforeEach(async () => {
     },
     kick: async (_g, u, reason) => void calls.push(['kick', u, reason]),
     editMessage: async () => undefined,
-    sendMessage: async () => ({ id: '0' }),
+    sendMessage: async (c, b) => {
+      calls.push(['send', c, JSON.stringify(b)]);
+      return { id: '0' };
+    },
     deleteMessage: async () => undefined,
     guildChannels: async () => [],
     guildRoles: async () => [],
@@ -80,7 +83,8 @@ describe('厄', () => {
     const dm = calls.find((c) => c[0] === 'dm')![2]!;
     expect(dm).toContain('誹謗中傷');
     expect(dm).toContain('もう 1 つ厄が付くと BAN');
-    expect(dm).toContain('/menzaifu');
+    expect(dm).toContain('厄祓い');
+    expect(dm).toContain('縁側だけ');
     expect(dm).not.toContain(STAFF);
     expect(await activeYakuCount(db, U)).toBe(1);
     expect((await listAudit(db)).map((a) => a.action)).toContain('yaku.add');
@@ -182,7 +186,7 @@ describe('一発 BAN', () => {
   });
 });
 
-describe('免罪符', () => {
+describe('厄祓い（買うと面接待ち → 運営が祓う）', () => {
   beforeEach(async () => {
     await giveYaku(ctx, shinshoku, U, '誹謗中傷', false);
     calls = [];
@@ -198,19 +202,43 @@ describe('免罪符', () => {
     expect(await activeYakuCount(db, U)).toBe(1);
   });
 
-  it('買うと厄が祓われ、厄年ロールが外れ、花びらが減る', async () => {
+  it('買うと銭が減って面接待ちになる（厄はまだ残る）。運営が祓うと厄年ロールが外れる', async () => {
+    expect(cfg.economy.menzaifuPrice).toBe(10000);
     await addCoins(db, U, cfg.economy.menzaifuPrice + 10, 'adjust');
-    expect(await purchaseMenzaifu(ctx, U)).toEqual({ status: 'ok', remaining: 0, price: cfg.economy.menzaifuPrice });
+    expect(await purchaseMenzaifu(ctx, U)).toEqual({ status: 'ok', price: cfg.economy.menzaifuPrice });
     expect((await walletOf(db, U)).balance).toBe(10);
+    expect(await activeYakuCount(db, U)).toBe(1);
+    expect(calls).not.toContainEqual(['removeRole', U, ROLE.yakudoshi]);
+    expect(await yakubaraiWaiting(db, U)).toMatchObject({ price: cfg.economy.menzaifuPrice });
+    expect(calls.find((c) => c[0] === 'dm')?.[2]).toContain('面接');
+    expect((await listAudit(db)).map((a) => a.action)).toContain('yaku.yakubarai');
+    // #記録 に、運営が押す「面接して祓う」ボタンつきの知らせ
+    const notice = calls.find((c) => c[0] === 'send' && c[1] === cfg.channels.log);
+    expect(notice?.[2]).toContain(`yakubarai:done:${U}`);
+    // 面接待ちのあいだは、もう一度は買えない
+    expect(await purchaseMenzaifu(ctx, U)).toEqual({ status: 'waiting' });
+    // 運営が取り消すと、厄祓いが終わる
+    expect(await clearYaku(ctx, shinshoku, U, '面接した')).toEqual({ status: 'cleared', remaining: 0 });
     expect(calls).toContainEqual(['removeRole', U, ROLE.yakudoshi]);
-    expect(await activeYakuCount(db, U)).toBe(0);
+    expect(await yakubaraiWaiting(db, U)).toBeUndefined();
+    expect((await yakuHistory(db, U))[0]?.clearedReason).toBe('menzaifu');
+    expect(await menzaifuUsed(db, U)).toBe(1);
   });
 
   it('1 人 1 回まで', async () => {
     await addCoins(db, U, cfg.economy.menzaifuPrice * 3, 'adjust');
     await purchaseMenzaifu(ctx, U);
+    await clearYaku(ctx, shinshoku, U, '面接した');
     await giveYaku(ctx, shinshoku, U, 'スパム・宣伝', false);
     expect(await purchaseMenzaifu(ctx, U)).toEqual({ status: 'used_up', max: 1 });
+  });
+
+  it('面接待ちのまま、ほかの理由で厄がなくなったら閉じる（回数には数えない）', async () => {
+    await addCoins(db, U, cfg.economy.menzaifuPrice, 'adjust');
+    await purchaseMenzaifu(ctx, U);
+    await clearYakuForUnban(db, { memberId: U, by: GUJI, keep: 0, note: '' });
+    expect(await yakubaraiWaiting(db, U)).toBeUndefined();
+    expect(await menzaifuUsed(db, U)).toBe(0);
   });
 
   it('厄がなければ買えない', async () => {

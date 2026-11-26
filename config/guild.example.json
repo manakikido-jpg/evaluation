@@ -70,7 +70,7 @@
     "excludedVoiceChannelIds": [],
     "shuinGive": 3,
     "shuinReceive": 5,
-    "menzaifuPrice": 300,
+    "menzaifuPrice": 10000,
     "menzaifuMaxUses": 1
   }
 }

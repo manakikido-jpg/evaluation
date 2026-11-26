@@ -523,7 +523,7 @@ export function MemberAdmissionSection(props: {
 
 /** 設定の項目（左の目次。id は section の sec-○○） */
 const SETTINGS_SECTIONS: [string, string][] = [
-  ['coins', '🪙 {通貨}と免罪符'],
+  ['coins', '🪙 {通貨}と厄祓い'],
   ['rooms', '🚪 通話部屋の値段'],
   ['voicegroups', '🔊 自動で増える通話'],
   ['voicechat', '💬 通話のチャット'],
@@ -1205,7 +1205,7 @@ export function SettingsPage(props: {
       <form method="post" action="/settings" class="settings">
         <Csrf session={props.session} />
         <section class="card anchor" id="sec-coins">
-          <h2>{e.currencyEmoji} 通貨と免罪符</h2>
+          <h2>{e.currencyEmoji} 通貨と厄祓い</h2>
           <div class="fields">
             <label class="field">
               <span>通貨の名前</span>
@@ -1215,8 +1215,8 @@ export function SettingsPage(props: {
               <span>通貨の絵文字</span>
               <input type="text" name="currencyEmoji" value={e.currencyEmoji} maxlength={10} />
             </label>
-            <Num name="menzaifuPrice" label="免罪符の値段" value={e.menzaifuPrice} file={f.menzaifuPrice} min={1} />
-            <Num name="menzaifuMaxUses" label="免罪符を買える回数（1 人あたり）" value={e.menzaifuMaxUses} file={f.menzaifuMaxUses} />
+            <Num name="menzaifuPrice" label="厄祓いの値段" value={e.menzaifuPrice} file={f.menzaifuPrice} min={1} />
+            <Num name="menzaifuMaxUses" label="厄祓いを買える回数（1 人あたり）" value={e.menzaifuMaxUses} file={f.menzaifuMaxUses} />
             <Num name="voicePer10Min" label="通話 10 分ごとにもらえる量" value={e.voicePer10Min} file={f.voicePer10Min} />
             <Num name="longVoiceBonusAmount" label="7時間の浮上ボーナス（1日1回・週2回まで。0で停止）" value={e.longVoiceBonusAmount} file={f.longVoiceBonusAmount} />
             <p class="note">日本時間の1日にVC参加を合計7時間で追加支給。週は月曜始まり。AFK・BOTは除き、1人の通話も数えます。通常の通話報酬の上限とは別です。</p>
@@ -1818,7 +1818,7 @@ export function SettingsPage(props: {
           </p>
           {props.boosters && <BoosterList boosters={props.boosters} log={props.boostLog ?? []} />}
           <div class="fields">
-            <Num name="boostDiscountPercent" label="授与品の割引 %（免罪符・贈り物はのぞく。0 で割引なし。90 まで）" value={e.boostDiscountPercent} file={f.boostDiscountPercent} />
+            <Num name="boostDiscountPercent" label="授与品の割引 %（厄祓い・贈り物はのぞく。0 で割引なし。90 まで）" value={e.boostDiscountPercent} file={f.boostDiscountPercent} />
           </div>
           <label class="field">
             <span>本人への DM の最初の文（特典の案内は BOT が下に足します）</span>

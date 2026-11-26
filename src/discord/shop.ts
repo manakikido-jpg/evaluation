@@ -17,14 +17,15 @@ import {
   type UserSelectMenuInteraction,
   type Message,
 } from 'discord.js';
-import { emaChannelIds, type CasinoConfig, type GuildConfig } from '../config.js';
+import { adminLevelOf, emaChannelIds, type CasinoConfig, type GuildConfig } from '../config.js';
 import { boostCasino } from '../services/casino/boost.js';
 import type { Db } from '../db/client.js';
 import type { ShopItem } from '../db/schema.js';
 import type { DiscordActions } from '../lib/discordRest.js';
 import { logger } from '../lib/logger.js';
 import { walletOf } from '../services/economy.js';
-import { purchaseMenzaifu } from '../services/moderation.js';
+import { purchaseMenzaifu, yakubaraiResultText } from '../services/moderation.js';
+import { isYakudoshi, YAKU_BLOCKED } from '../services/yakuGate.js';
 import { drawOmikuji, omikujiToday } from '../services/omikuji.js';
 import { ticketsOf } from '../services/tickets.js';
 import { styleItem } from '../services/casino/styles.js';
@@ -96,6 +97,10 @@ export class ShopApp {
     const id = 'customId' in interaction ? interaction.customId : '';
     if (!id.startsWith('shop:')) return;
     try {
+      // 👹 厄のあいだは「厄祓い」だけ（一覧を開く・選ぶ・受けるは通して、品物で見分ける）
+      if (this.yaku(interaction.member) && !/^shop:(open|page:\d+|cancel|pick(:.*)?|buy:.*)$/.test(id) && interaction.isRepliable()) {
+        return void (await interaction.reply({ content: YAKU_BLOCKED, ...EPHEMERAL }));
+      }
       if (interaction.isButton()) {
         if (id === 'shop:open') return await this.open(interaction);
         if (/^shop:page:\d+$/.test(id)) return await this.open(interaction, Number(id.split(':')[2]));
@@ -144,6 +149,12 @@ export class ShopApp {
     }
   }
 
+  /** 厄のあいだか（運営はのぞく） */
+  private yaku(member: unknown): boolean {
+    const roleIds = roleIdsOf(member);
+    return isYakudoshi(this.cfg(), roleIds) && !adminLevelOf(this.cfg(), roleIds);
+  }
+
   /** 通貨の名前（銭） */
   private get coinName(): string {
     return this.cfg().economy.currencyName;
@@ -175,6 +186,7 @@ export class ShopApp {
   private async pick(i: StringSelectMenuInteraction<'cached'>): Promise<void> {
     const item = await getItem(this.db, Number(i.values[0]));
     if (!item?.enabled) return void (await i.update(done('この授与品は、今は受けられません。')));
+    if (item.kind !== 'menzaifu' && this.yaku(i.member)) return void (await i.update(done(YAKU_BLOCKED)));
     const balance = await this.balance(i.user.id);
     const e = this.cfg().economy;
     if (kobanValue(item.kind) !== undefined) return void (await i.update(kobanBuyConfirm(item, balance, kobanStaff(this.cfg(), roleIdsOf(i.member))) as never));
@@ -316,6 +328,7 @@ export class ShopApp {
   private async execute(i: Buyable, item: ShopItem, extra: { targetId?: string; message?: string } = {}, discount?: DiscountTicket): Promise<string> {
     const cfg = this.cfg();
     const userId = i.user.id;
+    if (item.kind !== 'menzaifu' && this.yaku(i.member)) return YAKU_BLOCKED;
     if (item.boosterOnly && !isBooster(i)) return '🏮 この授与品は、奉納（サーバーブースト）している方だけが受けられます。';
     switch (item.kind) {
       case 'role':
@@ -324,10 +337,7 @@ export class ShopApp {
         return this.role(i, item, discount);
       case 'menzaifu': {
         const r = await purchaseMenzaifu({ db: this.db, cfg, discord: this.discord }, userId);
-        if (r.status === 'ok') return `🧾 厄を 1 つ祓いました。${r.remaining ? `残りの厄: ${r.remaining}` : '厄年は外れました。'}`;
-        if (r.status === 'no_yaku') return `祓う厄がありません（${this.coinName}は減っていません）。`;
-        if (r.status === 'used_up') return `免罪符は 1 人 ${r.max} 回までです。`;
-        return `${this.coinName}が足りません（${r.price} 枚必要・いま ${r.balance} 枚）。`;
+        return yakubaraiResultText(r, cfg.economy);
       }
       case 'omikuji_extra':
         return this.omikujiExtra(i, item, discount);

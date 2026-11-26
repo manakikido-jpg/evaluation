@@ -114,7 +114,7 @@ afterEach(async () => {
 describe('差し込み', () => {
   it('{名前} を今の設定の値に、{#チャンネル名} をリンクに置き換える', () => {
     const r = renderNotice('免罪符は {免罪符の値段} {通貨}。{#しきたり} を読む。氏子は {氏子のご縁}', cfg, CHANNELS);
-    expect(r.text).toBe(`免罪符は 300 銭。<#${CH.shikitari}> を読む。氏子は 20`);
+    expect(r.text).toBe(`免罪符は 10000 銭。<#${CH.shikitari}> を読む。氏子は 20`);
     expect(r.unknown).toEqual([]);
   });
 
@@ -270,7 +270,7 @@ describe('掲示', () => {
     const after = applyOverrides(cfg, overridesSchema.parse({ economy: { menzaifuPrice: 800 } }));
     expect(await syncPostedNotices({ db, cfg: after, discord: d.discord }, cfg)).toBe(1);
     expect(d.messages.get((await getNotice(db, price.id))!.messageId!)?.content).toBe('免罪符は 800 枚');
-    expect(d.messages.get((await getNotice(db, editing.id))!.messageId!)?.content).toBe('300 枚');
+    expect(d.messages.get((await getNotice(db, editing.id))!.messageId!)?.content).toBe('10000 枚');
     expect(d.log).toEqual([`edit ${(await getNotice(db, price.id))!.messageId}`]);
     expect((await getNotice(db, plain.id))?.postedText).toBe('こんにちは');
   });

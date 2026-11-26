@@ -11,7 +11,7 @@ import { addTickets, ticketName } from './tickets.js';
 /**
  * 期間限定イベント（ボーナス週間・セール）。始まりから終わりまでの間だけ、BOT の設定に入れる。
  * - voice: 通話でもらえる{通貨}が value%（200 = 2 倍）
- * - shop: 授与品が value% 引き（免罪符・贈り物はのぞく）
+ * - shop: 授与品が value% 引き（厄祓い・贈り物はのぞく）
  * - gacha: 物御籤が value% 引き
  * - voice_ticket: その日（日本時間）の通話が value 分になった人に、券を ticket_count 枚（その日 1 回）
  * 同じ種類が重なったら、いちばん大きいものが効く（voice_ticket は重なった分だけ配る）。

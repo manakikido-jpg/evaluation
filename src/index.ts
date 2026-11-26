@@ -44,6 +44,8 @@ import { VoiceCounterApp } from './discord/voiceCounter.js';
 import { PresenceGiftApp } from './discord/presenceGifts.js';
 import { VoiceChatClearApp } from './discord/voiceChatClear.js';
 import { AfkMuteApp } from './discord/afkMute.js';
+import { YakuVoiceApp } from './discord/yakuVoice.js';
+import { replyYakuBlocked, yakuInteractionBlocked } from './discord/yakuInteractionGate.js';
 import { BellApp, BellStickyApp } from './discord/bell.js';
 import { DiaryApp } from './discord/diary.js';
 import { GachaApp } from './discord/gacha.js';
@@ -183,6 +185,7 @@ async function main(): Promise<void> {
   const presenceGifts = new PresenceGiftApp(db, cfg, actions);
   const voiceChatClear = new VoiceChatClearApp(cfg, () => Date.now(), channelId => rooms.preservesMessages(channelId));
   const afkMute = new AfkMuteApp(db, cfg);
+  const yakuVoice = new YakuVoiceApp(cfg);
   const serverMuteRoles = new ServerMuteRolesApp(db, cfg);
   const bell = new BellApp(client, db, cfg, actions);
   const bellSticky = new BellStickyApp(cfg);
@@ -279,6 +282,7 @@ async function main(): Promise<void> {
     voiceChatClear.attach(guild);
     // 奥の院で BOT がミュートした人が、止まっていた間に出ていたら外す
     await afkMute.attach(guild).catch((err) => logger.warn({ err }, 'afk mute attach failed'));
+    await yakuVoice.attach(guild).catch((err) => logger.warn({ err }, 'yaku voice attach failed'));
     await serverMuteRoles.attach(guild).catch(err => logger.warn({ err }, 'server mute role attach failed'));
     // 呼び鈴のボタンを、決めたチャンネルのいちばん下に
     bellSticky.attach(guild);
@@ -498,6 +502,7 @@ async function main(): Promise<void> {
     // 奥の院（寝落ち）に入ったらミュート、出たら外す
     void (async () => {
       await afkMute.onVoiceStateUpdate(before, after);
+      await yakuVoice.onVoiceStateUpdate(before, after).catch((err) => logger.warn({ err }, 'yaku voice check failed'));
       await serverMuteRoles.onVoiceStateUpdate(before, after);
     })().catch(err => logger.warn({ err }, 'voice mute sync failed'));
     // 通話のチャットに「この通話の人に朱印を押す」
@@ -507,6 +512,8 @@ async function main(): Promise<void> {
     void rooms.onVoiceStateUpdate(before, after);
   });
   client.on(Events.InteractionCreate, (i) => {
+    // 👹 厄のあいだ止める操作（送金・市場・キャスト・カジノ・お年玉など）は、ここで止める
+    if (yakuInteractionBlocked(cfg(), i)) return void replyYakuBlocked(i);
     void onTalkTopicInteraction(i, cfg().guildId);
     void recording.onInteraction(i);
     void maikura.onInteraction(i);

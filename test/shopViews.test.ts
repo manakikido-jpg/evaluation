@@ -77,7 +77,7 @@ describe('ショップの見た目', () => {
     );
     expect(m.embeds[0]!.description).toContain('👛 いまの🪙銭: **3,000 枚**');
     expect(m.embeds[0]!.description).toContain('🌸 色守り（桜） … 10/5 まで');
-    expect(m.embeds.map((e) => e.title)).toEqual(['🛍 授与所', '🎨 色守り', '🏷 称号', '🎁 贈る', '🧾 厄払い']);
+    expect(m.embeds.map((e) => e.title)).toEqual(['🛍 授与所', '🎨 色守り', '🏷 称号', '🎁 贈る', '🙏 厄祓い']);
     const color = m.embeds[1]!.fields![0]!;
     expect(color).toMatchObject({ name: '🌸 色守り（桜）', inline: true });
     expect(color.value).toContain('**1,500 枚**・30 日');

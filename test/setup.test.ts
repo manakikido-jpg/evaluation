@@ -235,7 +235,7 @@ describe('セットアップ', () => {
     expect(cfg.ranks.find((x) => x.key === 'sanpaisha')?.roleId).toBe(r.roleIds.sanpaisha);
     expect(cfg.ranks.find((x) => x.key === 'guji')?.roleId).toBe(r.roleIds.guji);
     // 見本の経済設定などはそのまま
-    expect(cfg.economy.menzaifuPrice).toBe(300);
+    expect(cfg.economy.menzaifuPrice).toBe(10000);
   });
 });
 

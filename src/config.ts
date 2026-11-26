@@ -114,9 +114,9 @@ export const economySchema = z.object({
   /** 朱印を押した人・押された人がもらえる量 */
   shuinGive: z.number().int().min(0).default(3),
   shuinReceive: z.number().int().min(0).default(5),
-  /** 免罪符の値段（考え中のため仮の値） */
-  menzaifuPrice: z.number().int().positive().default(300),
-  /** 免罪符を買える回数（1 人あたり、ずっと） */
+  /** 厄祓いの値段（買うと面接待ちになり、運営との面接のあとに祓う。本人の決定 2026-11-26） */
+  menzaifuPrice: z.number().int().positive().default(10000),
+  /** 厄祓いを買える回数（1 人あたり、ずっと） */
   menzaifuMaxUses: z.number().int().min(0).default(1),
   /** 贈り物（ショップ）: 1 回に贈れる量と、1 人が 1 日に贈れる合計 */
   giftMin: z.number().int().positive().default(10),
@@ -133,7 +133,7 @@ export const economySchema = z.object({
   omikujiBase: z.number().int().min(0).default(10),
   /** おみくじは通話に入っているときだけ引ける（AFK・数えない通話はのぞく） */
   omikujiVoiceOnly: z.boolean().default(true),
-  /** 奉納している人の授与品の割引（%。免罪符・贈り物はのぞく。0 で割引なし） */
+  /** 奉納している人の授与品の割引（%。厄祓い・贈り物はのぞく。0 で割引なし） */
   boostDiscountPercent: z.number().int().min(0).max(90).default(20),
   /** コアタイム中の通話の花びら（%。150 で 1.5 倍。増えた分は 1 日の上限に数えない） */
   coreTimePercent: z.number().int().min(100).max(500).default(150),

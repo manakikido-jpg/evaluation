@@ -24,12 +24,14 @@ import {
   kickMember,
   purchaseMenzaifu,
   writeMemo,
+  yakubaraiResultText,
+  YAKUBARAI_DONE,
   type Actor,
   type Denied,
   type ModCtx,
 } from '../services/moderation.js';
 import { goshuinchoOf } from '../services/shuin.js';
-import { activeYakuCount, memosOf, membersWithYaku, menzaifuUsed } from '../services/yaku.js';
+import { activeYakuCount, memosOf, membersWithYaku, menzaifuUsed, yakubaraiWaiting, yakubaraiWaitingList } from '../services/yaku.js';
 import { rankLabel, highestRank } from '../domain/ranks.js';
 import { SHU } from './views.js';
 
@@ -85,6 +87,7 @@ export class StaffApp {
         }
       } else if (interaction.isButton()) {
         if (interaction.customId === 'menzaifu:buy') return await this.buyMenzaifu(interaction);
+        if (interaction.customId.startsWith(YAKUBARAI_DONE)) return await this.yakubaraiDone(interaction);
         if (interaction.customId.startsWith('yaku:confirm:')) return await this.confirmYaku(interaction);
         if (interaction.customId.startsWith('yaku:cancel:')) {
           this.pending.delete(interaction.customId.split(':')[2] ?? '');
@@ -199,9 +202,10 @@ export class StaffApp {
   }
 
   private async yakuList(): Promise<string> {
-    const rows = await membersWithYaku(this.db);
+    const [rows, waiting] = await Promise.all([membersWithYaku(this.db), yakubaraiWaitingList(this.db)]);
     if (!rows.length) return '厄が付いている方はいません。';
-    const lines = rows.slice(0, 25).map((r) => `👹 ${mention(r.memberId)}（${r.displayName ?? '?'}）厄 ${r.active}`);
+    const wait = new Set(waiting.map((w) => w.memberId));
+    const lines = rows.slice(0, 25).map((r) => `👹 ${mention(r.memberId)}（${r.displayName ?? '?'}）厄 ${r.active}${wait.has(r.memberId) ? ' 🙏 厄祓いの面接待ち' : ''}`);
     return `**厄が付いている方（${rows.length} 人）**\n${lines.join('\n')}${rows.length > 25 ? `\nほか ${rows.length - 25} 人は管理画面で確認してください。` : ''}`;
   }
 
@@ -236,50 +240,59 @@ export class StaffApp {
     return embed.toJSON();
   }
 
-  // ───────── 全員用: 免罪符 ─────────
+  // ───────── 全員用: 厄祓い（/厄祓い） ─────────
 
   private async menzaifu(i: ChatInputCommandInteraction<'cached'>): Promise<void> {
     await i.deferReply(EPHEMERAL);
     const e = this.cfg.economy;
-    const [yakuCount, used, wallet] = await Promise.all([
+    const [yakuCount, used, wallet, waiting] = await Promise.all([
       activeYakuCount(this.db, i.user.id),
       menzaifuUsed(this.db, i.user.id),
       walletOf(this.db, i.user.id),
+      yakubaraiWaiting(this.db, i.user.id),
     ]);
     const left = Math.max(0, e.menzaifuMaxUses - used);
     const lines = [
       `今の厄: ${yakuCount}${yakuCount ? ' 👹' : ''}`,
-      `免罪符の値段: ${e.currencyEmoji}${e.currencyName} ${e.menzaifuPrice}`,
+      `厄祓いの値段: ${e.currencyEmoji}${e.currencyName} ${e.menzaifuPrice}`,
       `持っている${e.currencyName}: ${e.currencyEmoji} ${wallet.balance}`,
-      `あと買える回数: ${left} 回`,
+      waiting ? '🙏 面接待ちです（運営から声がかかるまでお待ちください）' : `あと受けられる回数: ${left} 回`,
+      '-# 厄祓いを受けると面接待ちになり、運営との面接のあとに厄が祓われます。',
     ];
-    const canBuy = yakuCount > 0 && left > 0 && wallet.balance >= e.menzaifuPrice;
-    const embed = new EmbedBuilder().setColor(SHU).setTitle('📜 免罪符').setDescription(lines.join('\n'));
+    const canBuy = yakuCount > 0 && !waiting && left > 0 && wallet.balance >= e.menzaifuPrice;
+    const embed = new EmbedBuilder().setColor(SHU).setTitle('🙏 厄祓い').setDescription(lines.join('\n'));
     const components = canBuy
       ? [
           new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-            new ButtonBuilder().setCustomId('menzaifu:buy').setLabel('免罪符を購入して厄を祓う').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('menzaifu:buy').setLabel('厄祓いを申し込む（面接待ちになる）').setStyle(ButtonStyle.Primary),
           ),
         ]
       : [];
-    const note = yakuCount === 0 ? '厄は付いていません。' : left === 0 ? '免罪符はもう買えません。' : wallet.balance < e.menzaifuPrice ? `${e.currencyName}が足りません。通話や朱印で貯まります。` : '';
+    const note = yakuCount === 0 ? '厄は付いていません。' : waiting ? '' : left === 0 ? '厄祓いはもう受けられません。' : wallet.balance < e.menzaifuPrice ? `${e.currencyName}が足りません。通話で貯まります。` : '';
     await i.editReply({ content: note || null, embeds: [embed.toJSON()], components });
   }
 
   private async buyMenzaifu(i: ButtonInteraction<'cached'>): Promise<void> {
     await i.deferUpdate();
-    const e = this.cfg.economy;
     const r = await purchaseMenzaifu(this.ctx, i.user.id);
-    const text =
-      r.status === 'ok'
-        ? `📜 免罪符を購入し、厄を 1 つ祓いました（${e.currencyEmoji}-${r.price}）。${r.remaining ? `残りの厄: ${r.remaining}` : '厄はなくなりました。'}`
-        : r.status === 'no_yaku'
-          ? '厄は付いていません。'
-          : r.status === 'used_up'
-            ? '免罪符はもう買えません。'
-            : `${e.currencyName}が足りません（必要 ${r.price} / 持っている ${r.balance}）。`;
-    if (r.status === 'ok') await this.log(`📜 免罪符 ${mention(i.user.id)} が厄を祓いました（残り ${r.remaining}）`);
-    await i.editReply({ content: text, embeds: [], components: [] });
+    await i.editReply({ content: yakubaraiResultText(r, this.cfg.economy), embeds: [], components: [] });
+  }
+
+  /** #記録 の「面接して祓う」（神職・宮司）。いちばん新しい厄を祓い、厄祓いを終わりにする */
+  private async yakubaraiDone(i: ButtonInteraction<'cached'>): Promise<void> {
+    const actor = this.actorOf(i);
+    if (!actor) return void (await i.reply({ content: '神職・宮司のみ使えます。', ...EPHEMERAL }));
+    const targetId = i.customId.slice(YAKUBARAI_DONE.length);
+    await i.deferReply(EPHEMERAL);
+    if (!(await yakubaraiWaiting(this.db, targetId))) {
+      await i.message.edit({ components: [] }).catch(() => undefined);
+      return void (await i.editReply('この方の厄祓いは、もう終わっています（面接待ちではありません）。'));
+    }
+    const r = await clearYaku(this.ctx, actor, targetId, '厄祓い（面接のあと）');
+    if (r.status === 'denied') return void (await i.editReply(DENIED[r.reason]));
+    if (r.status === 'none') return void (await i.editReply('祓う厄がありませんでした。'));
+    await i.message.edit({ content: `${i.message.content}\n✅ ${mention(actor.id)} が面接して祓いました（残りの厄: ${r.remaining}）`, components: [], allowedMentions: NO_MENTIONS }).catch(() => undefined);
+    await i.editReply(`🙏 ${mention(targetId)} さまの厄を祓いました。${r.remaining ? `残りの厄: ${r.remaining}` : '厄年は外れました。'}`);
   }
 
   /** モデレーションの記録を #記録 へ。宮司が行った分は、ほかの運営の目に触れないよう #記録 には残さない（社務所Web の記録には残る）。 */

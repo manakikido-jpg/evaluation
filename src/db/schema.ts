@@ -434,6 +434,29 @@ export const yaku = pgTable(
   (t) => [index('yaku_member_idx').on(t.memberId, t.createdAt)],
 );
 
+/**
+ * 🙏 厄祓いの申し込み（授与所で買う → 運営との面接 → 運営が祓う）。
+ * status: waiting（面接待ち）/ done（祓った）/ closed（ほかの理由で厄がなくなった・BAN など）
+ * 面接待ちは 1 人 1 つだけ（同時に押しても二重に払わない）。
+ */
+export const yakubaraiRequests = pgTable(
+  'yakubarai_requests',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    memberId: text('member_id').notNull(),
+    price: integer('price').notNull(),
+    status: text('status').$type<'waiting' | 'done' | 'closed'>().notNull().default('waiting'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    doneAt: timestamp('done_at', { withTimezone: true }),
+    doneBy: text('done_by'),
+  },
+  (t) => [
+    uniqueIndex('yakubarai_waiting_uq').on(t.memberId).where(sql`${t.status} = 'waiting'`),
+    index('yakubarai_member_idx').on(t.memberId, t.createdAt),
+  ],
+);
+export type YakubaraiRequest = typeof yakubaraiRequests.$inferSelect;
+
 /** 神職どうしの申し送りメモ（本人には見えない） */
 export const memos = pgTable(
   'memos',
