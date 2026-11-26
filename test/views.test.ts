@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { setNewSystemVisible } from '../src/domain/terms.js';
 import { commandDefinitions } from '../src/discord/commands.js';
 import { parseShuinId, shuinId } from '../src/discord/ids.js';
 import { breakdownLine, giveLog, giveReply, goshuinchoReply, giversReply, promotionAnnouncement, revokeReply } from '../src/discord/views.js';
@@ -23,7 +24,11 @@ describe('customId', () => {
 
 describe('コマンド定義', () => {
   it('右クリックメニュー・全員用・神職用', () => {
+    // ③の前は新制度のコマンド（/絵馬・/世話役の投票）を出さない
+    expect(commandDefinitions(cfg).some((d) => d.name === 'ema' || d.name === 'sewayaku')).toBe(false);
+    setNewSystemVisible(true);
     const defs = commandDefinitions(cfg);
+    setNewSystemVisible(false);
     expect(defs.map((d) => d.name)).toEqual(['alt', 'bingo', 'visitprofile', 'recording', 'プロフィール', 'goshuin', 'ema', 'talktopic', 'janken', 'zandaka', 'fujo', 'sewayaku', 'stickerdesk', 'ichiba', 'toukoubun', 'sokin', 'cast', 'shinpu', 'mypage', 'casino', 'items', 'present', 'yougo', 'menzaifu', 'omikuji', 'gacha', 'bell', 'invite', 'sharedinvite', 'hajimete', 'soudan', 'help', 'panel', 'yaku', 'ban', 'kick', 'gift', 'roomadmin', 'role', 'temprole', 'tempperm', 'minutes', 'memo', 'member']);
     const bingo = defs.find(d => d.name === 'bingo')!;
     expect(bingo.default_member_permissions).toBeUndefined();

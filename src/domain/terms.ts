@@ -24,3 +24,18 @@ export function isMusubiMode(): boolean {
 export function w(oldText: string, newText: string): string {
   return musubiMode ? newText : oldText;
 }
+
+/**
+ * 🎐 新制度をメンバーに見せるか（③絵馬での昇格が ON のときだけ）。
+ * OFF のあいだは「絵馬を贈る」ボタン・頂いた絵馬の欄・/絵馬・/世話役の投票 を出さない（本人の決定 2026-11-26）。
+ * BOT が起動時と毎分、settings の ema_promotion を見て切り替える（変わったらコマンドを登録し直す）。
+ */
+let newSystemVisible = false;
+
+export function setNewSystemVisible(on: boolean): void {
+  newSystemVisible = on;
+}
+
+export function isNewSystemVisible(): boolean {
+  return newSystemVisible;
+}

@@ -95,9 +95,10 @@ import { guildChannelsCached, syncCurrencyRename } from './services/notices.js';
 import { announceUpdates } from './services/updateNews.js';
 import { createDiscordActions } from './lib/discordRest.js';
 import { commandDefinitions } from './discord/commands.js';
-import { isMusubiMode, setMusubiMode } from './domain/terms.js';
+import { isMusubiMode, isNewSystemVisible, setMusubiMode, setNewSystemVisible } from './domain/terms.js';
 import { newSystemStartedAt } from './services/shuin.js';
 import { createMusubiSync } from './services/musubiSwitch.js';
+import { emaPromotionEnabled } from './services/emaPromotion.js';
 import { logger } from './lib/logger.js';
 import { pingRoleIds } from './services/notify.js';
 import { explainStartupError } from './lib/startupErrors.js';
@@ -218,6 +219,8 @@ async function main(): Promise<void> {
     }
     // 🧵 呼び名（御朱印 → 結び）：コマンドの表示名を登録する前に、今の言葉を決めておく
     setMusubiMode(Boolean(await newSystemStartedAt(db).catch(() => undefined)));
+    // 🎐 ③絵馬での昇格が ON のときだけ新制度のコマンドを出す
+    setNewSystemVisible(await emaPromotionEnabled(db).catch(() => false));
     // どれかが失敗しても（Discord が混んでいるなど）、止まらずに続ける
     await guild.commands
       .set(commandDefinitions(cfg()))
@@ -233,6 +236,7 @@ async function main(): Promise<void> {
         logger.info('commands re-registered for musubi terms');
       },
       registered: isMusubiMode(),
+      registeredVisible: isNewSystemVisible(),
     });
     await syncMusubi();
     // 通貨の名前を変えたあと（花びら → 銭）: 投稿済みの掲示を出し直す（1 回だけ）

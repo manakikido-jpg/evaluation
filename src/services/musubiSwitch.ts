@@ -7,7 +7,8 @@ import { findChannel, guildChannelsCached, listNotices, publishNotice, updateNot
 import { listTerms, syncGlossaryNotices, updateTerm } from './glossary.js';
 import { MUSUBI_TERM_SWAPS, type GlossaryCategory } from './glossaryDefaults.js';
 import { newSystemStartedAt } from './shuin.js';
-import { setMusubiMode } from '../domain/terms.js';
+import { setMusubiMode, setNewSystemVisible } from '../domain/terms.js';
+import { emaPromotionEnabled } from './emaPromotion.js';
 
 /**
  * 🧵 新制度④c：呼び名の切り替え（御朱印 → 結び）を、掲示と用語集に当てる。
@@ -187,8 +188,11 @@ export function createMusubiSync(deps: {
   registerCommands: () => Promise<void>;
   /** 起動時に登録したときの言葉 */
   registered: boolean;
+  /** 起動時に登録したときの、新制度を見せるか（③） */
+  registeredVisible?: boolean;
 }): () => Promise<{ on: boolean; reregistered: boolean; applied?: { changed: number; republished: number; custom: string[]; terms: number } } | undefined> {
   let registered = deps.registered;
+  let registeredVisible = deps.registeredVisible ?? false;
   let busy = false;
   return async () => {
     if (busy) return undefined;
@@ -196,10 +200,14 @@ export function createMusubiSync(deps: {
     try {
       const on = Boolean(await newSystemStartedAt(deps.db));
       setMusubiMode(on);
+      // 🎐 ③絵馬での昇格が ON になったら新制度のコマンド（/絵馬・/世話役の投票）を出す
+      const visible = await emaPromotionEnabled(deps.db);
+      setNewSystemVisible(visible);
       let reregistered = false;
-      if (on !== registered) {
+      if (on !== registered || visible !== registeredVisible) {
         await deps.registerCommands();
         registered = on;
+        registeredVisible = visible;
         reregistered = true;
       }
       if (on === (await musubiApplied(deps.db))) return { on, reregistered };

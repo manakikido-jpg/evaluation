@@ -513,6 +513,8 @@ export class ShuinApp {
 
   /** 🎐 「絵馬を贈る」ボタン: 氏子以上・条件を満たしていれば一言のモーダルを出す。だめなら理由を出す */
   private async emaGive(interaction: ButtonInteraction<'cached'>, receiverId: string): Promise<void> {
+    // 🎐 絵馬は③（絵馬での昇格）が ON になるまで使わない（前に出したボタンが残っていても）
+    if (!(await emaPromotionEnabled(this.db))) return void (await interaction.reply({ content: '🎐 絵馬は、新制度が始まってからです。', flags: MessageFlags.Ephemeral, allowedMentions: NO_MENTIONS }));
     const check = await checkGiveEma(this.db, this.cfg, interaction.user.id, receiverId);
     if (!check.ok) {
       await interaction.reply({ ...emaGiveReply(receiverId, check), flags: MessageFlags.Ephemeral, allowedMentions: NO_MENTIONS });
@@ -525,6 +527,7 @@ export class ShuinApp {
   /** 🎐 絵馬の一言のモーダルを受けて贈る（匿名・1 人 1 枚・贈り直し可） */
   private async emaSubmit(interaction: ModalSubmitInteraction<'cached'>, receiverId: string): Promise<void> {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    if (!(await emaPromotionEnabled(this.db))) return void (await interaction.editReply({ content: '🎐 絵馬は、新制度が始まってからです。', allowedMentions: NO_MENTIONS }));
     const message = interaction.fields.getTextInputValue('message');
     const result = await this.lock.run(receiverId, () => giveEma(this.db, this.cfg, interaction.user.id, receiverId, message));
     if (result.ok) await this.log(`🎐 絵馬 <@${interaction.user.id}> → <@${receiverId}>（${EMA_TIER_LABEL[result.tier]}・${result.created ? '新規' : '贈り直し'}・票 ${result.count}）`);

@@ -349,7 +349,10 @@ export function goshuinchoReply(
   // 🎐 絵馬（評価の票）は参拝者・氏子・世話役にだけ出す
   const emaRelevant = rank?.key === 'sanpaisha' || rank?.key === 'ujiko' || rank?.key === 'sewayaku';
   const promoteMode = Boolean(ema?.promoteMode);
-  if (mode === 'ema') return emaCardReply(ranks, owner, rank, emaRelevant, profile, ema);
+  if (mode === 'ema') {
+    if (!promoteMode) return { content: '🎐 絵馬は、新制度が始まってからです。' };
+    return emaCardReply(ranks, owner, rank, emaRelevant, profile, ema);
+  }
 
   const received = data.receivedCount
     ? `${data.receivedCount} 人\n${breakdownLine(ranks, data.byRank)}`
@@ -386,13 +389,12 @@ export function goshuinchoReply(
     if (about.length) embed.addFields(about);
     embed.addFields(introField, ...goenFields);
     if (collectionField) embed.addFields(collectionField);
-    if (ema && emaRelevant) embed.addFields({ name: '🎐 頂いた絵馬', value: emaField(ema) });
+    // 🎐 絵馬（新制度）は③が ON になるまで見せない（本人の決定 2026-11-26）
     if (coins) embed.addFields({ name: coins.name, value: `${coins.emoji} ${coins.balance}`, inline: true });
     if (profile.tickets) embed.addFields({ name: '🎟 券', value: profile.tickets });
     if (profile.bannerUrl) embed.setImage(profile.bannerUrl);
     const buttons = [
       ...(profile.self ? [] : [giveButton(owner.id)]),
-      ...(profile.self || !emaRelevant ? [] : [emaGiveButton(owner.id)]),
       ...(profile.self ? [unmetButton(owner.id)] : []),
       listButton(owner.id),
     ];

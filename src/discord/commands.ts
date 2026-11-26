@@ -8,7 +8,7 @@ import {
 } from 'discord.js';
 import type { GuildConfig } from '../config.js';
 import { COMMAND } from './ids.js';
-import { w } from '../domain/terms.js';
+import { isNewSystemVisible, w } from '../domain/terms.js';
 import { DURATIONS, PERM_PRESETS } from '../services/tempGrantPresets.js';
 
 const durationChoices = DURATIONS.map(([value, name]) => ({ name, value }));
@@ -21,7 +21,7 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
   const banReasons = cfg?.moderation.instantBanReasons ?? ['その他'];
   // 神職用: 「メンバーをタイムアウト」の権限がある人にだけ表示（使えるかどうかは BOT がロールで確認する）
   const staff = PermissionFlagsBits.ModerateMembers;
-  return [
+  const defs: RESTPostAPIApplicationCommandsJSONBody[] = [
     new SlashCommandBuilder().setName('alt').setNameLocalizations({ ja: 'サブ垢' }).setDescription('Declare your sub account').setDescriptionLocalizations({ ja: 'サブアカウントの申告（サブのアカウントで打つ）' })
       .addSubcommand((s) => s.setName('declare').setNameLocalizations({ ja: '申告' }).setDescription('Declare this account as a sub account').setDescriptionLocalizations({ ja: 'このアカウントが、だれのサブかを申告する（運営が承認します）' })
         .addUserOption((o) => o.setName('main').setNameLocalizations({ ja: '本アカウント' }).setDescription('Your main account').setDescriptionLocalizations({ ja: 'あなたの本アカウント' }).setRequired(true))
@@ -682,4 +682,6 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .addUserOption((o) => o.setName('user').setNameLocalizations({ ja: '相手' }).setDescription('user').setRequired(true))
       .toJSON(),
   ];
+  // 🎐 ③絵馬での昇格が ON になるまで、新制度のコマンド（/絵馬・/世話役の投票）は出さない
+  return isNewSystemVisible() ? defs : defs.filter((d) => d.name !== COMMAND.ema && d.name !== COMMAND.sewayaku);
 }

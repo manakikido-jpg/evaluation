@@ -588,6 +588,7 @@ describe('ShuinApp：絵馬を贈る（新制度②）', () => {
   }
 
   it('氏子は条件を満たした参拝者に絵馬を贈れる（ボタン→モーダル→贈る）', async () => {
+    await (await import('../src/services/emaPromotion.js')).setEmaPromotion(db, true, 'guji'); // 絵馬は③が ON のときだけ
     await seedMembers();
     await seedTogether(3); // 3日・各60分＝合計180分
     const giver = members.get(GU)!;
@@ -604,6 +605,7 @@ describe('ShuinApp：絵馬を贈る（新制度②）', () => {
   });
 
   it('参拝者は絵馬を贈れない（モーダルを出さずに理由を出す）', async () => {
+    await (await import('../src/services/emaPromotion.js')).setEmaPromotion(db, true, 'guji'); // 絵馬は③が ON のときだけ
     await seedMembers();
     await seedTogether(3);
     // 贈る人を参拝者にする
@@ -617,6 +619,7 @@ describe('ShuinApp：絵馬を贈る（新制度②）', () => {
   });
 
   it('いっしょの時間が足りないと贈れない（モーダルを出さずに理由を出す）', async () => {
+    await (await import('../src/services/emaPromotion.js')).setEmaPromotion(db, true, 'guji'); // 絵馬は③が ON のときだけ
     await seedMembers();
     await seedTogether(2); // 2日しかない＝条件未満
     const giver = members.get(GU)!;
@@ -626,19 +629,31 @@ describe('ShuinApp：絵馬を贈る（新制度②）', () => {
     expect(press.replies[0]?.content).toContain('足りません');
   });
 
-  it('プロフィール（御朱印帳）に「頂いた絵馬」の欄が出る', async () => {
+  it('絵馬は③の前は見せない（ボタン・欄・押しても始まっていない）。③のあとは /絵馬 に「頂いた絵馬」が出る', async () => {
     await seedMembers();
     await seedTogether(3);
     const { giveEma } = await import('../src/services/ema.js');
     await giveEma(db, cfg, GU, SA, 'すてきな時間でした');
     const viewer = members.get(GU)!;
-    const show = interaction('slash', viewer, { commandName: 'goshuin', options: { getUser: () => members.get(SA)!.user, getBoolean: () => null } });
-    await app.onInteraction(show.i as never);
-    const embed = show.replies.at(-1)?.embeds?.[0];
-    const fields = (embed as { fields?: { name: string; value: string }[] } | undefined)?.fields ?? [];
-    const emaField = fields.find((f) => f.name.includes('頂いた絵馬'));
-    expect(emaField?.value).toContain('1 枚');
-    expect(emaField?.value).toContain('すてきな時間でした');
+    const open = async (commandName: string) => {
+      const show = interaction('slash', viewer, { commandName, options: { getUser: () => members.get(SA)!.user, getBoolean: () => null } });
+      await app.onInteraction(show.i as never);
+      return JSON.stringify(show.replies.at(-1));
+    };
+    // ③の前：プロフィールに絵馬の欄もボタンも出ない。押しても始まっていない
+    const before = await open('goshuin');
+    expect(before).not.toContain('頂いた絵馬');
+    expect(before).not.toContain(emaGiveId(SA));
+    const press = interaction('button', viewer, { customId: emaGiveId(SA) });
+    await app.onInteraction(press.i as never);
+    expect(press.shownModals).toHaveLength(0);
+    expect(press.replies[0]?.content).toContain('新制度が始まってから');
+    expect(await open('ema')).toContain('新制度が始まってから');
+    // ③のあと：/絵馬 に頂いた絵馬と一言
+    await (await import('../src/services/emaPromotion.js')).setEmaPromotion(db, true, 'guji');
+    const after = await open('ema');
+    expect(after).toContain('頂いた絵馬');
+    expect(after).toContain('すてきな時間でした');
   });
 
   async function seedExistingEma(receiverId: string, n: number) {
@@ -920,7 +935,7 @@ describe('🌸 新制度ローンチの通し稽古（③→④→⑤→元に�
       const registered: (string | undefined)[] = [];
       const syncMusubi = createMusubiSync({
         db, cfg: () => cfg, discord,
-        registerCommands: async () => { registered.push((commandDefinitions(cfg).find((c) => c.name === 'goshuin') as { name_localizations?: Record<string, string> }).name_localizations?.ja); },
+        registerCommands: async () => { const defs = commandDefinitions(cfg); registered.push(`${(defs.find((c) => c.name === 'goshuin') as { name_localizations?: Record<string, string> }).name_localizations?.ja}${defs.some((c) => c.name === 'ema') ? '+絵馬' : ''}`); },
         registered: isMusubiMode(),
       });
       const tick = async () => {
@@ -934,6 +949,7 @@ describe('🌸 新制度ローンチの通し稽古（③→④→⑤→元に�
       expect(sent.filter((s) => s.channelId === cfg.channels.keiji)).toHaveLength(0);
       expect(isMusubiMode()).toBe(false);
       expect(registered).toEqual([]);
+      expect(commandDefinitions(cfg).some((c) => c.name === 'ema' || c.name === 'sewayaku')).toBe(false); // ③の前は新制度のコマンドを出さない
 
       // ── ③ 絵馬での昇格を ON ──
       await setEmaPromotion(db, true, G);
@@ -947,14 +963,14 @@ describe('🌸 新制度ローンチの通し稽古（③→④→⑤→元に�
       expect(keiji.filter((s) => !s.embeds?.length).map((s) => s.content)).toEqual([expect.stringContaining('5 名')]); // まとめて1回
       expect((await walletOf(db, K)).balance).toBe(0); // ④の前：旧ご縁300で特典を払わない
       expect(isMusubiMode()).toBe(false); // ③だけでは呼び名は変わらない
-      expect(registered).toEqual([]);
+      expect(registered).toEqual(['御朱印帳+絵馬']); // ③で /絵馬・/世話役の投票 を出すためにコマンドを登録し直した
 
       // ── ④ ご縁のリセット ──
       await resetAllShuin(db, G);
       await tick();
       expect(await goenOf(db, K)).toBe(0);
       expect(isMusubiMode()).toBe(true);
-      expect(registered).toEqual(['ご縁帳']); // コマンドの日本語名を登録し直した
+      expect(registered).toEqual(['御朱印帳+絵馬', 'ご縁帳+絵馬']); // コマンドの日本語名を登録し直した
       expect((await getNotice(db, nSys.id))!.body).toContain('# 🧵 結び・ご縁・絵馬');
       expect((await getNotice(db, nPanel.id))!.body).toContain('「結ぶ」');
       expect((await getNotice(db, nBan.id))!.body).toContain('朱印'); // 手を入れた掲示は変えない
@@ -985,7 +1001,7 @@ describe('🌸 新制度ローンチの通し稽古（③→④→⑤→元に�
       expect((await undoAllShuinReset(db, G)).status).toBe('ok');
       await tick();
       expect(isMusubiMode()).toBe(false);
-      expect(registered).toEqual(['ご縁帳', '御朱印帳']); // 日本語名も戻した
+      expect(registered).toEqual(['御朱印帳+絵馬', 'ご縁帳+絵馬', '御朱印帳+絵馬']); // 日本語名も戻した
       expect((await getNotice(db, nSys.id))!.body).toBe(tSys.body);
       expect((await getNotice(db, nPanel.id))!.body).toBe(tGuide.body);
       expect((await listTerms(db)).map((t) => t.term)).toEqual(expect.arrayContaining(['朱印', '御朱印帳']));
