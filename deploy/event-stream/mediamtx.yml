@@ -1,0 +1,36 @@
+# MediaMTX 1.15.6。映像・管理APIはDocker内だけ。公開するのは暗号化したOBS入口のみ。
+logLevel: warn
+logDestinations: [stdout]
+readTimeout: 15s
+writeTimeout: 15s
+authMethod: http
+authHTTPAddress: http://web:3000/event-stream/auth
+authHTTPExclude: []
+api: yes
+apiAddress: :9997
+metrics: no
+pprof: no
+playback: no
+rtsp: no
+webrtc: no
+srt: no
+rtmp: yes
+rtmpEncryption: strict
+rtmpsAddress: :1936
+rtmpServerKey: /tls/server.key
+rtmpServerCert: /tls/server.crt
+hls: yes
+hlsAddress: :8888
+hlsAllowOrigins: []
+hlsAlwaysRemux: yes
+hlsVariant: lowLatency
+hlsSegmentCount: 7
+hlsSegmentDuration: 2s
+hlsPartDuration: 500ms
+hlsSegmentMaxSize: 10M
+pathDefaults:
+  source: publisher
+  overridePublisher: no
+  record: no
+paths:
+  '~^event/[0-9a-f-]{36}$':

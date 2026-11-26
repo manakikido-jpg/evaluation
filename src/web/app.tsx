@@ -9,6 +9,7 @@ import {ARCADE_KINDS,isArcadeKind} from '../domain/casinoArcade.js';
 import { deployRuns, reflectedTimes } from '../services/deployInfo.js';
 import { loadAppointRoles, saveAppointRoles } from '../services/appointRoles.js';
 import { mountEventLottery } from './eventLottery.js';
+import type { StreamConfig } from '../services/eventStream.js';
 import { mountEvaluation } from './evaluation.js';
 import { applyTiersToOpenRounds } from '../services/casino/fortune.js';
 import { RoomsPage } from './views/rooms.js';
@@ -388,6 +389,7 @@ export type WebDeps = {
   /** 秘密の入口（/enter/この文字）。決めると、ここを通った人にだけログイン画面を出す（ほかは「見つかりません」） */
   entryKey?: string;
   now?: () => Date;
+  eventStream?: StreamConfig;
 };
 
 type Env = { Variables: { session: SessionView } };
@@ -630,7 +632,7 @@ export function createWebApp(deps: WebDeps) {
       return Boolean(s && s.userId === userId && (s.level === 'guji' || s.level === 'shinshoku'));
     },
   });
-  mountVisit(app, { db, api, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
+  mountVisit(app, { db, api, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now, eventStream:deps.eventStream });
   mountMarketplace(app, { db, api, discord: deps.discord, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
   mountLottery(app, { db, api, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
   mountTicketOperations(app, { db, api, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });

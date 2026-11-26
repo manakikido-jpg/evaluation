@@ -1,5 +1,8 @@
 # 管理画面（社務所 Web）を HTTPS で公開する
 {$SHAMUSHO_DOMAIN} {
+	# 配信サーバーの認証コールバックはDocker内部からだけ呼ぶ。
+	@stream_auth path /event-stream/auth
+	respond @stream_auth 404
 	encode gzip
 	reverse_proxy web:3000
 }
