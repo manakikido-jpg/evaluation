@@ -58,6 +58,7 @@ export const ACTION_LABEL: Record<string, string> = {
   'yaku.clear': '厄を取り消した',
   'yaku.menzaifu': '免罪符で厄を祓った',
   'yaku.yakubarai': '厄祓いを申し込んだ（面接待ち）',
+  'yaku.role_fix': '残っていた厄年ロールを外した',
   'member.ban': 'BAN',
   'member.kick': 'キック',
   'memo.add': 'メモを書いた',

@@ -17,6 +17,8 @@ export const FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
   ban_failed: { text: 'BAN の記録はしましたが、Discord での BAN に失敗しました。BOT の権限を確認してください。', kind: 'warn' },
   cleared: { text: '厄を 1 つ取り消しました。', kind: 'ok' },
   no_yaku: { text: '取り消す厄がありません。', kind: 'warn' },
+  yaku_role_fixed: { text: '厄の記録はありませんでしたが、残っていた 👹厄年ロールを外しました。', kind: 'ok' },
+  yaku_role_failed: { text: '👹厄年ロールを外せませんでした。Discord のサーバー設定 → ロールで、BOT のロールを「厄年」より上に動かしてから、もう一度「取り消す」を押してください（手で外してもかまいません）。', kind: 'warn' },
   kicked: { text: 'キックしました。', kind: 'ok' },
   kick_failed: { text: 'キックに失敗しました。BOT の権限を確認してください。', kind: 'warn' },
   unbanned: { text: 'BAN を解除しました。本人に招待リンクを送ると、入鯖申請からやり直せます（DM は BOT から送れません）。', kind: 'ok' },
@@ -86,6 +88,8 @@ export function ModerationSection(props: {
   menzaifuUsed: number;
   /** 厄祓いの面接待ちなら、申し込んだ日時 */
   yakubaraiSince?: Date;
+  /** 👹厄年ロールが付いているか（厄の記録がないのにロールだけ残っているときに「取り消す」を出す） */
+  hasYakuRole?: boolean;
   wallet: { balance: number; lifetimeEarned: number };
   coinTx: CoinTx[];
   activity: ActivityDaily[];
@@ -179,10 +183,10 @@ export function ModerationSection(props: {
                   厄を付ける
                 </button>
               </form>
-              {props.activeYaku > 0 && (
+              {(props.activeYaku > 0 || props.hasYakuRole) && (
                 <form method="post" action={`${base}/yaku/clear`}>
                   <input type="hidden" name="_csrf" value={csrf} />
-                  <h3>厄を取り消す（間違えて付けたとき）</h3>
+                  <h3>{props.activeYaku > 0 ? '厄を取り消す（間違えて付けたとき・厄祓いの面接のあと）' : '👹厄年ロールだけ残っています（厄の記録はありません）。取り消すとロールを外します'}</h3>
                   <input type="text" name="note" maxlength={300} placeholder="取り消す理由（必須）" required />
                   <button type="submit">取り消す</button>
                 </form>

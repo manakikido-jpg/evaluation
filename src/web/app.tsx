@@ -1196,6 +1196,7 @@ export function createWebApp(deps: WebDeps) {
             activeYaku={activeYaku}
             menzaifuUsed={used}
             yakubaraiSince={yakubarai?.createdAt}
+            hasYakuRole={Boolean(cfg.roles.yakudoshi && member?.roleIds.includes(cfg.roles.yakudoshi))}
             wallet={wallet}
             coinTx={coinTx}
             activity={activity}
@@ -2917,7 +2918,8 @@ export function createWebApp(deps: WebDeps) {
     if (!note) return back(c, id, 'invalid');
     const r = await clearYaku(mod(), actorOf(c.get('session')), id, note);
     if (r.status === 'denied') return back(c, id, deniedCode(r.reason));
-    return back(c, id, r.status === 'cleared' ? 'cleared' : 'no_yaku');
+    if (r.status === 'cleared') return back(c, id, r.roleOk ? 'cleared' : 'yaku_role_failed');
+    return back(c, id, r.roleFixed ? (r.roleOk ? 'yaku_role_fixed' : 'yaku_role_failed') : 'no_yaku');
   });
 
   app.post('/members/:id/ban', async (c) => {

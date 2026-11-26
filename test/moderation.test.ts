@@ -20,6 +20,7 @@ let calls: Call[];
 let dmOk: boolean;
 let ctx: ModCtx;
 let unbanNotFound = false;
+let removeFails = false;
 
 const shinshoku: Actor = { id: STAFF, level: 'shinshoku', via: 'web' };
 const guji: Actor = { id: GUJI, level: 'guji', via: 'discord' };
@@ -29,9 +30,13 @@ beforeEach(async () => {
   calls = [];
   dmOk = true;
   unbanNotFound = false;
+  removeFails = false;
   const discord: DiscordActions = {
     addRole: async (_g, u, r) => void calls.push(['addRole', u, r]),
-    removeRole: async (_g, u, r) => void calls.push(['removeRole', u, r]),
+    removeRole: async (_g, u, r) => {
+      if (removeFails) throw new DiscordHttpError('Missing Permissions', 403);
+      calls.push(['removeRole', u, r]);
+    },
     sendDm: async (u, content) => {
       calls.push(['dm', u, content]);
       return dmOk;
@@ -154,11 +159,29 @@ describe('厄', () => {
   it('神職による取り消しで厄年ロールが外れる', async () => {
     await giveYaku(ctx, shinshoku, U, '誹謗中傷', false);
     calls = [];
-    expect(await clearYaku(ctx, shinshoku, U, '間違えて付けた')).toEqual({ status: 'cleared', remaining: 0 });
+    expect(await clearYaku(ctx, shinshoku, U, '間違えて付けた')).toEqual({ status: 'cleared', remaining: 0, roleOk: true });
     expect(calls).toContainEqual(['removeRole', U, ROLE.yakudoshi]);
-    expect(await clearYaku(ctx, shinshoku, U, 'x')).toEqual({ status: 'none' });
+    expect(await clearYaku(ctx, shinshoku, U, 'x')).toEqual({ status: 'none', roleOk: true });
     const [h] = await yakuHistory(db, U);
     expect(h).toMatchObject({ clearedReason: 'staff', clearedBy: STAFF, clearedNote: '間違えて付けた' });
+  });
+
+  it('厄の記録がないのに厄年ロールだけ残っていたら、取り消しでロールを外す', async () => {
+    await recordJoin(db, { id: U, username: U, displayName: U, avatarUrl: null, roleIds: [ROLE.ujiko, ROLE.yakudoshi], isBot: false, joinedAt: null });
+    calls = [];
+    expect(await clearYaku(ctx, shinshoku, U, 'ロールだけ残っていた')).toEqual({ status: 'none', roleFixed: true, roleOk: true });
+    expect(calls).toContainEqual(['removeRole', U, ROLE.yakudoshi]);
+    expect((await listAudit(db)).map((a) => a.action)).toContain('yaku.role_fix');
+  });
+
+  it('厄年ロールを外せなかったら roleOk: false（運営に BOT のロールの位置を知らせる）', async () => {
+    await giveYaku(ctx, shinshoku, U, '誹謗中傷', false);
+    removeFails = true;
+    expect(await clearYaku(ctx, shinshoku, U, '間違えて付けた')).toEqual({ status: 'cleared', remaining: 0, roleOk: false });
+    // 記録はもう祓われているが、ロールが残っていれば、もう一度の取り消しで外せる
+    await recordJoin(db, { id: U, username: U, displayName: U, avatarUrl: null, roleIds: [ROLE.ujiko, ROLE.yakudoshi], isBot: false, joinedAt: null });
+    removeFails = false;
+    expect(await clearYaku(ctx, shinshoku, U, 'もう一度')).toEqual({ status: 'none', roleFixed: true, roleOk: true });
   });
 
   it('厄が付いている人の一覧', async () => {
@@ -218,7 +241,7 @@ describe('厄祓い（買うと面接待ち → 運営が祓う）', () => {
     // 面接待ちのあいだは、もう一度は買えない
     expect(await purchaseMenzaifu(ctx, U)).toEqual({ status: 'waiting' });
     // 運営が取り消すと、厄祓いが終わる
-    expect(await clearYaku(ctx, shinshoku, U, '面接した')).toEqual({ status: 'cleared', remaining: 0 });
+    expect(await clearYaku(ctx, shinshoku, U, '面接した')).toEqual({ status: 'cleared', remaining: 0, roleOk: true });
     expect(calls).toContainEqual(['removeRole', U, ROLE.yakudoshi]);
     expect(await yakubaraiWaiting(db, U)).toBeUndefined();
     expect((await yakuHistory(db, U))[0]?.clearedReason).toBe('menzaifu');

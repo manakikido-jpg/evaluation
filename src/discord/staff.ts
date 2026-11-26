@@ -26,6 +26,7 @@ import {
   writeMemo,
   yakubaraiResultText,
   YAKUBARAI_DONE,
+  YAKU_ROLE_FAILED,
   type Actor,
   type Denied,
   type ModCtx,
@@ -143,7 +144,15 @@ export class StaffApp {
       if (sub === 'clear') {
         const r = await clearYaku(this.ctx, actor, target.id, i.options.getString('note', true));
         const text =
-          r.status === 'denied' ? DENIED[r.reason] : r.status === 'none' ? `${mention(target.id)} さまに厄はありません。` : `${mention(target.id)} さまの厄を 1 つ取り消しました（残り ${r.remaining}）。`;
+          r.status === 'denied'
+            ? DENIED[r.reason]
+            : r.status === 'none'
+              ? r.roleFixed
+                ? r.roleOk
+                  ? `${mention(target.id)} さまに厄の記録はありませんでしたが、残っていた 👹厄年ロールを外しました。`
+                  : YAKU_ROLE_FAILED
+                : `${mention(target.id)} さまに厄はありません。`
+              : `${mention(target.id)} さまの厄を 1 つ取り消しました（残り ${r.remaining}）。${r.roleOk ? '' : `\n${YAKU_ROLE_FAILED}`}`;
         return void (await say(text));
       }
     }
@@ -290,9 +299,9 @@ export class StaffApp {
     }
     const r = await clearYaku(this.ctx, actor, targetId, '厄祓い（面接のあと）');
     if (r.status === 'denied') return void (await i.editReply({ content: DENIED[r.reason], allowedMentions: NO_MENTIONS }));
-    if (r.status === 'none') return void (await i.editReply({ content: '祓う厄がありませんでした。', allowedMentions: NO_MENTIONS }));
+    if (r.status === 'none') return void (await i.editReply({ content: r.roleFixed ? (r.roleOk ? '厄の記録はありませんでしたが、残っていた 👹厄年ロールを外しました。' : YAKU_ROLE_FAILED) : '祓う厄がありませんでした。', allowedMentions: NO_MENTIONS }));
     await i.message.edit({ content: `${i.message.content}\n✅ ${mention(actor.id)} が面接して祓いました（残りの厄: ${r.remaining}）`, components: [], allowedMentions: NO_MENTIONS }).catch(() => undefined);
-    await i.editReply({ content: `🙏 ${mention(targetId)} さまの厄を祓いました。${r.remaining ? `残りの厄: ${r.remaining}` : '厄年は外れました。'}`, allowedMentions: NO_MENTIONS });
+    await i.editReply({ content: `🙏 ${mention(targetId)} さまの厄を祓いました。${r.remaining ? `残りの厄: ${r.remaining}` : r.roleOk ? '厄年は外れました。' : `\n${YAKU_ROLE_FAILED}`}`, allowedMentions: NO_MENTIONS });
   }
 
   /** モデレーションの記録を #記録 へ。宮司が行った分は、ほかの運営の目に触れないよう #記録 には残さない（社務所Web の記録には残る）。 */

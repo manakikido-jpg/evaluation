@@ -151,18 +151,33 @@ async function instantBanLocked(ctx: ModCtx, actor: Actor, targetId: string, rea
   return { status: 'banned', dmSent, banOk };
 }
 
-export type ClearResult = { status: 'denied'; reason: Denied } | { status: 'none' } | { status: 'cleared'; remaining: number };
+export type ClearResult =
+  | { status: 'denied'; reason: Denied }
+  /** 厄の記録はなかった。roleFixed: 👹厄年ロールだけ残っていたので外した（roleOk: 外せたか） */
+  | { status: 'none'; roleFixed?: boolean; roleOk: boolean }
+  /** roleOk: 厄が 0 になって 👹厄年ロールを外せたか（外さなくてよいときも true） */
+  | { status: 'cleared'; remaining: number; roleOk: boolean };
 
-/** 神職による厄の取り消し */
+/** 神職による厄の取り消し。厄の記録がないのに 👹厄年ロールだけ残っているときは、ロールを外す */
 export async function clearYaku(ctx: ModCtx, actor: Actor, targetId: string, note: string): Promise<ClearResult> {
   const denied = await checkTarget(ctx, actor, targetId);
   if (denied) return { status: 'denied', reason: denied };
   const r = await clearYakuByStaff(ctx.db, { memberId: targetId, by: actor.id, note });
-  if (!r.cleared) return { status: 'none' };
-  await afterCleared(ctx, targetId, r.remaining, r.yakubarai ? '厄祓い（面接のあと）' : '神職による取り消し');
-  await audit(ctx.db, { actorId: actor.id, targetId, action: 'yaku.clear', detail: { note, remaining: r.remaining }, via: actor.via });
-  return { status: 'cleared', remaining: r.remaining };
+  if (!r.cleared) {
+    const yakudoshi = ctx.cfg.roles.yakudoshi;
+    const m = yakudoshi && r.remaining === 0 ? await getMember(ctx.db, targetId) : undefined;
+    if (!yakudoshi || !m?.roleIds.includes(yakudoshi)) return { status: 'none', roleOk: true };
+    const roleOk = await safely('remove leftover yakudoshi', () => ctx.discord.removeRole(ctx.cfg.guildId, targetId, yakudoshi, '厄の記録がないので、残っていた厄年を外す'));
+    await audit(ctx.db, { actorId: actor.id, targetId, action: 'yaku.role_fix', detail: { note, roleOk }, via: actor.via });
+    return { status: 'none', roleFixed: true, roleOk };
+  }
+  const roleOk = await afterCleared(ctx, targetId, r.remaining, r.yakubarai ? '厄祓い（面接のあと）' : '神職による取り消し');
+  await audit(ctx.db, { actorId: actor.id, targetId, action: 'yaku.clear', detail: { note, remaining: r.remaining, roleOk }, via: actor.via });
+  return { status: 'cleared', remaining: r.remaining, roleOk };
 }
+
+/** 👹厄年ロールを外せなかったときの、運営への案内 */
+export const YAKU_ROLE_FAILED = '⚠️ 👹厄年ロールを外せませんでした。Discord のサーバー設定 → ロールで、BOT のロールを「厄年」より上に動かしてから、もう一度「取り消す」を押してください（手で外してもかまいません）。';
 
 /** 本人が厄祓いを買う（授与所・/厄祓い）。面接待ちになり、#記録 に運営への知らせ（祓うボタンつき）を出す */
 export async function purchaseMenzaifu(ctx: ModCtx, memberId: string): Promise<MenzaifuResult> {
@@ -196,12 +211,14 @@ export function yakubaraiResultText(r: MenzaifuResult, e: Pick<GuildConfig['econ
   return `${e.currencyName}が足りません（${r.price} 枚必要・いま ${r.balance} 枚）。`;
 }
 
-async function afterCleared(ctx: ModCtx, memberId: string, remaining: number, why: string): Promise<void> {
+async function afterCleared(ctx: ModCtx, memberId: string, remaining: number, why: string): Promise<boolean> {
   const yakudoshi = ctx.cfg.roles.yakudoshi;
+  let roleOk = true;
   if (remaining === 0 && yakudoshi) {
-    await safely('remove yakudoshi', () => ctx.discord.removeRole(ctx.cfg.guildId, memberId, yakudoshi, `厄が祓われた（${why}）`));
+    roleOk = await safely('remove yakudoshi', () => ctx.discord.removeRole(ctx.cfg.guildId, memberId, yakudoshi, `厄が祓われた（${why}）`));
   }
   await ctx.discord.sendDm(memberId, dm.cleared());
+  return roleOk;
 }
 
 export type KickResult = { status: 'denied'; reason: Denied } | { status: 'kicked'; dmSent: boolean; kickOk: boolean };

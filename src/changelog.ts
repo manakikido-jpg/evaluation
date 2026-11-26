@@ -31,6 +31,26 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-11-26-yaku-role-fix',
+    date: '2026-11-26',
+    kind: 'fix',
+    where: ['Discord', '社務所Web'],
+    title: '👹 厄の記録がないのに厄年ロールだけ残って、厄を外せなかったのを直した',
+    items: [
+      '「取り消す」（/厄 取り消す・社務所Web・#記録 の「面接して祓う」）で、厄の記録がないのに 👹厄年ロールだけ残っているときも、ロールを外すようにしました。',
+      '社務所Web のメンバーのページで、ロールだけ残っている人にも「取り消す」が出ます。',
+      'BOT がロールを外せなかったときは、「BOT のロールを厄年より上に」と運営に出します（前は何も出ませんでした）。',
+    ],
+    announcement: {
+      priority: 'none',
+      audience: '運営',
+      steps: ['厄が外れない人がいたら、/厄 取り消す か社務所Web の「取り消す」を押す'],
+      postText: '',
+      imagePrompt: '',
+      notes: '運営の操作だけ。メンバーへの周知はいらない。',
+    },
+  },
+  {
     id: '2026-11-26-yaku-restrictions',
     date: '2026-11-26',
     kind: 'new',
