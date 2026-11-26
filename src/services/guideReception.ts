@@ -144,6 +144,30 @@ export async function openGuideReception(db: Db, visitorId: string, channelId: s
     return r;
   });
 }
+/** 案内所同士の移動は同じ受付を引き継ぐ。通常の再入室制限は変更しない。 */
+export async function moveGuideReception(db: Db, visitorId: string, from: string, to: string) {
+  return db.transaction(async tx => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`guide:${visitorId}`}))`);
+    const [row] = await tx.select().from(guideReceptions).where(and(eq(guideReceptions.visitorId, visitorId), eq(guideReceptions.channelId, from), isNull(guideReceptions.departedAt), inArray(guideReceptions.status, ['waiting', 'assigned']))).for('update');
+    if (!row || from === to) return undefined;
+    // 移動後に旧メッセージの削除が失敗しても、再起動後に回収できるよう覚える。
+    if (row.messageId) await tx.insert(settings).values({ key: `guide.moved_panel:${row.messageId}`, value: { channelId: row.channelId, messageId: row.messageId }, updatedBy: 'system' }).onConflictDoNothing();
+    const [moved] = await tx.update(guideReceptions).set({ channelId: to, messageId: null, notifiedAt: null }).where(eq(guideReceptions.id, row.id)).returning();
+    await audit(tx as Db, { actorId: 'system', targetId: visitorId, action: 'guide.move', detail: { receptionId: row.id, from, to }, via: 'discord' });
+    return moved;
+  });
+}
+/** 送信中に別の案内所へ移動しても、古い送信結果で新しいリンクを上書きしない。 */
+export async function attachGuidePanel(db: Db, id: number, channelId: string, messageId: string) {
+  return db.transaction(async tx => {
+    const [row] = await tx.update(guideReceptions).set({ messageId }).where(and(eq(guideReceptions.id, id), eq(guideReceptions.channelId, channelId), isNull(guideReceptions.messageId), isNull(guideReceptions.departedAt), inArray(guideReceptions.status, ['waiting', 'assigned']))).returning();
+    if (!row) await tx.insert(settings).values({ key: `guide.moved_panel:${messageId}`, value: { channelId, messageId }, updatedBy: 'system' }).onConflictDoNothing();
+    return row;
+  });
+}
+export const movedGuidePanels = (db: Db) => db.select().from(settings).where(sql`starts_with(${settings.key}, ${'guide.moved_panel:'})`);
+export const forgetMovedGuidePanel = (db: Db, key: string) => db.delete(settings).where(eq(settings.key, key));
+
 /** Discordで案内人ロールを確認したときだけ、登録も合わせて案内を開始する */
 export async function assignGuide(db: Db, id: number, memberId: string, authorization?: { roleVerified: true }) {
   return db.transaction(async tx => {

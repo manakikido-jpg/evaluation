@@ -3,7 +3,7 @@ import { Collection, type Guild } from 'discord.js';
 import type { Db } from '../src/db/client.js';
 import { GuideReceptionApp } from '../src/discord/guideReception.js';
 import { GuideWaitingNames } from '../src/discord/guideWaitingName.js';
-import { guideConfigSchema, saveGuideConfig, registerGuide, setGuideDuty, setGuideStatus, setGuideWaiting } from '../src/services/guideReception.js';
+import { openGuideReception, assignGuide, completeGuide, guideConfigSchema, saveGuideConfig, registerGuide, setGuideDuty, setGuideStatus, setGuideWaiting } from '../src/services/guideReception.js';
 import { recordJoin } from '../src/services/members.js';
 import { cfg, makeDb } from './helpers.js';
 const A = '870000000000000001', B = '870000000000000002', VC = '870000000000000004', ROLE = '870000000000000006';
@@ -25,6 +25,17 @@ function fixture(name = '案内所') {
   return { ch, people, guild, names: new GuideWaitingNames(db) };
 }
 describe('案内所の待機表示', () => {
+  it('案内開始した部屋は入室停止と表示し、完了後は担当の待機表示へ戻す', async () => {
+    const { ch, people, guild, names } = fixture();
+    const r = (await openGuideReception(db, B, VC))!;
+    await setGuideDuty(db, A, true, A); await assignGuide(db, r.id, A);
+    (ch.members as Collection<string, unknown>).set(A, people.get(A)!); (ch.members as Collection<string, unknown>).set(B, people.get(B)!);
+    await names.sync(guild, config, 1_000_000);
+    expect(ch.name).toBe('案内所（案内中・入室停止）');
+    await completeGuide(db, r.id, A);
+    await names.sync(guild, config, 1_001_000);
+    expect(ch.name).toBe('案内所（入室⭕）');
+  });
   it('すでに担当中のボタンを再度押しても、待機とは独立して表示を同期する', async () => {
     const { ch, guild } = fixture(); await saveGuideConfig(db, config, A); await setGuideDuty(db, A, true, A);
     const app = new GuideReceptionApp(db, () => cfg, {} as never);

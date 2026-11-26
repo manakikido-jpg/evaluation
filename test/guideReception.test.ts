@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Collection } from 'discord.js';
+import { Collection, PermissionsBitField } from 'discord.js';
 import { eq } from 'drizzle-orm';
 import type { Db } from '../src/db/client.js';
 import { auditLogs, employeePayroll, guideEmployees, guideReceptions } from '../src/db/schema.js';
-import { assignGuide, completeGuide, leaveGuideReception, loadGuideConfig, openGuideReception, parseGuideLinks, parsePanelReactions, registerGuide, saveGuideConfig, setGuideStatus, setGuideWaiting, waitingGuides, listedGuides } from '../src/services/guideReception.js';
+import { attachGuidePanel, moveGuideReception, movedGuidePanels, assignGuide, completeGuide, leaveGuideReception, loadGuideConfig, openGuideReception, parseGuideLinks, parsePanelReactions, registerGuide, saveGuideConfig, setGuideStatus, setGuideWaiting, waitingGuides, listedGuides } from '../src/services/guideReception.js';
 import { GuideReceptionApp, guideVisitorPanel } from '../src/discord/guideReception.js';
 import * as economy from '../src/services/economy.js';
 import { recordJoin } from '../src/services/members.js';
@@ -28,7 +28,11 @@ function mockGuild(visitorRoles = [PENDING], guideRoles = [ROLE]) {
   const regular = member(OTHER, []);
   const bot = member('870000000000000008', [PENDING], true);
   const people = new Collection([visitor, guide, regular, bot].map(m => [m.id, m]));
-  const guild = { id: cfg.guildId, roles: { cache: new Collection([[PENDING, { id: PENDING, name: '🧭 案内 待ち' }], [ROLE, { id: ROLE, name: '案内人' }]]) }, channels: { cache: new Collection([[VOICE, { type: 2, members: people }]]) }, members: { cache: people, fetch: vi.fn(async ({ user }: { user: string }) => people.get(user)) } };
+  const overwrites = new Collection<string, { id: string; type: 0 | 1; allow: PermissionsBitField; deny: PermissionsBitField }>();
+  const permissions = { cache: overwrites, edit: vi.fn(async (id: string, value: { Connect: boolean | null }, options: { type: 0 | 1 }) => {
+    overwrites.set(id, { id, type: options.type, allow: new PermissionsBitField(value.Connect === true ? ['Connect'] : []), deny: new PermissionsBitField(value.Connect === false ? ['Connect'] : []) });
+  }), delete: vi.fn(async (id: string) => { overwrites.delete(id); }) };
+  const guild = { id: cfg.guildId, roles: { cache: new Collection([[PENDING, { id: PENDING, name: '🧭 案内 待ち' }], [ROLE, { id: ROLE, name: '案内人' }]]) }, channels: { cache: new Collection([[VOICE, { type: 2, members: people, permissionOverwrites: permissions }]]), fetch: vi.fn(async (id: string) => guild.channels.cache.get(id)) }, members: { cache: people, fetch: vi.fn(async ({ user }: { user: string }) => people.get(user)) } };
   const discord = { sendMessage: vi.fn(async (_channel: string, _body: unknown) => ({ id: 'message' })), deleteMessage: vi.fn(async () => undefined), editMessage: vi.fn(async (_channel: string, _message: string, _body: unknown) => undefined), sendDm: vi.fn(async () => true) };
   const roleActions = {
     addRole: vi.fn(async (_guild: string, user: string, role: string) => { people.get(user)!.roles.cache.set(role, { id: role }); }),
@@ -85,6 +89,70 @@ describe('案内の受付と給与', () => {
     await leaveGuideReception(db, VISITOR, now);
     expect(await openGuideReception(db, VISITOR, VOICE, new Date(+now + 9 * 60_000))).toBeUndefined();
     expect(await openGuideReception(db, VISITOR, VOICE, new Date(+now + 10 * 60_000))).toBeDefined();
+  });
+  it('案内所間の移動は10分以内でも担当・受付を維持し、給与を二重にしない', async () => {
+    await active(); const r = await reception(); await assignGuide(db, r.id, GUIDE);
+    await attachGuidePanel(db, r.id, VOICE, 'old');
+    const moved = await moveGuideReception(db, VISITOR, VOICE, '870000000000000099');
+    expect(moved).toMatchObject({ id: r.id, status: 'assigned', guideId: GUIDE, messageId: null, notifiedAt: null, departedAt: null });
+    expect(await moveGuideReception(db, VISITOR, VOICE, '870000000000000099')).toBeUndefined();
+    expect(await attachGuidePanel(db, r.id, VOICE, 'late-message')).toBeUndefined();
+    expect((await movedGuidePanels(db)).map(x => (x.value as { messageId: string }).messageId).sort()).toEqual(['late-message', 'old']);
+    expect(await attachGuidePanel(db, r.id, '870000000000000099', 'new')).toMatchObject({ id: r.id, messageId: 'new' });
+    expect((await completeGuide(db, r.id, GUIDE, now))!.amount).toBe(150);
+    expect(await completeGuide(db, r.id, GUIDE, now)).toBeUndefined();
+    expect((await economy.walletOf(db, GUIDE)).balance).toBe(150);
+  });
+  it('案内所1→2のリンクを即座に出し直し、旧リンク削除の失敗も再起動後に回収する', async () => {
+    await configure(); const m = mockGuild(); const second = '870000000000000099';
+    await saveGuideConfig(db, { ...(await loadGuideConfig(db)), voiceChannelIds: [VOICE, second] }, GUIDE);
+    let sent = 0;
+    m.discord.sendMessage.mockImplementation(async () => ({ id: 'message-' + ++sent }));
+    await m.app.tick(m.guild as never);
+    const [before] = await db.select().from(guideReceptions);
+    expect(before!.messageId).toBeTruthy();
+    const oldChannel = m.guild.channels.cache.get(VOICE)!;
+    m.guild.channels.cache.set(second, { ...oldChannel, members: new Collection([[VISITOR, m.visitor]]) });
+    oldChannel.members = new Collection([...oldChannel.members].filter(([id]) => id !== VISITOR));
+    m.visitor.voice.channelId = second;
+    m.discord.deleteMessage.mockRejectedValueOnce(new Error('timeout'));
+    await m.app.onVoiceStateUpdate({ channelId: VOICE } as never, { channelId: second, id: VISITOR, member: m.visitor, guild: m.guild } as never);
+    const [after] = await db.select().from(guideReceptions);
+    expect(after).toMatchObject({ id: before!.id, channelId: second, departedAt: null, status: 'waiting' });
+    expect(after!.messageId).not.toBe(before!.messageId);
+    expect(m.discord.sendMessage.mock.calls.some(([id, body]) => id === second && JSON.stringify(body).includes('案内'))).toBe(true);
+    expect(m.discord.sendMessage.mock.calls.some(([id, body]) => id === STAFF && JSON.stringify(body).includes(`/${second}/${after!.messageId}`))).toBe(true);
+    const restarted = new GuideReceptionApp(db, () => guideCfg, m.discord as never);
+    await restarted.tick(m.guild as never);
+    expect(await movedGuidePanels(db)).toHaveLength(0);
+    expect(m.discord.deleteMessage).toHaveBeenCalledWith(VOICE, before!.messageId);
+    // 移動元の操作は移動先のパネルを案内し、担当の変更などはしない。
+    const click = { ...m.interaction(after!.id), channelId: VOICE };
+    await restarted.onInteraction(click as never);
+    expect(JSON.stringify(click.editReply.mock.calls)).toContain('新しいパネル');
+  });
+  it('旧部屋へのリンク送信中に移動しても、新部屋へ直ちに出し直す', async () => {
+    await configure(); const m = mockGuild(); const second = '870000000000000099';
+    await saveGuideConfig(db, { ...(await loadGuideConfig(db)), voiceChannelIds: [VOICE, second] }, GUIDE);
+    let markEntered!: () => void, release!: (v: { id: string }) => void;
+    const entered = new Promise<void>(resolve => { markEntered = resolve; });
+    const pending = new Promise<{ id: string }>(resolve => { release = resolve; });
+    let n = 0;
+    m.discord.sendMessage.mockImplementation(async channelId => {
+      if (channelId === VOICE && n++ === 0) { markEntered(); return pending; }
+      return { id: 'fresh-' + ++n };
+    });
+    const running = m.app.tick(m.guild as never); await entered;
+    const old = m.guild.channels.cache.get(VOICE)!;
+    m.guild.channels.cache.set(second, { ...old, members: new Collection([[VISITOR, m.visitor]]) });
+    old.members = new Collection([...old.members].filter(([id]) => id !== VISITOR));
+    m.visitor.voice.channelId = second;
+    await m.app.onVoiceStateUpdate({ channelId: VOICE } as never, { channelId: second, id: VISITOR, member: m.visitor, guild: m.guild } as never);
+    release({ id: 'late' }); await running;
+    const [r] = await db.select().from(guideReceptions);
+    expect(r).toMatchObject({ channelId: second, status: 'waiting', departedAt: null });
+    expect(r!.messageId).toMatch(/^fresh-/);
+    expect(m.discord.deleteMessage).toHaveBeenCalledWith(VOICE, 'late');
   });
   it('担当は1人だけ。本人の自己案内・他人の完了・退出後の完了を拒否する', async () => {
     await active(); await active(OTHER); await active(VISITOR);
