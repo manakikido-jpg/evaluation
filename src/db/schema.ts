@@ -2939,3 +2939,12 @@ export const minutesDocuments = pgTable('minutes_documents', {
   updatedAt: timestamp('updated_at',{withTimezone:true}).notNull().defaultNow(),
 },t=>[uniqueIndex('minutes_documents_nonce_idx').on(t.guildId,t.nonce),index('minutes_documents_updated_idx').on(t.guildId,t.updatedAt)]);
 export type MinutesDocument = typeof minutesDocuments.$inferSelect;
+/** 神符合戦の対戦保存。手札/山札を含むsnapshotは参加者向けAPIへ直接出さない。 */
+export const shinpuSavedRooms = pgTable('shinpu_saved_rooms', {
+  id:text('id').primaryKey(),guildId:text('guild_id').notNull(),
+  format:integer('format').notNull().default(1),revision:integer('revision').notNull(),
+  seats:jsonb('seats').$type<import('../services/shinpu/rooms.js').Tester[]>().notNull(),
+  summary:jsonb('summary').$type<{name:string;capacity:number;players:number;status:string}>().notNull(),
+  snapshot:jsonb('snapshot').$type<import('../services/shinpu/rooms.js').StoredRoom>().notNull(),
+  expiresAt:timestamp('expires_at',{withTimezone:true}).notNull(),updatedAt:timestamp('updated_at',{withTimezone:true}).notNull().defaultNow(),
+},t=>[index('shinpu_saved_guild_expiry_idx').on(t.guildId,t.expiresAt)]);

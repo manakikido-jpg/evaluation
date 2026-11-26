@@ -60,8 +60,8 @@ for (const definition of E.playableCards.filter(c => c.effect)) {
     expect(s.turn).toBe(1);
     expect(s.players.flatMap(p => p.hand).some(c => c.uid === usedUid)).toBe(false);
     for (const p of s.players) {
-      expect(p.hp).toBeGreaterThanOrEqual(0); expect(p.hp).toBeLessThanOrEqual(60);
-      expect(p.mp).toBeGreaterThanOrEqual(0); expect(p.mp).toBeLessThanOrEqual(20);
+      expect(p.hp).toBeGreaterThanOrEqual(0); expect(Number.isSafeInteger(p.hp)).toBe(true);
+      expect(p.mp).toBeGreaterThanOrEqual(0); expect(Number.isSafeInteger(p.mp)).toBe(true);
       expect(p.money).toBeGreaterThanOrEqual(0); expect(p.hand.length).toBeLessThanOrEqual(10);
     }
   });
@@ -156,10 +156,10 @@ it('厄除けはダメージを防がず、火傷・MP減少を1回だけ防ぐ'
   const s=game();s.players[1]!.statusGuard=true;attack(s,'SK-186');E.defend(s,[]);
   expect(s.players[1]!.hp).toBe(36);expect(s.players[1]!.burn).toBe(0);expect(s.players[1]!.statusGuard).toBe(false);
 });
-it('回復対象を選べて、HP上限・火傷・攻撃減算の解除が働く', () => {
+it('回復対象を選べて、HP60を超える回復・火傷・攻撃減算の解除が働く', () => {
   const s=game();s.players[1]!.hp=55;s.players[1]!.burn=1;s.players[1]!.attackPenalty=2;
   use(s,'SK-214',1);
-  expect(s.players[1]!.hp).toBe(60);expect(s.players[1]!.burn).toBe(0);expect(s.players[1]!.attackPenalty).toBe(0);
+  expect(s.players[1]!.hp).toBe(71);expect(s.players[1]!.burn).toBe(0);expect(s.players[1]!.attackPenalty).toBe(0);
   expect(s.players[0]!.hp).toBe(40);expect(s.players[0]!.mp).toBe(12);
 });
 it('山札3枚の選択は自分だけに保持し、選ばなかった2枚を山札の下へ戻す', () => {
@@ -248,7 +248,7 @@ it('200通りのCPU対戦で全効果・選択を処理し、有限の手番で�
     let n=seed;const s=E.create(2+seed%5,()=>((n=(n*1664525+1013904223)>>>0)/4294967296));
     for(let steps=0;s.phase!=='over'&&steps<500;steps++){
       E.cpu(s);
-      for(const p of s.players){expect(p.hp).toBeGreaterThanOrEqual(0);expect(p.hp).toBeLessThanOrEqual(60);expect(p.mp).toBeGreaterThanOrEqual(0);expect(p.mp).toBeLessThanOrEqual(20);expect(p.money).toBeGreaterThanOrEqual(0);expect(p.hand.length).toBeLessThanOrEqual(10);}
+      for(const p of s.players){expect(p.hp).toBeGreaterThanOrEqual(0);expect(Number.isSafeInteger(p.hp)).toBe(true);expect(p.mp).toBeGreaterThanOrEqual(0);expect(Number.isSafeInteger(p.mp)).toBe(true);expect(p.money).toBeGreaterThanOrEqual(0);expect(p.hand.length).toBeLessThanOrEqual(10);}
     }
     expect(s.phase).toBe('over');expect(s.turns).toBeLessThanOrEqual(80);
   }

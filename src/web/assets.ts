@@ -154,6 +154,7 @@ export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; ty
     'documents.css': {body:readText(path.join(here,'public/documents.css')),type:'text/css; charset=utf-8'},
     'documents.js': {body:readText(path.join(here,'public/documents.js')),type:'text/javascript; charset=utf-8'},
     'shinpu.css': { body: shinpuCss(), type: 'text/css; charset=utf-8' },
+    'shinpu-effects.js': {body:readText(path.join(here,'public/shinpu-effects.js')),type:'text/javascript; charset=utf-8'},
     'shinpu.js': { body: readText(path.join(here, 'public/shinpu.js')), type: 'text/javascript; charset=utf-8' },
     'ticket-operations.css': { body: readText(path.join(here, 'public/ticket-operations.css')), type: 'text/css; charset=utf-8' },
     'style.css': { body: readText(path.join(here, 'public/style.css')), type: 'text/css; charset=utf-8' },

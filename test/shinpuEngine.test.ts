@@ -82,11 +82,11 @@ test('burn applies on next turns and cleanse clears it', () => {
   assert.equal(s.players[1]!.burn, 0);
   assert.equal(s.players[1]!.hp, 59);
 });
-test('exchange spends resources and respects caps', () => {
+test('exchange spends resources without HP/MP caps', () => {
   const s = game();
   s.players[0]!.hp = 58;
   E.act(s, 'exchange', [], 'hp');
-  assert.equal(s.players[0]!.hp, 60);
+  assert.equal(s.players[0]!.hp, 66);
   assert.equal(s.players[0]!.money, 16);
   assert.equal(s.turn, 1);
   const x = game();
@@ -94,11 +94,11 @@ test('exchange spends resources and respects caps', () => {
   assert.throws(() => E.act(x, 'exchange', [], 'coin'));
   assert.equal(x.players[0]!.money, 20);
 });
-test('healing is capped and consumes exactly one card', () => {
+test('healing exceeds initial HP and consumes exactly one card', () => {
   const s = game();
   s.players[0]!.hp = 59;
   E.act(s, 'use', hand(s, 0, ['water']));
-  assert.equal(s.players[0]!.hp, 60);
+  assert.equal(s.players[0]!.hp, 71);
   assert.equal(s.players[0]!.hand.length, 0);
 });
 test('draw obeys ten-card cap', () => {
@@ -126,8 +126,8 @@ test('100 seeded CPU games finish, with valid resource ranges', () => {
     for (let step = 0; s.phase !== 'over' && step < 200; step++) {
       E.cpu(s);
       for (const p of s.players) {
-        assert.ok(p.hp >= 0 && p.hp <= 60);
-        assert.ok(p.mp >= 0 && p.mp <= 20);
+        assert.ok(p.hp >= 0 && Number.isSafeInteger(p.hp));
+        assert.ok(p.mp >= 0 && Number.isSafeInteger(p.mp));
         assert.ok(p.money >= 0);
         assert.ok(p.hand.length <= 10);
       }
@@ -213,7 +213,7 @@ test('召喚は運営の名前と肖像を記録し、MP3でHP10回復と燐火�
   assert.equal(s.turn, 1);
   assert.ok(s.log.some((t) => t.includes('小林の式神が利用者を助けた')));
 });
-test('召喚のHPは上限60で、MP不足・防御中・他の札との併用は状態を変えない', () => {
+test('召喚はHP60を超えて回復し、MP不足・防御中・他の札との併用は状態を変えない', () => {
   const s = game();
   s.players[0]!.hp = 57;
   const ids = hand(s, 0, ['summon', 'water']);
@@ -225,9 +225,9 @@ test('召喚のHPは上限60で、MP不足・防御中・他の札との併用�
   assert.equal(s.summon, null);
   s.players[0]!.mp = 3;
   E.act(s, 'use', [ids[0]!]);
-  assert.equal(s.players[0]!.hp, 60);
+  assert.equal(s.players[0]!.hp, 67);
   assert.equal(s.players[0]!.mp, 0);
-  assert.equal(s.summon!.healed, 3);
+  assert.equal(s.summon!.healed, 10);
   const d = game();
   E.act(d, 'attack', hand(d, 0, ['arrow']), 1);
   assert.throws(() => E.defend(d, hand(d, 1, ['summon'])));
