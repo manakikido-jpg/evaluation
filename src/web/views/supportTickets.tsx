@@ -156,7 +156,8 @@ export function TicketsPage(props: {
   const avg = rated.length ? (rated.reduce((n, t) => n + (t.rating ?? 0), 0) / rated.length).toFixed(1) : '—';
   return (
     <Layout title="お問い合わせ" session={session} nav="tickets">
-      <h1>📨 お問い合わせ</h1>
+      <p><a href="/support">チケット対応・完了履歴・運用期限の設定を開く</a></p>
+      <h1>📨 お問い合わせ</h1><p><a href="/support">新しいチケット対応・履歴を開く</a></p>
       <p class="note">お問い合わせ・相談・役職の希望・個人スタンプ依頼の受付をまとめて管理します。</p>
       <nav class="inline-actions" aria-label="お問い合わせのメニュー">
         <a href="#inquiry-open">受付中</a><a href="#inquiry-roles">希望できる役職</a><a href="#inquiry-settings">受付設定・パネル</a><a href="#inquiry-types">受付の種類・質問</a><a href="#inquiry-closed">対応済み</a>

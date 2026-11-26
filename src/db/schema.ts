@@ -2876,3 +2876,47 @@ export const directTransfers = pgTable('direct_transfers', {
   check('direct_transfers_status', sql`${t.status} IN ('pending', 'sent', 'cancelled')`),
 ]);
 export type DirectTransfer = typeof directTransfers.$inferSelect;
+
+/** 新規チケットから適用する対応運用。既存の預り銭/履歴とは分離する。 */
+export const ticketOperations = pgTable('ticket_operations', {
+  ticketId: bigint('ticket_id', { mode: 'number' }).primaryKey().references(() => supportTickets.id, { onDelete: 'cascade' }),
+  state: text('state').$type<import('../domain/ticketPolicy.js').TicketWorkflowState>().notNull().default('unassigned'),
+  urgent: boolean('urgent').notNull().default(false),
+  urgencyVersion: integer('urgency_version').notNull().default(0),
+  policy: jsonb('policy').$type<import('../domain/ticketPolicy.js').TicketPolicy>().notNull(),
+  typeLabel: text('type_label').notNull(),
+  roleIds: text('role_ids').array().notNull().default(sql`'{}'::text[]`),
+  subjectIds: text('subject_ids').array().notNull().default(sql`'{}'::text[]`),
+  cycle: integer('cycle').notNull().default(0),
+  creationId: text('creation_id').unique(),
+  archiveCursor: text('archive_cursor'),
+  archiveComplete: boolean('archive_complete').notNull().default(false),
+  openedAt: timestamp('opened_at', { withTimezone: true }).notNull().defaultNow(),
+  stateAt: timestamp('state_at', { withTimezone: true }).notNull().defaultNow(),
+  progressAt: timestamp('progress_at', { withTimezone: true }).notNull().defaultNow(),
+  firstReplyAt: timestamp('first_reply_at', { withTimezone: true }),
+  handoffTo: text('handoff_to'), handoffBy: text('handoff_by'), handoffReason: text('handoff_reason'),
+  closeSummary: text('close_summary'), resolutionConfirmedAt: timestamp('resolution_confirmed_at', { withTimezone: true }),
+  retainUntil: timestamp('retain_until', { withTimezone: true }),
+  expiredAt: timestamp('expired_at', { withTimezone: true }),
+  cleanupChannelId: text('cleanup_channel_id'),
+}, t => [index('ticket_operations_state_idx').on(t.state), index('ticket_operations_retention_idx').on(t.retainUntil), check('ticket_operations_state_check', sql`${t.state} in ('unassigned','active','user_wait','internal_wait','closed')`)]);
+export type TicketOperation = typeof ticketOperations.$inferSelect;
+export const ticketEvents = pgTable('ticket_events', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  ticketId: bigint('ticket_id', { mode: 'number' }).notNull().references(() => supportTickets.id, { onDelete: 'cascade' }),
+  actorId: text('actor_id').notNull(), kind: text('kind').notNull(), internal: boolean('internal').notNull().default(false),
+  body: text('body').notNull(), dedupe: text('dedupe'), createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [index('ticket_events_ticket_idx').on(t.ticketId, t.id), uniqueIndex('ticket_events_dedupe_idx').on(t.ticketId, t.dedupe)]);
+export const ticketAttachments = pgTable('ticket_attachments', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(), ticketId: bigint('ticket_id', { mode: 'number' }).notNull().references(() => supportTickets.id, { onDelete: 'cascade' }),
+  sourceId: text('source_id').notNull(), messageId: text('message_id'), sourceChannelId: text('source_channel_id'), sourceUrl: text('source_url'), name: text('name').notNull(), contentType: text('content_type').notNull(),
+  size: integer('size').notNull(), storageKey: text('storage_key').notNull(), status: text('status').$type<'pending'|'ready'|'failed'>().notNull().default('pending'),
+  error: text('error'), attempts: integer('attempts').notNull().default(0), nextTryAt: timestamp('next_try_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [uniqueIndex('ticket_attachments_source_idx').on(t.ticketId, t.sourceId), index('ticket_attachments_ticket_idx').on(t.ticketId), check('ticket_attachments_size_check', sql`${t.size} >= 0`)]);
+export const ticketNotices = pgTable('ticket_notices', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(), ticketId: bigint('ticket_id', { mode: 'number' }).notNull().references(() => supportTickets.id, { onDelete: 'cascade' }),
+  cycle: integer('cycle').notNull().default(0),
+  dedupe: text('dedupe').notNull(), kind: text('kind').notNull(), body: text('body').notNull(), target: text('target').$type<'user'|'owner'|'admin'|'channel'>().notNull(),
+  sentAt: timestamp('sent_at', { withTimezone: true }), attempts: integer('attempts').notNull().default(0), nextTryAt: timestamp('next_try_at', { withTimezone: true }).notNull().defaultNow(), leaseUntil: timestamp('lease_until', { withTimezone: true }),
+}, t => [uniqueIndex('ticket_notices_dedupe_idx').on(t.ticketId,t.cycle,t.dedupe), index('ticket_notices_pending_idx').on(t.sentAt,t.nextTryAt)]);

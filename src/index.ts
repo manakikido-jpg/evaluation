@@ -193,7 +193,9 @@ async function main(): Promise<void> {
   const market = new MarketApp(db, cfg, actions, env.WEB_BASE_URL);
   const board = new BoardApp(db, cfg, actions);
   const cast = new CastApp(db, cfg, actions, env.WEB_BASE_URL, env.DISCORD_MESSAGE_CONTENT === 'on');
-  const supportTickets = new TicketApp(db, cfg, actions);
+  const supportTickets = new TicketApp(db, cfg, actions, env.WEB_BASE_URL, env.DISCORD_MESSAGE_CONTENT === 'on');
+  const ticketNoticesTimer=setInterval(()=>{void supportTickets.flushOperationNotices().catch(()=>logger.warn('ticket notice delivery pending'));},5000);
+  ticketNoticesTimer.unref();
   // 宿坊の部屋には「この通話の人のプロフィールを見る」を出さない
   const voicePanel = new VoicePanelApp(cfg, undefined, async (channelId) => {
     const room = await roomOf(db, channelId);

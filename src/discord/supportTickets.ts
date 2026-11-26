@@ -1,3 +1,6 @@
+import { TicketOperationRuntime } from './ticketOperationRuntime.js';
+import { operationOf } from '../services/ticketOperations.js';
+import type { TicketOperation } from '../db/schema.js';
 import {
   ActionRowBuilder,
   ChannelType,
@@ -56,7 +59,7 @@ const button = (custom_id: string, label: string, style: Btn['style'] = 2, emoji
 const row = (...b: Btn[]) => ({ type: 1 as const, components: b });
 
 /** 運営（神職・宮司）のロール。種類のロールとあわせて、チケットが見える */
-export const adminRoleIdsOf = (cfg: GuildConfig) => [...(cfg.admin?.shinshokuRoleIds ?? []), ...(cfg.admin?.gujiRoleIds ?? [])];
+export const adminRoleIdsOf = (cfg: GuildConfig) => [...new Set([...(cfg.admin?.shinshokuRoleIds ?? []), ...(cfg.admin?.gujiRoleIds ?? []), ...cfg.ranks.filter(r=>['guji','shinshoku'].includes(r.key)).map(r=>r.roleId)])];
 
 /** パネル: 種類を選ぶ欄 */
 export function ticketPanel(c: TicketConfig): MessageBody {
@@ -71,7 +74,7 @@ export function ticketPanel(c: TicketConfig): MessageBody {
           '',
           ...types.map((t) => `${t.emoji} **${t.label}** … ${t.description}`),
           '',
-          '-# 同じ種類のチケットは、1 人 1 つまで開けます',
+          '-# 同じ内容は既存の受付へまとめ、別件は新しいチケットで受け付けます',
         ].join('\n'),
         color: COLOR,
       },
@@ -87,6 +90,7 @@ export async function refreshTicketPanel(db: Db, discord: Pick<DiscordActions, '
   const c = await loadTicketConfig(db);
   if (!c.panelChannelId) return false;
   const body = ticketPanel(c);
+  body.components?.push(row(button('tk:history:0','管理・履歴'),button('tk:urgentopen:0','緊急の安全問題',4)) as never);
   if (c.panelMessageId && !opts.repost) {
     try {
       await discord.editMessage(c.panelChannelId, c.panelMessageId, body);
@@ -101,7 +105,7 @@ export async function refreshTicketPanel(db: Db, discord: Pick<DiscordActions, '
 }
 
 /** チャンネルの最初のメッセージ（あいさつ・答え・操作のボタン） */
-export function ticketIntro(t: SupportTicket, type: TicketType, coin: string): MessageBody {
+export function ticketIntro(t: SupportTicket, type: TicketType, coin: string, operation?: TicketOperation): MessageBody {
   const extra: Btn[] = [];
   if (type.kind === 'role') extra.push(button(`tk:hire:${t.id}`, '採用する（運営）', 3, '✅'));
   if (type.kind === 'request') extra.push(button(`tk:quote:${t.id}`, '値段と期限を出す（運営）', 1, '💰'));
@@ -113,15 +117,16 @@ export function ticketIntro(t: SupportTicket, type: TicketType, coin: string): M
         title: `${type.emoji} ${type.label} #${t.id}`,
         description: [
           type.greeting,
+          ...(operation ? [`受付番号: #${t.id} ／ 未対応 ／ 運営の初回返信目安: ${operation.policy.firstReplyHours}時間`, 'この自動受付は運営の初回返信には数えません。証拠はチャンネルか管理画面に添付できます。'] : []),
           ...(t.roleId ? ['', `🎐 希望する役職: <@&${t.roleId}>`] : []),
           ...t.answers.flatMap((x) => ['', `**${x.q}**`, x.a || '（なし）']),
           '',
-          `-# 運営は「担当する」で受け持ちます。終わったら「閉じる」（やりとりは記録に残ります）${type.kind === 'request' ? `。依頼の代金（${coin}）は社務所が預かり、できあがったら担当に渡します` : ''}`,
+          `-# 運営は「担当する」で受け持ちます。${operation?'完了は「管理・履歴」から対応結果と解決確認を記録します':'終わったら「閉じる」（やりとりは記録に残ります）'}${type.kind === 'request' ? `。依頼の代金（${coin}）は社務所が預かり、できあがったら担当に渡します` : ''}`,
         ].join('\n').slice(0, 4000),
         color: COLOR,
       },
     ],
-    components: [row(button(`tk:claim:${t.id}`, '担当する（運営）', 1, '🙋'), button(`tk:add:${t.id}`, '人を足す', 2, '➕'), button(`tk:close:${t.id}`, '閉じる', 4, '🔒'), ...extra)],
+    components: [row(button(`tk:claim:${t.id}`, '担当する（運営）', 1, '🙋'), ...(operation ? [button(`tk:history:${t.id}`, '管理・履歴')] : [button(`tk:add:${t.id}`, '人を足す', 2, '➕')]), button(`tk:close:${t.id}`, operation ? '解決確認・完了' : '閉じる', 4, '🔒'), ...extra)],
   };
 }
 
@@ -132,15 +137,19 @@ export const isGuildBoss = (member: Pick<GuildMember, 'id'> & { guild?: { ownerI
 export class TicketApp {
   private guild?: Guild;
   private ticking = false;
+  private readonly operations: TicketOperationRuntime;
 
   constructor(
     private readonly db: Db,
     private readonly cfg: () => GuildConfig,
     private readonly discord: DiscordActions,
-  ) {}
+    baseUrl?: string,
+    contentAvailable = true,
+  ) { this.operations = new TicketOperationRuntime(db,cfg,discord,baseUrl,(t,type,op)=>{const intro=ticketIntro(t,type,this.coin(),op);if(!contentAvailable&&intro.embeds?.[0])intro.embeds[0].description+='\n\n返信・証拠の追加は「管理・履歴」のWeb画面をご利用ください（このチャンネルは通知用です）。';return intro;},contentAvailable); }
 
   attach(guild: Guild): void {
-    this.guild = guild;
+    this.guild = guild; this.operations.attach(guild);
+    void refreshTicketPanel(this.db,this.discord).catch(()=>logger.warn('ticket panel refresh pending'));
   }
 
   private coin(): string {
@@ -160,10 +169,17 @@ export class TicketApp {
     if (!('customId' in interaction) || !interaction.customId.startsWith('tk:')) return;
     const [, action, a, b] = interaction.customId.split(':');
     try {
+      if (await this.operations.handle(interaction)) return;
+      if (action === 'urgentopen' && interaction.isButton() && interaction.inCachedGuild()) {
+        const conf=await loadTicketConfig(this.db);
+        if(!conf.types.some(t=>t.enabled&&t.kind==='normal')){await interaction.reply({content:'緊急の受付種類が未設定です。宮司・神職へ直接お知らせください。',...EPHEMERAL});return;}
+        await interaction.reply({content:'安全に関わる緊急の内容を送る種類を選んでください。',components:[{type:1,components:[{type:3,custom_id:'tk:openurgent',placeholder:'種類を選ぶ',options:conf.types.filter(t=>t.enabled&&t.kind==='normal').slice(0,25).map(t=>({label:t.label,value:t.key}))}]}],...EPHEMERAL} as never); return;
+      }
       // 評価は DM のボタン（サーバーの外）
       if (action === 'rate' && interaction.isButton()) return await this.rate(interaction, Number(a), Number(b));
       if (!interaction.inCachedGuild() || interaction.guildId !== this.cfg().guildId) return;
       if (interaction.isStringSelectMenu()) {
+        if (action === 'openurgent') return await this.choose(interaction, interaction.values[0] ?? '', true);
         if (action === 'open') return await this.choose(interaction, interaction.values[0] ?? '');
         if (action === 'role') return await this.ask(interaction, a ?? '', interaction.values[0]);
         return;
@@ -186,6 +202,7 @@ export class TicketApp {
         return;
       }
       if (interaction.isModalSubmit()) {
+        if (action === 'modalurgent') return await this.submit(interaction,a ?? '',b || undefined,true);
         if (action === 'modal') return await this.submit(interaction, a ?? '', b || undefined);
         if (action === 'quotemodal') return await this.quoteSubmit(interaction, Number(a));
         return;
@@ -212,7 +229,7 @@ export class TicketApp {
   // ───────── 開く ─────────
 
   /** 種類を選んだ: 役職の希望ならロールを選ぶ → 質問 → 開く */
-  private async choose(i: StringSelectMenuInteraction<'cached'>, key: string): Promise<void> {
+  private async choose(i: StringSelectMenuInteraction<'cached'>, key: string, urgent = false): Promise<void> {
     const c = await loadTicketConfig(this.db);
     const t = ticketTypeOf(c, key);
     if (!t || !t.enabled) return void (await i.reply({ content: 'その種類は、いまは使えません。', ...EPHEMERAL }));
@@ -225,44 +242,52 @@ export class TicketApp {
         ...EPHEMERAL,
       } as never));
     }
-    await this.ask(i, key);
+    await this.ask(i, key,undefined,urgent);
   }
 
   /** 質問の入力欄を出す（質問がなければ、すぐ開く） */
-  private async ask(i: StringSelectMenuInteraction<'cached'>, key: string, roleId?: string): Promise<void> {
+  private async ask(i: StringSelectMenuInteraction<'cached'>, key: string, roleId?: string, urgent = false): Promise<void> {
     const c = await loadTicketConfig(this.db);
     const t = ticketTypeOf(c, key);
     if (!t) return void (await i.reply({ content: 'その種類は、いまは使えません。', ...EPHEMERAL }));
-    if (!t.questions.length) {
+    const questions=t.kind==='normal' ? (t.questions.length?t.questions:[{label:'相談・通報の内容',long:true,required:true}]).map((q,n)=>({...q,required:n===0})) : t.questions;
+    if (!questions.length) {
       await i.deferReply(EPHEMERAL);
-      return void (await i.editReply(await this.create(i.member, c, t, [], roleId)));
+      return void (await i.editReply(await this.create(i.member, c, t, [], roleId,urgent,i.id)));
     }
     await i.showModal(
       new ModalBuilder()
-        .setCustomId(`tk:modal:${key}:${roleId ?? ''}`)
+        .setCustomId(`tk:${urgent?'modalurgent':'modal'}:${key}:${roleId ?? ''}`)
         .setTitle(`${t.emoji} ${t.label}`.slice(0, 45))
         .addComponents(
-          ...t.questions.map((q, n) =>
+          ...questions.map((q, n) =>
             new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId(`q${n}`).setLabel(q.label.slice(0, 45)).setStyle(q.long ? TextInputStyle.Paragraph : TextInputStyle.Short).setRequired(q.required).setMaxLength(q.long ? 1000 : 200)),
           ),
         ),
     );
   }
 
-  private async submit(i: ModalSubmitInteraction<'cached'>, key: string, roleId?: string): Promise<void> {
+  private async submit(i: ModalSubmitInteraction<'cached'>, key: string, roleId?: string, urgent = false): Promise<void> {
     await i.deferReply(EPHEMERAL);
     const c = await loadTicketConfig(this.db);
     const t = ticketTypeOf(c, key);
     if (!t) return void (await i.editReply('その種類は、いまは使えません。'));
-    const answers = t.questions.map((q, n) => ({ q: q.label, a: i.fields.getTextInputValue(`q${n}`).trim() }));
-    await i.editReply(await this.create(i.member, c, t, answers, roleId));
+    const questions=t.kind==='normal'&& !t.questions.length?[{label:'相談・通報の内容'}]:t.questions;
+    const answers = questions.map((q, n) => ({ q: q.label, a: i.fields.getTextInputValue(`q${n}`).trim() }));
+    await i.editReply(await this.create(i.member, c, t, answers, roleId,urgent,i.id));
   }
 
   /** チケットとチャンネルを作る。返事の文 */
-  private async create(member: GuildMember, c: TicketConfig, type: TicketType, answers: { q: string; a: string }[], roleId?: string): Promise<string> {
-    const r = await openTicket(this.db, c, { typeKey: type.key, openerId: member.id, answers, ...(roleId ? { roleId } : {}) });
+  private async create(member: GuildMember, c: TicketConfig, type: TicketType, answers: { q: string; a: string }[], roleId?: string, urgent = false, requestId?:string): Promise<string> {
+    const r = await openTicket(this.db, c, { typeKey: type.key, openerId: member.id, answers, managed:type.kind==='normal', urgent, requestId, ...(roleId ? { roleId } : {}) });
     if (r.status === 'already') return `もう開いている ${type.label} のチケットがあります: ${r.ticket.channelId ? `<#${r.ticket.channelId}>` : `#${r.ticket.id}`}`;
     if (r.status !== 'ok') return r.status === 'bad_role' ? 'その役職は希望できません。' : r.status === 'missing' ? '必要なところを入れてください。' : 'その種類は、いまは使えません。';
+    if (await operationOf(this.db,r.ticket.id)) {
+      await this.operations.started(r.ticket.id,answers);
+      await audit(this.db,{actorId:member.id,action:'ticket.open',detail:{ticketId:r.ticket.id,type:type.key,workflow:true},via:'discord'});
+      const ticket=await getTicket(this.db,r.ticket.id);
+      return `🎫 受付番号 #${r.ticket.id} で受け付けました。${ticket?.channelId?` <#${ticket.channelId}>`:'チャンネルを準備中です。管理・履歴からも確認できます。'}`;
+    }
     const g = this.guild ?? member.guild;
     const me = g.members.me;
     const SEE = PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages | PermissionFlagsBits.ReadMessageHistory | PermissionFlagsBits.AttachFiles | PermissionFlagsBits.EmbedLinks;
@@ -457,16 +482,20 @@ export class TicketApp {
   /** チケットのチャンネルで話したら、運営か開いた人かを記録（放置の知らせ・自動で閉じるため） */
   async onMessage(m: Message): Promise<void> {
     if (m.author.bot || !m.inGuild() || m.guildId !== this.cfg().guildId) return;
+    if(await this.operations.capture(m)) return;
     const t = await ticketByChannel(this.db, m.channelId);
     if (!t) return;
     const c = await loadTicketConfig(this.db);
     await touchTicket(this.db, t.id, this.isStaff(ticketTypeOf(c, t.typeKey), m.member) && m.author.id !== t.openerId ? 'staff' : 'user');
   }
 
+  async flushOperationNotices(now=new Date()) { await this.operations.flushNotices(now); }
+
   async tick(now = new Date()): Promise<void> {
     if (this.ticking) return;
     this.ticking = true;
     try {
+      await this.operations.tick(now);
       const c = await loadTicketConfig(this.db);
       const r = await ticketTick(this.db, c, now);
       const log = await this.logChannel(c);

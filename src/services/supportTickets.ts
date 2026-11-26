@@ -1,4 +1,6 @@
-import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { effectiveTicketPolicy, type TicketPolicy } from '../domain/ticketPolicy.js';
+import { ticketOperations, ticketNotices, ticketEvents } from '../db/schema.js';
+import { inArray, and, desc, eq, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { settings, supportTickets, type SupportTicket } from '../db/schema.js';
 import { addCoins, spendWithin, walletOf } from './economy.js';
@@ -32,6 +34,7 @@ export type TicketType = {
   /** 役職の希望で選べるロール */
   roleChoices: string[];
   enabled: boolean;
+  workflow?: Partial<TicketPolicy>;
 };
 
 export type TicketConfig = {
@@ -46,6 +49,7 @@ export type TicketConfig = {
   /** 開いた人の返事がないまま、この時間たったら案内（さらに 24 時間で閉じる）。0 なら自動で閉じない */
   idleHours: number;
   types: TicketType[];
+  workflow?: Partial<TicketPolicy>;
 };
 
 export const TICKET_QUESTIONS_MAX = 5;
@@ -92,6 +96,7 @@ function parseType(x: unknown): TicketType | undefined {
       .map((y) => ({ label: str(y.label, 45), long: y.long === true, required: y.required !== false })),
     roleChoices: ids(v.roleChoices),
     enabled: v.enabled !== false,
+    ...(v.workflow && typeof v.workflow === 'object' ? { workflow: v.workflow as Partial<TicketPolicy> } : {}),
   };
 }
 
@@ -108,6 +113,7 @@ export async function loadTicketConfig(db: Db): Promise<TicketConfig> {
     staleHours: int(v.staleHours, d.staleHours, 1, 24 * 14),
     idleHours: int(v.idleHours, d.idleHours, 0, 24 * 30),
     types,
+    ...(v.workflow && typeof v.workflow === 'object' ? { workflow: v.workflow as Partial<TicketPolicy> } : {}),
   };
 }
 
@@ -136,21 +142,32 @@ export type OpenResult = { status: 'ok'; ticket: SupportTicket } | { status: 'al
 export async function openTicket(
   db: Db,
   c: TicketConfig,
-  input: { typeKey: string; openerId: string; answers: { q: string; a: string }[]; roleId?: string },
+  input: { typeKey: string; openerId: string; answers: { q: string; a: string }[]; roleId?: string; managed?: boolean; urgent?: boolean; requestId?: string },
   now = new Date(),
 ): Promise<OpenResult> {
   const t = ticketTypeOf(c, input.typeKey);
   if (!t || !t.enabled) return { status: 'no_type' };
   if (t.kind === 'role' && (!input.roleId || !t.roleChoices.includes(input.roleId))) return { status: 'bad_role' };
-  for (const [i, question] of t.questions.entries()) if (question.required && !input.answers[i]?.a.trim()) return { status: 'missing' };
+  if(input.managed&&t.kind==='normal'&&!input.answers[0]?.a.trim())return {status:'missing'};
+  for (const [i, question] of t.questions.entries()) if (question.required && !(input.managed&&t.kind==='normal'&&i>0) && !input.answers[i]?.a.trim()) return { status: 'missing' };
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`ticket:${input.openerId}:${input.typeKey}`}))`);
-    const [cur] = await tx.select().from(supportTickets).where(and(eq(supportTickets.openerId, input.openerId), eq(supportTickets.typeKey, input.typeKey), eq(supportTickets.status, 'open')));
+    if(input.managed&&input.requestId)await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`ticket:creation:${input.openerId}:${input.requestId}`}))`);
+    const current = await tx.select().from(supportTickets).where(and(eq(supportTickets.openerId, input.openerId), eq(supportTickets.typeKey, input.typeKey), eq(supportTickets.status, 'open')));
+    const managedIds=input.managed&&current.length?new Set((await tx.select({id:ticketOperations.ticketId}).from(ticketOperations).where(inArray(ticketOperations.ticketId,current.map(t=>t.id)))).map(x=>x.id)):new Set<number>();
+    const cur=input.managed?current.find(t=>managedIds.has(t.id)&&JSON.stringify(t.answers)===JSON.stringify(input.answers.map(x=>({q:x.q.slice(0,45),a:x.a.slice(0,4000)})))):current[0];
+    if (input.managed && input.requestId) {
+      const [prior] = await tx.select({ ticket: supportTickets }).from(ticketOperations).innerJoin(supportTickets,eq(ticketOperations.ticketId,supportTickets.id)).where(eq(ticketOperations.creationId,`${input.openerId}:${input.requestId}`));
+      if(prior)return {status:'already' as const,ticket:prior.ticket};
+    }
     if (cur) return { status: 'already' as const, ticket: cur };
     const [row] = await tx
       .insert(supportTickets)
-      .values({ typeKey: input.typeKey, openerId: input.openerId, answers: input.answers.map((x) => ({ q: x.q.slice(0, 45), a: x.a.slice(0, 1000) })), ...(t.kind === 'role' ? { roleId: input.roleId } : {}), lastUserAt: now, createdAt: now })
+      .values({ typeKey: input.typeKey, openerId: input.openerId, answers: input.answers.map((x) => ({ q: x.q.slice(0, 45), a: x.a.slice(0, input.managed?4000:1000) })), ...(t.kind === 'role' ? { roleId: input.roleId } : {}), lastUserAt: now, createdAt: now })
       .returning();
+    if (input.managed) await tx.insert(ticketOperations).values({ ticketId: row!.id, creationId: input.requestId ? `${input.openerId}:${input.requestId}` : undefined, policy: effectiveTicketPolicy(c.workflow, t.workflow), typeLabel: t.label, roleIds: t.roleIds, urgent: input.urgent ?? false, openedAt: now, stateAt: now, progressAt: now });
+    if(input.managed)await tx.insert(ticketEvents).values({ticketId:row!.id,actorId:input.openerId,kind:'receipt',body:input.answers.map(x=>`【${x.q.slice(0,45)}】${x.a.slice(0,4000)}`).join('\n').slice(0,16000),internal:false,dedupe:'receipt:0',createdAt:now});
+    if(input.managed&&input.urgent)await tx.insert(ticketNotices).values({ticketId:row!.id,cycle:0,dedupe:'0:urgent:0',kind:'urgent',target:'admin',body:'緊急の安全問題が届いています。',nextTryAt:now});
     return { status: 'ok' as const, ticket: row! };
   });
 }
@@ -300,7 +317,9 @@ export async function ticketTick(db: Db, c: TicketConfig, now = new Date()): Pro
   const H = 3_600_000;
   const open = await openTickets(db);
   const out: TicketTick = { stale: [], idleWarn: [], idleClose: [] };
+  const managed = new Set((await db.select({ id: ticketOperations.ticketId }).from(ticketOperations)).map(x => x.id));
   for (const t of open) {
+    if (managed.has(t.id)) continue;
     const userAt = t.lastUserAt?.getTime() ?? t.createdAt.getTime();
     const staffAt = t.lastStaffAt?.getTime() ?? 0;
     if (userAt > staffAt && !t.staleNotifiedAt && now.getTime() - userAt >= c.staleHours * H) {
