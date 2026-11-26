@@ -1,0 +1,45 @@
+{
+  "baselineCommit": "ea7c568b",
+  "method": "Fresh Node process, compiled assets module only, explicit GC at each snapshot; catalog exercise reads all 474 catalog assets. Not a full Web/VPS load test.",
+  "nodeVersion": "v24.22.1",
+  "before": {
+    "assetCount": 740,
+    "catalogFiles": 474,
+    "catalogPayloadMiB": 59.5,
+    "before": {
+      "rssMiB": 26.9,
+      "heapMiB": 3.7,
+      "arrayBuffersMiB": 0.1
+    },
+    "afterImport": {
+      "rssMiB": 475.9,
+      "heapMiB": 32.2,
+      "arrayBuffersMiB": 77.6
+    },
+    "afterCatalog": {
+      "rssMiB": 475.9,
+      "heapMiB": 32.4,
+      "arrayBuffersMiB": 77.6
+    }
+  },
+  "after": {
+    "assetCount": 740,
+    "catalogFiles": 474,
+    "catalogPayloadMiB": 59.5,
+    "before": {
+      "rssMiB": 27.2,
+      "heapMiB": 3.7,
+      "arrayBuffersMiB": 0.1
+    },
+    "afterImport": {
+      "rssMiB": 272.4,
+      "heapMiB": 33.5,
+      "arrayBuffersMiB": 10.1
+    },
+    "afterCatalog": {
+      "rssMiB": 332.8,
+      "heapMiB": 33.4,
+      "arrayBuffersMiB": 49.8
+    }
+  }
+}

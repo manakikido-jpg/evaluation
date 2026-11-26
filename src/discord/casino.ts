@@ -72,6 +72,8 @@ export class CasinoApp {
       await interaction.editReply(shinpuTestReply(this.baseUrl, testLink));
       return;
     }
+    // リンクのDB処理が長引いても、初回応答の3秒を超えないようにする。
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     let link: string | undefined;
     if (this.db && this.baseUrl && this.cfg().casino.enabled) {
       const m = interaction.member;
@@ -80,7 +82,8 @@ export class CasinoApp {
         return undefined;
       });
     }
-    await interaction.reply(casinoReply(this.cfg(), this.baseUrl, link)).catch((err: unknown) => logger.warn({ err }, 'casino reply failed'));
+    const { flags: _ephemeral, ...body } = casinoReply(this.cfg(), this.baseUrl, link);
+    await interaction.editReply(body).catch((err: unknown) => logger.warn({ err }, 'casino reply failed'));
   }
 }
 

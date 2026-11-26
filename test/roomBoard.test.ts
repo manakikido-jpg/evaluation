@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChannelType } from 'discord.js';
 import type { Db } from '../src/db/client.js';
 import { tempVoice } from '../src/db/schema.js';
@@ -34,10 +34,26 @@ function fakeGuild() {
   };
   const vcs = { [V1]: voice(V1, '🏨 りくの宿', 1, ['a', 'b']), [V2]: voice(V2, '🔒 ひみつ', 2, ['c']), [V3]: voice(V3, 'みんなの宿', 3, ['d', 'e', 'f']), [V4]: voice(V4, '空の宿', 4, []) };
   const cache = new Map<string, unknown>([[BOARD, text(BOARD)], [OTHER_BOARD, text(OTHER_BOARD)], ...Object.entries(vcs)]);
-  return { guild: { id: cfg.guildId, channels: { cache } } as never, boards, log, vcs };
+  return { guild: { id: cfg.guildId, channels: { cache } } as never, boards, log, vcs, cache };
 }
 
 describe('🏨 いまの部屋の掲示板', () => {
+  it('30部屋の受付状態をまとめて読み、部屋数ぶんのSELECTを繰り返さない', async () => {
+    const g = fakeGuild();
+    for (const id of Object.keys(g.vcs)) g.cache.delete(id);
+    for (let n = 0; n < 30; n++) {
+      const id = `94000000000000${String(100 + n)}`;
+      g.cache.set(id, { ...g.vcs[V1], id, name: `宿${n}`, rawPosition: n });
+    }
+    await saveRoomKnockConfig(db, { boardChannelId: BOARD }, 'staff');
+    const select = vi.spyOn(db, 'select');
+    try {
+      await new RoomBoardApp(db, () => cfg, async () => true).attach(g.guild);
+      expect(g.boards.get(BOARD)!.size).toBe(30);
+      // 設定・掲示の保存状態・宿の一覧・受付状態の一括取得。
+      expect(select).toHaveBeenCalledTimes(4);
+    } finally { select.mockRestore(); }
+  });
   it('1 部屋のメッセージ: 人数・入室のしかた・話題・こんこんボタン・🔑 招待のみ', () => {
     const base = { vcId: V1, guildId: cfg.guildId, name: '🏨 りくの宿', count: 3, mode: 'knock' as const, invite: false, topic: 'ゲームの話', ownerId: 'o', knockEnabled: true };
     const knock = JSON.stringify(roomBoardCard(base));

@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../db/client.js';
 import { settings } from '../db/schema.js';
@@ -43,6 +43,15 @@ export async function roomKnockStates(db: Db): Promise<{ room: string; state: Kn
 export async function roomKnockState(db: Db, room: string): Promise<KnockState> {
   const [row] = await db.select().from(settings).where(eq(settings.key, key(room)));
   return stateSchema.parse(row?.value ?? {});
+}
+/** 掲示板で使う部屋だけを1回で読む。個別読み込みと同じ初期値・検査を使う。 */
+export async function roomKnockStatesFor(db: Db, rooms: readonly string[]): Promise<Map<string, KnockState>> {
+  const ids = [...new Set(rooms)];
+  if (!ids.length) return new Map();
+  const rows = await db.select({ key: settings.key, value: settings.value }).from(settings)
+    .where(inArray(settings.key, ids.map(key)));
+  const values = new Map(rows.map(row => [row.key, row.value]));
+  return new Map(ids.map(room => [room, stateSchema.parse(values.get(key(room)) ?? {})]));
 }
 async function change<T>(db: Db, room: string, fn: (s: KnockState) => T): Promise<T> {
   return db.transaction(async tx => {

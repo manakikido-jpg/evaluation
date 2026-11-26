@@ -1,11 +1,33 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { settings } from '../src/db/schema.js';
 import type { Db } from '../src/db/client.js';
 import { fmtSec, roomKnockConfig, saveRoomKnockConfig, answerRoomKnock, cancelKnock, recordKnockMessage, requestRoomKnock, resetRoomKnock, roomKnockState, setKnockControl, setRoomKnockMode } from '../src/services/roomKnock.js';
 import { makeDb } from './helpers.js';
+import { roomKnockStatesFor, setRoomTopic } from '../src/services/roomKnock.js';
 let db: Db, close: () => Promise<void>;
 beforeEach(async () => { ({ db, close } = await makeDb()); });
 afterEach(async () => { await close(); });
 const R = 'room', A = 'alice', B = 'bob';
+it('30部屋を1回で読み、未設定・受付中・話題などは個別取得と同じ結果になる', async () => {
+  await setRoomKnockMode(db, R, 'knock');
+  await requestRoomKnock(db, R, A, 'pending', 1000);
+  await setRoomTopic(db, R, '雑談', A, 1000);
+  const rooms = [R, ...Array.from({ length: 29 }, (_, n) => `empty-${n}`)];
+  const expected = new Map(await Promise.all(rooms.map(async room => [room, await roomKnockState(db, room)] as const)));
+  const select = vi.spyOn(db, 'select');
+  try {
+    expect(await roomKnockStatesFor(db, [...rooms, R])).toEqual(expected);
+    expect(select).toHaveBeenCalledOnce();
+    select.mockClear();
+    expect(await roomKnockStatesFor(db, [])).toEqual(new Map());
+    expect(select).not.toHaveBeenCalled();
+  } finally { select.mockRestore(); }
+});
+it('一括取得でも壊れた受付状態を正常扱いせず、個別取得と同じ検査をする', async () => {
+  await db.insert(settings).values({ key: `room_knock:${R}`, value: { mode: 'invalid' }, updatedBy: 'test' });
+  await expect(roomKnockState(db, R)).rejects.toThrow();
+  await expect(roomKnockStatesFor(db, [R])).rejects.toThrow();
+});
 describe('宿のこんこんの永続状態', () => {
   it('初期は自由。自由と取り込み中は受け付けない', async () => {
     expect((await roomKnockState(db, R)).mode).toBe('open');
