@@ -11,7 +11,6 @@ import { recordJoin } from '../src/services/members.js';
 import { listItems, seedDefaultItems } from '../src/services/shop.js';
 import { activeYakuCount, yakubaraiWaiting } from '../src/services/yaku.js';
 import { isYakudoshi, yakuBlocks, YAKU_BLOCKED } from '../src/services/yakuGate.js';
-import { tempVoice } from '../src/db/schema.js';
 import { cfg, makeDb, ROLE } from './helpers.js';
 
 const USER = '770000000000000010';
@@ -87,29 +86,6 @@ describe('👹 厄の制限: 通話は縁側だけ', () => {
     // 運営がいる通話（面接など）は切らない
     const staffIn = new Map([[STAFF, { id: STAFF, roles: { cache: new Map([[ROLE.shinshoku, {}]]) } }]]);
     expect(await app.check(state({ id: 'v4', name: '面接', members: staffIn }, yaku, calls), 120_000)).toBe(false);
-  });
-});
-
-describe('👹 厄の制限: 人が立てた宿には入れる', () => {
-  it('部屋主がほかの人なら入れる。自分が部屋主の部屋・ふつうの通話は切る', async () => {
-    const { db, close } = await makeDb();
-    await db.insert(tempVoice).values([
-      { channelId: 'r1', ownerId: '770000000000000099', hubId: 'hub' },
-      { channelId: 'r2', ownerId: USER, hubId: 'hub' },
-    ]);
-    const app = new YakuVoiceApp(() => cfg, db);
-    const calls: string[] = [];
-    const guild = { id: cfg.guildId, afkChannelId: 'afk', voiceStates: { cache: new Map() } } as unknown as Guild;
-    const st = (id: string, name: string) => ({
-      guild, channelId: id, channel: { id, name },
-      member: { id: USER, user: { bot: false }, roles: { cache: new Map([[ROLE.ujiko, {}], [ROLE.yakudoshi, {}]]) }, send: async () => void calls.push('dm') },
-      disconnect: async () => void calls.push('disconnect'),
-    }) as unknown as VoiceState;
-    expect(await app.check(st('r1', '🍶 宵宮の部屋'))).toBe(false);
-    expect(calls).toEqual([]);
-    expect(await app.check(st('r2', '🍶 自分の部屋'))).toBe(true);
-    expect(await app.check(st('v9', '雑談'))).toBe(true);
-    await close();
   });
 });
 

@@ -1,22 +1,16 @@
 import type { Guild, VoiceState } from 'discord.js';
 import { adminLevelOf, type GuildConfig } from '../config.js';
-import type { Db } from '../db/client.js';
 import { logger } from '../lib/logger.js';
-import { roomOf } from '../services/rooms.js';
 import { isEngawaName } from '../services/voiceUsage.js';
 import { isYakudoshi } from '../services/yakuGate.js';
 
 /**
  * 👹 厄のあいだは、通話は縁側だけ（本人の決定 2026-11-26）。
- * 縁側でない通話に入ったら切って、本人に DM で知らせる（DM は10分に1回まで）。
- * 奥の院（AFK）・運営がいる通話（面接など）・人が立てた宿や部屋（部屋主が本人でない）はそのまま。自分では宿を開けない（rooms / tempVoice）。
+ * 縁側でない通話に入ったら切って、本人に DM で知らせる（DM は10分に1回まで）。奥の院（AFK）と、運営がいる通話（面接など）はそのまま。
  */
 export class YakuVoiceApp {
   private notified = new Map<string, number>();
-  constructor(
-    private readonly cfg: () => GuildConfig,
-    private readonly db?: Db,
-  ) {}
+  constructor(private readonly cfg: () => GuildConfig) {}
 
   /** 起動したとき：いま縁側でない通話にいる厄の人を切る */
   async attach(guild: Guild): Promise<void> {
@@ -37,11 +31,6 @@ export class YakuVoiceApp {
     // 運営（神職・宮司）がいる通話は、面接などのために入れる
     const members = (v.channel as { members?: Map<string, { id: string; roles: { cache: Map<string, unknown> } }> }).members;
     if (members && [...members.values()].some((x) => x.id !== m.id && adminLevelOf(this.cfg(), [...x.roles.cache.keys()]))) return false;
-    // 人が立てた宿・部屋には入れる（本人の決定 2026-11-26）
-    if (this.db && v.channelId) {
-      const room = await roomOf(this.db, v.channelId).catch(() => undefined);
-      if (room && room.ownerId !== m.id) return false;
-    }
     try {
       await v.disconnect('厄のあいだは縁側の通話だけ');
     } catch (err) {

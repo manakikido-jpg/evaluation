@@ -31,25 +31,6 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    id: '2026-11-26-yaku-join-rooms',
-    date: '2026-11-26',
-    kind: 'improve',
-    where: ['Discord'],
-    title: '👹 厄のあいだも、人が立てた宿には入れるようにした',
-    items: [
-      '厄のあいだは通話は縁側だけですが、ほかの人が立てた宿・部屋（部屋主が自分でない部屋）には入れるようにしました。',
-      '自分で宿を開くことは、これまでどおりできません。入った人が払う宿は、ふつうどおり部屋代がかかります。',
-    ],
-    announcement: {
-      priority: 'optional',
-      audience: '厄が付いている人',
-      steps: ['ほかの人が立てた宿・部屋に、ふつうに入る'],
-      postText: '👹 厄のあいだも、ほかの人が立てた宿には入れるようになりました（自分で宿を開くことはできません）。',
-      imagePrompt: 'なし（さっきの厄のお知らせに一言そえるだけでよい）',
-      notes: '厄の制限のお知らせ（2026-11-26-yaku-restrictions）とまとめて周知してよい。',
-    },
-  },
-  {
     id: '2026-11-26-yaku-restrictions',
     date: '2026-11-26',
     kind: 'new',
