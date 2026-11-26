@@ -3,7 +3,7 @@ import type { Db } from '../db/client.js';
 import { decidePromotion, highestRank, type Promotion } from '../domain/ranks.js';
 import { musubiWeight } from '../domain/musubi.js';
 import { addCoins } from './economy.js';
-import { giveShuin, newSystemStartedAt, revokeShuin } from './shuin.js';
+import { beenTogether, giveShuin, newSystemStartedAt, revokeShuin } from './shuin.js';
 
 /**
  * Discord に依存しない「朱印を押す／取り消す」の手順。
@@ -18,7 +18,8 @@ export type GiveDenied =
   | 'not_member' // 相手がサーバーにいない
   | 'giver_no_rank' // 押す人がまだ参拝者になっていない
   | 'yakudoshi' // 押す人が厄年
-  | 'receiver_no_rank'; // 相手がまだ参拝者になっていない
+  | 'receiver_no_rank' // 相手がまだ参拝者になっていない
+  | 'not_together'; // 結び（④のあと）：通話でいっしょになったことがない
 
 export type GiveOutcome =
   | { kind: 'denied'; reason: GiveDenied }
@@ -45,6 +46,8 @@ export async function giveFlow(
   // 🧵 新制度のご縁の時代（④リセットのあと）は「結び」：重みはだれでも等しく1・同じ相手には1回きり。
   // それまでは旧御朱印のまま（格の重み・昇格後の押し直しで差額）。
   const musubi = Boolean(await newSystemStartedAt(db));
+  // 結べるのは、通話でいっしょになったことのある人だけ（本人の決定 2026-11-26）
+  if (musubi && !(await beenTogether(db, giver.id, receiver.id))) return { kind: 'denied', reason: 'not_together' };
   // 朱印と通貨を一緒に記録する（途中で失敗したら、どちらも残さない）
   const res = await db.transaction(async (tx) => {
     const r = await giveShuin(tx, {

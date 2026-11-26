@@ -163,6 +163,13 @@ export async function resetReceivedShuin(db: Db, receiverId: string, by: string,
   });
 }
 
+/** 通話でいっしょになったことがあるか（voice_pairs に2人の記録がある） */
+export async function beenTogether(db: Db, a: string, b: string): Promise<boolean> {
+  const [x, y] = a < b ? [a, b] : [b, a];
+  const [row] = await db.select({ n: count() }).from(voicePairs).where(and(eq(voicePairs.memberA, x), eq(voicePairs.memberB, y)));
+  return Number(row?.n ?? 0) > 0;
+}
+
 /**
  * 🧵 結びのコレクション：その人が「まだ結んでいない相手」の一覧（出会った人数のコンプリート用）。
  * total＝通話でいっしょになったことのある相手（在籍・BOT/退出/自分をのぞく）の数、met＝そのうちもう結んだ数、unmet＝まだの相手（最近来た順・limit まで）。

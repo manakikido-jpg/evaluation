@@ -73,8 +73,25 @@ describe('🔄 新制度の切替：全員のご縁リセット', () => {
 });
 
 describe('🧵 新制度の結び（④リセットのあと）', () => {
+  /** 2人が通話でいっしょになった記録（結べるのは、いっしょになったことのある人だけ） */
+  const together = async (...pairs: [string, string][]) => {
+    const { voicePairs } = await import('../src/db/schema.js');
+    await db.insert(voicePairs).values(pairs.map(([x, y]) => ({ memberA: x < y ? x : y, memberB: x < y ? y : x, date: '2026-11-20', minutes: 10 })));
+  };
+
+  it('結べるのは通話でいっしょになったことのある人だけ（④の前の朱印は今までどおり）', async () => {
+    const { resetAllShuin } = await import('../src/services/shuin.js');
+    expect(await giveFlow(db, cfg, member(A, ROLE.ujiko), member(B, ROLE.sanpaisha))).toMatchObject({ kind: 'given' }); // ④の前
+    await resetAllShuin(db, 'guji');
+    expect(await giveFlow(db, cfg, member(A, ROLE.ujiko), member(B, ROLE.sanpaisha))).toMatchObject({ kind: 'denied', reason: 'not_together' });
+    await together([A, B]);
+    expect(await giveFlow(db, cfg, member(A, ROLE.ujiko), member(B, ROLE.sanpaisha))).toMatchObject({ kind: 'given', weight: 1 });
+  });
+
   it('結びの重みはだれでも等しく1。リセット前は旧御朱印の格の重み', async () => {
     const { resetAllShuin } = await import('../src/services/shuin.js');
+    const D0 = '200000000000000004', E0 = '200000000000000005';
+    await together([A, B], [C, B], [D0, B], [E0, B]);
     // リセット前：氏子は格の重み 2
     expect(await giveFlow(db, cfg, member(A, ROLE.ujiko), member(B, ROLE.sanpaisha))).toMatchObject({ kind: 'given', weight: 2 });
     await resetAllShuin(db, 'guji');
@@ -88,6 +105,7 @@ describe('🧵 新制度の結び（④リセットのあと）', () => {
 
   it('同じ相手には1回きり：昇格しても押し直しで差額は足さない（取り消したものは結び直せる）', async () => {
     const { resetAllShuin } = await import('../src/services/shuin.js');
+    await together([A, B]);
     await resetAllShuin(db, 'guji');
     expect(await giveFlow(db, cfg, member(A, ROLE.sanpaisha), member(B, ROLE.sanpaisha))).toMatchObject({ kind: 'given', weight: 1, goen: 1 });
     // A が世話役に上がってから、もう一度押しても「もう結んだ」（差額なし）

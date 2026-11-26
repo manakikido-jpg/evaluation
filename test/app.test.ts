@@ -995,6 +995,9 @@ describe('🌸 新制度ローンチの通し稽古（③→④→⑤→元に�
       expect((await listTerms(db)).map((t) => t.term)).toEqual(expect.arrayContaining(['結び', 'ご縁帳', '絵馬']));
       // 結び：氏子は重み1・同じ相手には1回きり
       const info = (id: string, role: string) => ({ id, isBot: false, roleIds: [role] });
+      // 結べるのは、通話でいっしょになったことのある人だけ
+      const { voicePairs } = await import('../src/db/schema.js');
+      await db.insert(voicePairs).values({ memberA: SA[0]! < SB ? SA[0]! : SB, memberB: SA[0]! < SB ? SB : SA[0]!, date: '2026-11-20', minutes: 10 });
       expect(await giveFlow(db, cfg, info(SA[0]!, ROLE.ujiko), info(SB, ROLE.sanpaisha))).toMatchObject({ kind: 'given', weight: 1 });
       expect(await giveFlow(db, cfg, info(SA[0]!, ROLE.sewayaku), info(SB, ROLE.sanpaisha))).toMatchObject({ kind: 'already' });
       // 新しく結んでたまったご縁で、節目特典が出る（ご縁25 → 500銭）
