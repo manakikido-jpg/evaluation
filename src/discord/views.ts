@@ -204,7 +204,7 @@ export function goshuinchoReply(
 
   const embed = new EmbedBuilder()
     .setColor(SHU)
-    .setTitle(`📕 ${owner.displayName} さまのプロフィール`)
+    .setTitle(w(`📕 ${owner.displayName} さまのプロフィール`, `📕 ${owner.displayName} さまのご縁帳`))
     .setDescription(`${rankLabel(rank)} ・ ご縁 **${data.goen}**${nextText}`);
   // 性別・DM・フレンド（あるものだけ）
   const about = [
@@ -272,7 +272,7 @@ export function giversReply(ownerId: string, givers: { giverId: string }[], tota
   const embed = new EmbedBuilder()
     .setColor(SHU)
     .setTitle(w(`朱印をくれた人（${total} 人）`, `結んでくれた人（${total} 人）`))
-    .setDescription(`${nameOf(ownerId)} ${w('さまの御朱印帳', 'さまのプロフィール')}\n\n${lines}${more}`);
+    .setDescription(`${nameOf(ownerId)} ${w('さまの御朱印帳', 'さまのご縁帳')}\n\n${lines}${more}`);
   return { embeds: [embed.toJSON()], allowedMentions: { parse: [] } };
 }
 

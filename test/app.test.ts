@@ -746,3 +746,138 @@ describe('ShuinApp：絵馬を贈る（新制度②）', () => {
     expect([...members.get(SA)!.roles.cache.keys()]).not.toContain(ROLE.ujiko);
   });
 });
+
+describe('🌸 新制度ローンチの通し稽古（③→④→⑤→元に戻す）', () => {
+  it('当日の手順どおりに切り替えて、昇格・通知・特典・結び・呼び名・掲示・用語集・コマンド名・特典のゲート・元に戻すまで確かめる', async () => {
+    const { setEmaPromotion } = await import('../src/services/emaPromotion.js');
+    const { resetAllShuin, undoAllShuinReset, goenOf } = await import('../src/services/shuin.js');
+    const { createMusubiSync } = await import('../src/services/musubiSwitch.js');
+    const { commandDefinitions } = await import('../src/discord/commands.js');
+    const { isMusubiMode, setMusubiMode } = await import('../src/domain/terms.js');
+    const { createNotice, getNotice, publishNotice } = await import('../src/services/notices.js');
+    const { DEFAULT_NOTICES, DEFAULT_GUIDES } = await import('../src/services/noticeDefaults.js');
+    const { seedDefaultTerms, listTerms } = await import('../src/services/glossary.js');
+    const { giveFlow } = await import('../src/services/flows.js');
+    const { setPerkUjiko, perkUjikoEnabled, meetsUjiko } = await import('../src/services/perkGate.js');
+    const { ema } = await import('../src/db/schema.js');
+    try {
+      // ── 準備（ローンチ前の本番に近い状態） ──
+      const SA = ['400000000000000081', '400000000000000082', '400000000000000083', '400000000000000084']; // 参拝者・氏子の票5枚
+      const UJ = '400000000000000085'; // 氏子・世話役の票3枚
+      const SB = '400000000000000086'; // 参拝者・氏子の票2枚（まだ上がらない）
+      const K = '400000000000000087'; // 氏子・旧制度のご縁300（特典の一斉払いの事故が起きやすい人）
+      const join = async (id: string, role: string) => {
+        await recordJoin(db, { id, username: id.slice(-3), displayName: `u${id.slice(-2)}`, avatarUrl: null, roleIds: [role], isBot: false, joinedAt: new Date() });
+        return add(id, role);
+      };
+      const votes = (receiverId: string, n: number, tier: 'ujiko' | 'sewayaku', base: bigint) =>
+        db.insert(ema).values(Array.from({ length: n }, (_, i) => ({ giverId: String(base + BigInt(i)), receiverId, tier, message: '', createdAt: new Date(), revokedAt: null })));
+      for (const [k, id] of SA.entries()) { await join(id, ROLE.sanpaisha); await votes(id, 5, 'ujiko', 4780000000000000000n + BigInt(k * 10)); }
+      await join(UJ, ROLE.ujiko); await votes(UJ, 3, 'sewayaku', 4790000000000000000n);
+      await join(SB, ROLE.sanpaisha); await votes(SB, 2, 'ujiko', 4791000000000000000n);
+      await join(K, ROLE.ujiko);
+      await db.insert(shuin).values({ giverId: '401000000000000099', receiverId: K, weight: 300, giverRank: 'guji' });
+
+      // 掲示（標準のまま投稿ずみ・#絵馬 のボタン付き・運営が手を入れたもの）と用語集
+      const CHS = [
+        { id: '960000000000000001', name: 'しきたり', type: 0, parent_id: null, position: 0 },
+        { id: '960000000000000002', name: '絵馬-男性', type: 0, parent_id: null, position: 1 },
+      ];
+      const posted: { channelId: string; body: { content?: string; components?: unknown[] } }[] = [];
+      let seq = 0;
+      const discord = {
+        sendMessage: async (channelId: string, body: { content?: string; components?: unknown[] }) => { posted.push({ channelId, body }); return { id: `n${++seq}` }; },
+        editMessage: async (channelId: string, _m: string, body: { content?: string; components?: unknown[] }) => { posted.push({ channelId, body }); },
+        deleteMessage: async () => undefined,
+        pinMessage: async () => undefined,
+        guildChannels: async () => CHS,
+      } as never;
+      const noticeCtx = { db, cfg, discord };
+      const tSys = DEFAULT_NOTICES.find((t) => t.title === '朱印とご縁')!;
+      const tBan = DEFAULT_NOTICES.find((t) => t.title === '厄と BAN')!;
+      const tGuide = DEFAULT_GUIDES.find((t) => t.channelName === '絵馬-男性' && t.title === '使い方')!;
+      const nSys = await createNotice(db, { channelId: CHS[0]!.id, title: tSys.title, body: tSys.body, by: G });
+      const nBan = await createNotice(db, { channelId: CHS[0]!.id, title: tBan.title, body: `${tBan.body}\n（運営が書き足した行）`, by: G });
+      const nPanel = await createNotice(db, { channelId: CHS[1]!.id, title: tGuide.title, body: tGuide.body, shuinButton: true, by: G });
+      await publishNotice(noticeCtx, nSys.id, G);
+      await publishNotice(noticeCtx, nPanel.id, G);
+      await seedDefaultTerms(db, G);
+
+      // BOT の毎分の仕事（index.ts と同じつなぎ方）
+      const registered: (string | undefined)[] = [];
+      const syncMusubi = createMusubiSync({
+        db, cfg: () => cfg, discord,
+        registerCommands: async () => { registered.push((commandDefinitions(cfg).find((c) => c.name === 'goshuin') as { name_localizations?: Record<string, string> }).name_localizations?.ja); },
+        registered: isMusubiMode(),
+      });
+      const tick = async () => {
+        await app.checkEvaluationPromotions(guild as never);
+        await app.checkGoenPerks(guild as never);
+        await app.checkEmaKeep(guild as never);
+        await syncMusubi();
+      };
+      await tick(); // ローンチ前：何も変わらない
+      expect(sent.filter((s) => s.channelId === cfg.channels.keiji)).toHaveLength(0);
+      expect(isMusubiMode()).toBe(false);
+      expect(registered).toEqual([]);
+
+      // ── ③ 絵馬での昇格を ON ──
+      await setEmaPromotion(db, true, G);
+      await tick();
+      for (const id of SA) expect([...members.get(id)!.roles.cache.keys()]).toContain(ROLE.ujiko); // 氏子の票5枚 → 氏子
+      expect([...members.get(UJ)!.roles.cache.keys()]).toContain(ROLE.sewayaku); // 世話役の票3枚 → 世話役
+      expect([...members.get(SB)!.roles.cache.keys()]).not.toContain(ROLE.ujiko); // 2枚はまだ
+      const keiji = sent.filter((s) => s.channelId === cfg.channels.keiji);
+      expect(keiji.filter((s) => s.embeds?.length)).toHaveLength(5); // 1人ずつのカード
+      expect(keiji.filter((s) => s.embeds?.length).every((s) => !(s.content ?? '').includes('<@&'))).toBe(true); // 通知なし
+      expect(keiji.filter((s) => !s.embeds?.length).map((s) => s.content)).toEqual([expect.stringContaining('5 名')]); // まとめて1回
+      expect((await walletOf(db, K)).balance).toBe(0); // ④の前：旧ご縁300で特典を払わない
+      expect(isMusubiMode()).toBe(false); // ③だけでは呼び名は変わらない
+      expect(registered).toEqual([]);
+
+      // ── ④ ご縁のリセット ──
+      await resetAllShuin(db, G);
+      await tick();
+      expect(await goenOf(db, K)).toBe(0);
+      expect(isMusubiMode()).toBe(true);
+      expect(registered).toEqual(['ご縁帳']); // コマンドの日本語名を登録し直した
+      expect((await getNotice(db, nSys.id))!.body).toContain('# 🧵 結び・ご縁・絵馬');
+      expect((await getNotice(db, nPanel.id))!.body).toContain('「結ぶ」');
+      expect((await getNotice(db, nBan.id))!.body).toContain('朱印'); // 手を入れた掲示は変えない
+      expect(JSON.stringify(posted.slice(-3))).toContain('"label":"結ぶ"'); // #絵馬 のボタンも出し直した
+      expect(posted.some((p) => p.channelId === cfg.channels.log && (p.body.content ?? '').includes('厄と BAN'))).toBe(true); // 手で直す掲示を #記録 に
+      expect((await listTerms(db)).map((t) => t.term)).toEqual(expect.arrayContaining(['結び', 'ご縁帳', '絵馬']));
+      // 結び：氏子は重み1・同じ相手には1回きり
+      const info = (id: string, role: string) => ({ id, isBot: false, roleIds: [role] });
+      expect(await giveFlow(db, cfg, info(SA[0]!, ROLE.ujiko), info(SB, ROLE.sanpaisha))).toMatchObject({ kind: 'given', weight: 1 });
+      expect(await giveFlow(db, cfg, info(SA[0]!, ROLE.sewayaku), info(SB, ROLE.sanpaisha))).toMatchObject({ kind: 'already' });
+      // 新しく結んでたまったご縁で、節目特典が出る（ご縁25 → 500銭）
+      await db.insert(shuin).values({ giverId: '401000000000000098', receiverId: K, weight: 25, giverRank: 'sanpaisha' });
+      await tick();
+      expect((await walletOf(db, K)).balance).toBe(500);
+      // プロフィールの言葉も結び
+      const show = interaction('slash', members.get(SA[0]!)!, { commandName: 'goshuin', options: { getUser: () => members.get(SB)!.user, getBoolean: () => null } });
+      await app.onInteraction(show.i as never);
+      expect(JSON.stringify(show.replies.at(-1))).toContain('結んでくれた人');
+      expect(JSON.stringify(show.replies.at(-1))).not.toContain('朱印');
+
+      // ── ⑤ 特典のゲート（カジノ・宿を氏子から） ──
+      await setPerkUjiko(db, true, G);
+      expect(await perkUjikoEnabled(db)).toBe(true);
+      expect(meetsUjiko(cfg, [ROLE.sanpaisha])).toBe(false);
+      expect(meetsUjiko(cfg, [ROLE.ujiko])).toBe(true);
+
+      // ── うまくいかないとき：④を元に戻す ──
+      expect((await undoAllShuinReset(db, G)).status).toBe('ok');
+      await tick();
+      expect(isMusubiMode()).toBe(false);
+      expect(registered).toEqual(['ご縁帳', '御朱印帳']); // 日本語名も戻した
+      expect((await getNotice(db, nSys.id))!.body).toBe(tSys.body);
+      expect((await getNotice(db, nPanel.id))!.body).toBe(tGuide.body);
+      expect((await listTerms(db)).map((t) => t.term)).toEqual(expect.arrayContaining(['朱印', '御朱印帳']));
+      expect(await goenOf(db, K)).toBe(300 + 25); // 旧ご縁が戻る（新しく結んだ分はそのまま）
+    } finally {
+      setMusubiMode(false);
+    }
+  });
+});

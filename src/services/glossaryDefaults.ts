@@ -113,7 +113,7 @@ export const MUSUBI_TERM_SWAPS: { category: GlossaryCategory; from: GlossaryDefa
   {
     category: 'system',
     from: { category: 'system', emoji: '📖', term: '御朱印帳', reading: 'ごしゅいんちょう', description: '自分の評価カード（`/御朱印帳`）' },
-    to: { category: 'system', emoji: '📖', term: 'プロフィール', reading: 'ぷろふぃーる', description: '自分のカード。ご縁・絵馬・自己紹介が見られる（`/プロフィール`）' },
+    to: { category: 'system', emoji: '📖', term: 'ご縁帳', reading: 'ごえんちょう', description: '自分のカード。ご縁・絵馬・自己紹介が見られる（`/ご縁帳`。右クリックの「プロフィール」でも開ける）' },
   },
   {
     category: 'system',

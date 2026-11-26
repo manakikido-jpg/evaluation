@@ -6,6 +6,8 @@ import { DEFAULT_GUIDES, DEFAULT_NOTICES } from './noticeDefaults.js';
 import { findChannel, guildChannelsCached, listNotices, publishNotice, updateNotice, type NoticeCtx } from './notices.js';
 import { listTerms, syncGlossaryNotices, updateTerm } from './glossary.js';
 import { MUSUBI_TERM_SWAPS, type GlossaryCategory } from './glossaryDefaults.js';
+import { newSystemStartedAt } from './shuin.js';
+import { setMusubiMode } from '../domain/terms.js';
 
 /**
  * 🧵 新制度④c：呼び名の切り替え（御朱印 → 結び）を、掲示と用語集に当てる。
@@ -30,10 +32,10 @@ const SWAPS: Record<string, [string, string][]> = {
   [key('しきたり', '厄と BAN')]: [['厄年の間は朱印を押せません', '厄年の間は結べません']],
   [key('しきたり', '花びら・相談')]: [
     ['- 朱印を押すと {朱印を押すと} 枚、押してもらうと {朱印を頂くと} 枚', '- 結ぶと {朱印を押すと} 枚、結んでもらうと {朱印を頂くと} 枚'],
-    ['残高は自分の御朱印帳（`/御朱印帳`）で見られます', '残高は自分のプロフィール（`/プロフィール`）で見られます'],
+    ['残高は自分の御朱印帳（`/御朱印帳`）で見られます', '残高は自分のご縁帳（`/ご縁帳`）で見られます'],
   ],
   [key('しきたり', '用語集')]: [
-    ['- **御朱印帳** … 自分の評価カード', '- **プロフィール** … 自分のカード（ご縁・絵馬・自己紹介）'],
+    ['- **御朱印帳** … 自分の評価カード', '- **ご縁帳** … 自分のカード（ご縁・絵馬・自己紹介）'],
     [
       '- **朱印** … 評価スタンプ ／ **ご縁** … 評価ポイント ／ **格** … 朱印 1 回で渡せるご縁',
       '- **結び** … はじめましてのあいさつ（同じ人と 1 回） ／ **ご縁** … 結びでたまる数（節目でごほうび） ／ **絵馬** … 評価の票（集まると役職が上がる）',
@@ -55,8 +57,8 @@ const FULL: Record<string, string> = {
 - 自分と BOT とは結べません
 - 結ぶと相手の **ご縁** が増えます。ご縁が節目に届くと、ごほうびがあります（役職には使いません）
 
-## プロフィールを見る
-右クリック →「アプリ」→ **プロフィール**、または \`/プロフィール\`（自己紹介・性別・DM とフレンド・役職・ご縁・絵馬が見られます）
+## ご縁帳を見る
+右クリック →「アプリ」→ **プロフィール**、または \`/ご縁帳\`（自己紹介・性別・DM とフレンド・役職・ご縁・絵馬が見られます）
 
 ## 絵馬と役職
 役職は **絵馬**（評価の票）で上がります（上がると {#慶事} で発表されます）。
@@ -161,4 +163,55 @@ export async function setMusubiApplied(db: Db, on: boolean): Promise<void> {
     .insert(settings)
     .values({ key: APPLIED_KEY, value: { on }, updatedBy: 'system' })
     .onConflictDoUpdate({ target: settings.key, set: { value: { on }, updatedBy: 'system', updatedAt: new Date() } });
+}
+
+/**
+ * 🧵 BOT の毎分の呼び名の切り替え（index.ts から使う）。
+ * - ④の印（new_system_started）を見て言葉を決める（setMusubiMode）。
+ * - 登録したときの言葉とずれたら、コマンドの表示名を登録し直す（registerCommands）。
+ * - 最後に当てた言葉（musubi_applied）とずれたら、掲示・用語集を切り替えて出し直し、#記録 に知らせる。
+ * 同時に二重に動かない。BOT が止まっていた間の切り替えも、次に呼んだときに当てる。
+ */
+export function createMusubiSync(deps: {
+  db: Db;
+  cfg: () => NoticeCtx['cfg'];
+  discord: NoticeCtx['discord'];
+  registerCommands: () => Promise<void>;
+  /** 起動時に登録したときの言葉 */
+  registered: boolean;
+}): () => Promise<{ on: boolean; reregistered: boolean; applied?: { changed: number; republished: number; custom: string[]; terms: number } } | undefined> {
+  let registered = deps.registered;
+  let busy = false;
+  return async () => {
+    if (busy) return undefined;
+    busy = true;
+    try {
+      const on = Boolean(await newSystemStartedAt(deps.db));
+      setMusubiMode(on);
+      let reregistered = false;
+      if (on !== registered) {
+        await deps.registerCommands();
+        registered = on;
+        reregistered = true;
+      }
+      if (on === (await musubiApplied(deps.db))) return { on, reregistered };
+      const ctx = { db: deps.db, cfg: deps.cfg(), discord: deps.discord };
+      const r = await syncMusubiNotices(ctx, on, 'system');
+      const terms = await syncMusubiGlossary(ctx, on, 'system');
+      await setMusubiApplied(deps.db, on);
+      const log = ctx.cfg.channels.log;
+      if (log) {
+        const custom = r.custom.length ? `\n手を入れてある掲示は自動では変えていません。手で直してください：${r.custom.join('・')}` : '';
+        await deps.discord
+          .sendMessage(log, { content: `🧵 呼び名を「${on ? '結び' : '御朱印'}」に切り替えました（掲示 ${r.changed} 件・用語 ${terms} 件・出し直し ${r.republished} 件）。${custom}`, allowed_mentions: { parse: [] } })
+          .catch(() => undefined);
+      }
+      return { on, reregistered, applied: { ...r, terms } };
+    } catch (err) {
+      logger.warn({ err }, 'musubi terms sync failed');
+      return undefined;
+    } finally {
+      busy = false;
+    }
+  };
 }

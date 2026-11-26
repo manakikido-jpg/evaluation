@@ -69,6 +69,7 @@ describe('🧵 呼び名の切り替え（御朱印 → 結び）', () => {
     expect(giveReply(A, given).content).not.toContain('朱印');
     const json = JSON.stringify(card());
     expect(json).toContain('結んでくれた人');
+    expect(json).toContain('さまのご縁帳');
     expect(json).toContain('"label":"結ぶ"');
     expect(json).not.toContain('朱印');
     expect(vcList([{ id: A, name: 'さくら', stamped: true }], 1).content).toContain('もう結んだ人は ✅');
@@ -76,12 +77,12 @@ describe('🧵 呼び名の切り替え（御朱印 → 結び）', () => {
     expect(COIN_REASON_LABEL.shuin_revoke).toBe('結びの取り消し');
   });
 
-  it('コマンドの日本語の名前：/御朱印帳 → /プロフィール、/パネル 朱印 → 結ぶ（振り分けの英語名は変えない）', () => {
+  it('コマンドの日本語の名前：/御朱印帳 → /ご縁帳、/パネル 朱印 → 結ぶ（振り分けの英語名は変えない）', () => {
     const goshuin = () => commandDefinitions(cfg).find((c) => c.name === 'goshuin') as { name: string; name_localizations?: Record<string, string> };
     expect(goshuin().name_localizations?.ja).toBe('御朱印帳');
     setMusubiMode(true);
     expect(goshuin().name).toBe('goshuin');
-    expect(goshuin().name_localizations?.ja).toBe('プロフィール');
+    expect(goshuin().name_localizations?.ja).toBe('ご縁帳');
     expect(JSON.stringify(commandDefinitions(cfg))).not.toContain('朱印');
   });
 
@@ -128,7 +129,7 @@ describe('🧵 呼び名の切り替え（御朱印 → 結び）', () => {
     expect((await getNotice(db, panel.id))!.body).toBe(guide.body);
   });
 
-  it('用語集：標準のままの用語だけ入れかえ（御朱印帳→プロフィール・朱印→結び・格→絵馬）、手を入れた用語は変えない。元に戻せる', async () => {
+  it('用語集：標準のままの用語だけ入れかえ（御朱印帳→ご縁帳・朱印→結び・格→絵馬）、手を入れた用語は変えない。元に戻せる', async () => {
     const { discord } = fakeDiscord();
     const ctx = { db, cfg, discord };
     await seedDefaultTerms(db, G);
@@ -137,7 +138,7 @@ describe('🧵 呼び名の切り替え（御朱印 → 結び）', () => {
 
     const n = await syncMusubiGlossary(ctx, true, G);
     const names = (await listTerms(db)).map((t) => t.term);
-    expect(names).toContain('プロフィール');
+    expect(names).toContain('ご縁帳');
     expect(names).toContain('結び');
     expect(names).toContain('絵馬');
     expect(names).not.toContain('御朱印帳');

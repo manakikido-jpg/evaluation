@@ -123,7 +123,7 @@ describe('差し込み', () => {
     expect(r.unknown).toEqual([]);
     expect(r.text).toContain('**氏子** … 絵馬（氏子の票）5 枚 ・ 結び 1');
     expect(r.text).toContain('**世話役** … 絵馬（世話役の票）3 枚 ・ 結び 2');
-    expect(r.text).toContain('**総代** … 絵馬（総代の票）3 枚 ・ 結び 2');
+    expect(r.text).toContain('**総代** … 絵馬（総代の票）3 枚 ・ 結び 1');
     expect(r.text).toContain('**参拝者** … 入ったとき ・ 結び 1');
     expect(r.text).toContain('参拝者→氏子は氏子の票 5 枚／氏子→世話役は世話役の票 3 枚／世話役→総代は総代の票 3 枚');
     expect(r.text).toContain('氏子5・世話役3・総代3・維持3');

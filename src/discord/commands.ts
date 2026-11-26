@@ -52,9 +52,9 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .toJSON(),
     new SlashCommandBuilder()
       .setName(COMMAND.goshuin)
-      .setNameLocalizations({ ja: w('御朱印帳', 'プロフィール') })
+      .setNameLocalizations({ ja: w('御朱印帳', 'ご縁帳') })
       .setDescription('Show a goshuincho (shuin, goen and rank)')
-      .setDescriptionLocalizations({ ja: w('プロフィール（御朱印帳・自己紹介・ご縁）を見る。ここから朱印を押せる', 'プロフィール（自己紹介・ご縁・絵馬）を見る。ここから結べる') })
+      .setDescriptionLocalizations({ ja: w('プロフィール（御朱印帳・自己紹介・ご縁）を見る。ここから朱印を押せる', 'ご縁帳（自己紹介・ご縁・絵馬）を見る。ここから結べる') })
       .setContexts(InteractionContextType.Guild)
       .addUserOption((o) =>
         o

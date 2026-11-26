@@ -520,7 +520,7 @@ export class ShuinApp {
   /** 🧵 まだ結んでいない人（結びのコレクション）: 自分のプロフィールから。選ぶと結べる（SHUIN_PICK_ONE で give） */
   private async unmetPick(interaction: ButtonInteraction<'cached'>, viewerId: string): Promise<void> {
     if (interaction.user.id !== viewerId) {
-      await interaction.reply({ content: w('🧵 「まだ結んでいない人」は、ご自身のプロフィール（御朱印帳）から見てください。', '🧵 「まだ結んでいない人」は、ご自身のプロフィールから見てください。'), flags: MessageFlags.Ephemeral });
+      await interaction.reply({ content: w('🧵 「まだ結んでいない人」は、ご自身のプロフィール（御朱印帳）から見てください。', '🧵 「まだ結んでいない人」は、ご自身のご縁帳から見てください。'), flags: MessageFlags.Ephemeral });
       return;
     }
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
