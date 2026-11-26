@@ -1,16 +1,17 @@
-import { and, count, eq, gte, inArray, isNull } from 'drizzle-orm';
+import { and, count, eq, gte, inArray, isNotNull, isNull } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
-import { ema, emaKeepWarn, memberAlts, members, settings } from '../db/schema.js';
+import { ema, emaKeepWarn, invites, memberAlts, members, settings } from '../db/schema.js';
 import { highestRank } from '../domain/ranks.js';
-import { emaStepFrom, emaFreshSince } from '../domain/ema.js';
+import { emaStepFrom, emaFreshSince, type EmaStep } from '../domain/ema.js';
+import { ujikoProgress } from './ujikoRequirement.js';
 import { validEmaCountOf } from './ema.js';
 import { staffAlts } from './staffAlts.js';
 
 /**
  * 🎐 絵馬での昇格（新制度③）の ON/OFF。宮司が社務所Webで切り替える。
  * 既定は OFF＝従来どおり（参拝者→氏子はご縁40＋縁側20時間）。
- * ON＝参拝者→氏子は「有効な絵馬 EMA_UJIKO_PROMOTE 枚」で決める（ご縁・縁側時間は使わない）。
+ * ON＝参拝者→氏子は「お参り期間中に、毎週きまる数の絵馬（招待で補える）」で決める（ご縁・縁側時間は使わない。ujikoRequirement.ts）。
  * どちらでも自動降格はしない。今いる氏子は据え置き。
  */
 const KEY = 'ema_promotion';
@@ -39,18 +40,45 @@ async function targetMembers(db: Db): Promise<{ id: string; roleIds: string[] }[
 }
 
 /**
+ * その段で「いま数えている枚数」と「必要な枚数」。
+ * 参拝者→氏子はお参り期間中の氏子の票＋招待の補いと、毎週きまる必要数（ujikoProgress）。
+ * 氏子→世話役・世話役→総代は、有効な票の枚数と設定の枚数。
+ */
+export async function emaStepProgress(db: Db, cfg: GuildConfig, memberId: string, step: EmaStep, now = new Date()): Promise<{ count: number; need: number }> {
+  if (step.from === 'sanpaisha') {
+    const p = await ujikoProgress(db, cfg, memberId, now);
+    return { count: p.total, need: p.required };
+  }
+  return { count: await validEmaCountOf(db, memberId, now, step.tier), need: step.promote };
+}
+
+/**
  * 絵馬が必要枚数そろって、次の役職に昇格できる人の ID。
  * いまの役職の段（emaStepFrom）に応じて、数える票の種類と必要枚数が変わる：
- * 参拝者→氏子（氏子の票5）／氏子→世話役（世話役の票3）／世話役→総代（総代の票3）。
+ * 参拝者→氏子（お参り期間中・毎週きまる数・招待で補える）／氏子→世話役（世話役の票）／世話役→総代（総代の票）。
  * 運営（神職・宮司など自動役職でない位が最上位の人）は対象外。
  */
 export async function emaPromotable(db: Db, cfg: GuildConfig, now = new Date()): Promise<string[]> {
   const out: string[] = [];
-  for (const p of await targetMembers(db)) {
-    const step = emaStepFrom(highestRank(cfg.ranks, p.roleIds)?.key, cfg.emaThresholds);
-    if (!step) continue;
-    if (!cfg.ranks.some((r) => r.key === step.to)) continue;
-    if ((await validEmaCountOf(db, p.id, now, step.tier)) >= step.promote) out.push(p.id);
+  const people = (await targetMembers(db))
+    .map((p) => ({ ...p, step: emaStepFrom(highestRank(cfg.ranks, p.roleIds)?.key, cfg.emaThresholds) }))
+    .filter((p) => p.step && cfg.ranks.some((r) => r.key === p.step!.to));
+  // 毎分の見回りが重くならないよう、参拝者は「今までの氏子の票＋招待の補い」が最低の数にも届かない人を先にまとめて外す
+  const sanIds = people.filter((p) => p.step!.from === 'sanpaisha').map((p) => p.id);
+  const upper = new Map<string, number>();
+  if (sanIds.length) {
+    const [votes, inv] = await Promise.all([
+      db.select({ id: ema.receiverId, n: count() }).from(ema).where(and(inArray(ema.receiverId, sanIds), eq(ema.tier, 'ujiko'), isNull(ema.revokedAt))).groupBy(ema.receiverId),
+      db.select({ id: invites.inviterId, n: count() }).from(invites).where(and(inArray(invites.inviterId, sanIds), isNotNull(invites.rewardedAt))).groupBy(invites.inviterId),
+    ]);
+    for (const r of votes) upper.set(r.id, Number(r.n));
+    for (const r of inv) upper.set(r.id, (upper.get(r.id) ?? 0) + Math.min(Number(r.n), cfg.emaThresholds.inviteSubstituteMax));
+  }
+  for (const p of people) {
+    const step = p.step!;
+    if (step.from === 'sanpaisha' && (upper.get(p.id) ?? 0) < cfg.emaThresholds.ujikoMin) continue;
+    const { count: have, need } = await emaStepProgress(db, cfg, p.id, step, now);
+    if (have >= need) out.push(p.id);
   }
   return out;
 }

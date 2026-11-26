@@ -121,15 +121,15 @@ describe('差し込み', () => {
   it('🎐 新制度の差し込み：絵馬での上がり方・結びの重み・枚数（宮司が変えた枚数に合わせる）', () => {
     const r = renderNotice('{役職一覧（絵馬）}\n{絵馬の昇格}\n氏子{氏子の絵馬}・世話役{世話役の絵馬}・総代{総代の絵馬}・維持{維持の絵馬}', cfg, CHANNELS);
     expect(r.unknown).toEqual([]);
-    expect(r.text).toContain('**氏子** … 絵馬（氏子の票）5 枚 ・ 結び 1');
+    expect(r.text).toContain('**氏子** … お参り期間中に絵馬（氏子の票）を毎週きまる数（直近7日に縁側に10時間以上いた氏子以上の人数の6割（切り上げ・最低1枚））・招待で3つまで補える ・ 結び 1');
     expect(r.text).toContain('**世話役** … 絵馬（世話役の票）3 枚 ・ 結び 2');
     expect(r.text).toContain('**総代** … 絵馬（総代の票）3 枚 ・ 結び 1');
     expect(r.text).toContain('**参拝者** … 入ったとき ・ 結び 1');
-    expect(r.text).toContain('参拝者→氏子は氏子の票 5 枚／氏子→世話役は世話役の票 3 枚／世話役→総代は総代の票 3 枚');
-    expect(r.text).toContain('氏子5・世話役3・総代3・維持3');
-    // 枚数を変えると差し込みも変わる
-    const changed = renderNotice('{氏子の絵馬}/{世話役の絵馬}', { ...cfg, emaThresholds: { ...cfg.emaThresholds, ujikoPromote: 7, sewayakuPromote: 4 } }, CHANNELS);
-    expect(changed.text).toBe('7/4');
+    expect(r.text).toContain('参拝者→氏子はお参り期間中に氏子の票を毎週きまる数（直近7日に縁側に10時間以上いた氏子以上の人数の6割（切り上げ・最低1枚）・招待で3つまで補える）／氏子→世話役は世話役の票 3 枚／世話役→総代は総代の票 3 枚');
+    expect(r.text).toContain('氏子毎週きまる数（直近7日に縁側に10時間以上いた氏子以上の人数の6割（切り上げ・最低1枚））・世話役3・総代3・維持3');
+    // 数を変えると差し込みも変わる
+    const changed = renderNotice('{氏子の絵馬}/{世話役の絵馬}/{招待の補い}', { ...cfg, emaThresholds: { ...cfg.emaThresholds, ujikoPercent: 55, ujikoActiveMinutes: 90, ujikoMin: 2, inviteSubstituteMax: 1, sewayakuPromote: 4 } }, CHANNELS);
+    expect(changed.text).toBe('毎週きまる数（直近7日に縁側に90分以上いた氏子以上の人数の55%（切り上げ・最低2枚））/4/1');
   });
 
   it('プレビューではリンクの代わりに #名前 を出す。同じ名前ならテキストチャンネルを選ぶ', () => {

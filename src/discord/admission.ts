@@ -66,7 +66,7 @@ import type { Actor, ModCtx } from '../services/moderation.js';
 import { appendFromSender, createSoudan, setSoudanCard } from '../services/soudan.js';
 import { goshuinchoOf } from '../services/shuin.js';
 import { emaPromotionEnabled } from '../services/emaPromotion.js';
-import { validEmaCountOf } from '../services/ema.js';
+import { ujikoProgress } from '../services/ujikoRequirement.js';
 import { w } from '../domain/terms.js';
 import { coreName } from '../lib/names.js';
 import { inviteOf } from '../services/invites.js';
@@ -701,9 +701,9 @@ export class AdmissionApp {
     // 🎐 絵馬での昇格が ON のときは、判定の目安を「氏子の票の枚数」で出す（ご縁は昇格に使わないため）
     const emaOn = await emaPromotionEnabled(this.db);
     for (const memberId of r.review) {
-      const [m, card, emaCount] = await Promise.all([getMember(this.db, memberId), goshuinchoOf(this.db, memberId), emaOn ? validEmaCountOf(this.db, memberId, now) : Promise.resolve(0)]);
-      const progress = emaOn
-        ? `🎐 絵馬（氏子の票） ${emaCount} / ${this.cfg.emaThresholds.ujikoPromote} 枚 ・ ご縁 ${card.goen}`
+      const [m, card, ep] = await Promise.all([getMember(this.db, memberId), goshuinchoOf(this.db, memberId), emaOn ? ujikoProgress(this.db, this.cfg, memberId, now) : Promise.resolve(undefined)]);
+      const progress = ep
+        ? `🎐 絵馬（氏子の票） ${ep.total} / ${ep.required} 枚（期間中の票 ${ep.votes}・招待の補い ${ep.inviteUsed}）・ ご縁 ${card.goen}`
         : `ご縁 ${card.goen}${first ? ` / ${first.requiredGoen}` : ''}`;
       const embed = new EmbedBuilder()
         .setColor(SHU)

@@ -3,7 +3,7 @@ import type { AdminSession } from '../../db/schema.js';
 import type { EvaluationData, EvaluationFilter } from '../../services/ujikoEvaluation.js';
 import { fmtMinutes } from '../../services/voiceUsage.js';
 import { UJIKO_RATING_ITEMS } from '../../services/ujikoRating.js';
-import { EMA_DEFAULT_THRESHOLDS, type EmaThresholdCounts } from '../../domain/ema.js';
+import { EMA_DEFAULT_THRESHOLDS, ujikoRuleText, type EmaThresholdCounts } from '../../domain/ema.js';
 import { Layout } from './layout.js';
 
 export function evaluationQuery(filter: EvaluationFilter, selectedIds: string[], page?: number): string {
@@ -13,39 +13,42 @@ export function evaluationQuery(filter: EvaluationFilter, selectedIds: string[],
   return query.toString();
 }
 
-export function EvaluationPage({ session, data, filter, page, emaPromotion = false, keepWarnings = [], names, saved, resetFlash, resetUndoable, perkUjiko = false, perkFlash, goenPerksText = '', goenPerksFlash, emaThresholds = EMA_DEFAULT_THRESHOLDS, emaThresholdsFlash }: {
+export function EvaluationPage({ session, data, filter, page, emaPromotion = false, keepWarnings = [], names, saved, resetFlash, resetUndoable, perkUjiko = false, perkFlash, goenPerksText = '', goenPerksFlash, emaThresholds = EMA_DEFAULT_THRESHOLDS, emaThresholdsFlash, ujikoWeek }: {
   session: AdminSession; data: EvaluationData; filter: EvaluationFilter; page: number;
   emaPromotion?: boolean; keepWarnings?: { id: string; count: number }[]; names?: Map<string, string>; saved?: string;
   resetFlash?: string; resetUndoable?: { at: Date; remaining: number; specialRemaining: number };
   perkUjiko?: boolean; perkFlash?: string;
   goenPerksText?: string; goenPerksFlash?: string;
   emaThresholds?: EmaThresholdCounts; emaThresholdsFlash?: string;
+  ujikoWeek?: { week: string; active: number; required: number };
 }) {
   const pageSize = 100, pages = Math.max(1, Math.ceil(data.rows.length / pageSize));
   const current = Math.min(page, pages), rows = data.rows.slice((current - 1) * pageSize, current * pageSize);
   const nameOf = (id: string) => names?.get(id) ?? id;
+  // 参拝者→氏子の決まり（毎週きまる数）
+  const ujikoRule = `お参り期間中に氏子の票を毎週きまる数（${ujikoRuleText(emaThresholds)}）・招待で${emaThresholds.inviteSubstituteMax}つまで補える`;
   return <Layout title="評価" nav="evaluation" session={session} wide>
     <div class="evaluation-page"><h1>氏子への評価</h1>
-    {saved === 'on' && <p class="flash ok" role="status">🎐 絵馬での昇格に切り替えました。これからは参拝者は有効な絵馬{emaThresholds.ujikoPromote}枚で氏子になります。</p>}
+    {saved === 'on' && <p class="flash ok" role="status">🎐 絵馬での昇格に切り替えました。これからは参拝者は{ujikoRule}で氏子になります。</p>}
     {saved === 'off' && <p class="flash ok" role="status">従来（ご縁40＋縁側20時間）に戻しました。</p>}
     {saved === 'confirm' && <p class="flash warn" role="alert">「切り替えてよい」にチェックを入れてから押してください。</p>}
     {session.level === 'guji' && <section class="card">
       <h2>🎐 絵馬での昇格（新制度③・⑧）</h2>
       <p>いまの昇格のきまり：{emaPromotion
-        ? <strong>絵馬で昇格（参拝者は有効な絵馬{emaThresholds.ujikoPromote}枚で氏子・氏子以降も絵馬で）</strong>
+        ? <strong>絵馬で昇格（参拝者は{ujikoRule}で氏子・氏子以降も絵馬で）</strong>
         : <strong>従来どおり（下の ご縁40＋縁側20時間）</strong>}。どちらでも自動降格はせず、今いる人は据え置きです。</p>
       <form method="post" action="/evaluation/ema-promotion" class="ema-promotion-form">
         <input type="hidden" name="_csrf" value={session.csrfToken}/>
         <input type="hidden" name="on" value={emaPromotion ? '0' : '1'}/>
         <label><input type="checkbox" name="confirm" value="yes"/> 切り替えてよい</label>
-        <button type="submit">{emaPromotion ? '従来（ご縁40＋縁側20時間）に戻す' : `絵馬${emaThresholds.ujikoPromote}枚での昇格に切り替える`}</button>
+        <button type="submit">{emaPromotion ? '従来（ご縁40＋縁側20時間）に戻す' : '絵馬での昇格に切り替える'}</button>
       </form>
-      <p class="note">絵馬での昇格に切り替えると、昇格は全部<strong>絵馬</strong>で決まり、ご縁・縁側時間は使いません（参拝者→氏子は氏子の票{emaThresholds.ujikoPromote}枚／氏子→世話役は世話役の票{emaThresholds.sewayakuPromote}枚／世話役→総代は総代の票{emaThresholds.sodaiPromote}枚）。枚数は下の「絵馬の枚数」で変えられます。切り替える前に、絵馬が十分にたまっているか下の「維持の注意」で確かめてください。</p>
+      <p class="note">絵馬での昇格に切り替えると、昇格は全部<strong>絵馬</strong>で決まり、ご縁・縁側時間は使いません（参拝者→氏子は{ujikoRule}／氏子→世話役は世話役の票{emaThresholds.sewayakuPromote}枚／世話役→総代は総代の票{emaThresholds.sodaiPromote}枚）。枚数は下の「絵馬の枚数」で変えられます。切り替える前に、絵馬が十分にたまっているか下の「維持の注意」で確かめてください。</p>
       <details><summary>維持の注意：有効な絵馬が{emaThresholds.ujikoKeep}枚未満の氏子（{keepWarnings.length} 人）</summary>
         <p class="note">自動では降格しません。運営が手で判断するための一覧です（絵馬の少ない順）。</p>
         {keepWarnings.length
           ? <ul>{keepWarnings.slice(0, 100).map((w) => <li><a href={'/members/' + w.id}>{nameOf(w.id)}</a> … 絵馬 {w.count} 枚</li>)}{keepWarnings.length > 100 && <li>ほか {keepWarnings.length - 100} 人</li>}</ul>
-          : <p>3枚未満の氏子はいません。</p>}
+          : <p>{emaThresholds.ujikoKeep}枚未満の氏子はいません。</p>}
       </details>
     </section>}
     {session.level === 'guji' && <section class="card">
@@ -103,11 +106,15 @@ export function EvaluationPage({ session, data, filter, page, emaPromotion = fal
     {session.level === 'guji' && <section class="card">
       <h2>🎐 絵馬の枚数（新制度③・⑧）</h2>
       {emaThresholdsFlash === 'saved' && <p class="flash ok" role="status">絵馬の枚数を保存しました。</p>}
-      {emaThresholdsFlash === 'invalid' && <p class="flash warn" role="alert">1〜100 の数で入れてください（維持は0でもかまいません）。維持は「参拝者→氏子」の枚数以下にしてください。</p>}
+      {emaThresholdsFlash === 'invalid' && <p class="flash warn" role="alert">決められた範囲の数で入れてください（割合は1〜100%、時間は1〜168時間、最低は1〜100枚、招待の補いは0〜20、維持は0〜100、世話役・総代は1〜100）。</p>}
       <p>昇格・維持に要る絵馬（票）の枚数です。「🎐 絵馬での昇格」が ON のときに効きます。変えると次の見回り（1分ほど）から新しい枚数で判定します。</p>
+      {ujikoWeek && <p class="ujiko-week"><strong>今週（{ujikoWeek.week} からの週）の参拝者→氏子：絵馬 {ujikoWeek.required} 枚</strong>（前の7日間に縁側に{Math.round(emaThresholds.ujikoActiveMinutes / 60 * 10) / 10}時間以上いた氏子以上 {ujikoWeek.active} 人 × {emaThresholds.ujikoPercent}%・切り上げ・最低{emaThresholds.ujikoMin}枚）。この週にお参り期間が始まった人は、ずっとこの数です。</p>}
       <form method="post" action="/evaluation/ema-thresholds" class="ema-thresholds-form">
         <input type="hidden" name="_csrf" value={session.csrfToken}/>
-        <label>参拝者→氏子（氏子の票）<input type="number" name="ujikoPromote" min={1} max={100} value={emaThresholds.ujikoPromote}/></label>
+        <label>参拝者→氏子：縁側にいた氏子以上の人数の何%か<input type="number" name="ujikoPercent" min={1} max={100} value={emaThresholds.ujikoPercent}/></label>
+        <label>参拝者→氏子：数える氏子以上の、前の7日間の縁側の時間（時間）<input type="number" name="ujikoActiveHours" min={1} max={168} value={Math.max(1, Math.round(emaThresholds.ujikoActiveMinutes / 60))}/></label>
+        <label>参拝者→氏子：いちばん少ないときの枚数<input type="number" name="ujikoMin" min={1} max={100} value={emaThresholds.ujikoMin}/></label>
+        <label>参拝者→氏子：招待で補える数（招待した人が参拝者になったら1つ）<input type="number" name="inviteSubstituteMax" min={0} max={20} value={emaThresholds.inviteSubstituteMax}/></label>
         <label>氏子の維持（これ未満で注意・0で注意なし）<input type="number" name="ujikoKeep" min={0} max={100} value={emaThresholds.ujikoKeep}/></label>
         <label>氏子→世話役（世話役の票）<input type="number" name="sewayakuPromote" min={1} max={100} value={emaThresholds.sewayakuPromote}/></label>
         <label>世話役→総代（総代の票）<input type="number" name="sodaiPromote" min={1} max={100} value={emaThresholds.sodaiPromote}/></label>

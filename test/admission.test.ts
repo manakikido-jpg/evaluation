@@ -270,7 +270,8 @@ describe('お参り期間', () => {
     calls.length = 0;
     await checkOmairi(ctx, new Date(now.getTime() + 15 * DAY));
     const dm = calls.find((c) => c.startsWith(`dm ${NEW2}`)) ?? '';
-    expect(dm).toContain('絵馬（氏子の票）を 5 枚');
+    expect(dm).toContain('絵馬（氏子の票）を 1 枚あつめる'); // 縁側にいた氏子以上がいない週は最低の1枚
+    expect(dm).toContain('招待した人が参拝者になると');
     expect(dm).not.toContain('ご縁を結んで');
   });
 

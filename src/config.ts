@@ -367,8 +367,13 @@ export const goenPerksSchema = z
 /** 🎐 絵馬での昇格・維持に要る票の枚数（新制度③⑧。たたき台の既定値。宮司が社務所Webで変えられる） */
 export const emaThresholdsSchema = z
   .object({
-    /** 参拝者→氏子に要る「氏子の票」 */
-    ujikoPromote: z.number().int().min(1).max(100).default(5),
+    /** 参拝者→氏子：お参り期間中に集める氏子の票の数＝直近7日に縁側で ujikoActiveMinutes 分以上いた氏子以上の人数の ujikoPercent%（切り上げ・毎週きまる） */
+    ujikoPercent: z.number().int().min(1).max(100).default(60),
+    ujikoActiveMinutes: z.number().int().min(1).max(10080).default(600),
+    /** 参拝者→氏子の必要数の最低（だれも縁側にいない週でも 0 にしない） */
+    ujikoMin: z.number().int().min(1).max(100).default(1),
+    /** 招待で補える数（招待した人が参拝者になったら 1 つ） */
+    inviteSubstituteMax: z.number().int().min(0).max(20).default(3),
     /** これを割ると維持の注意（0なら注意なし・自動降格はしない） */
     ujikoKeep: z.number().int().min(0).max(100).default(3),
     /** 氏子→世話役に要る「世話役の票」 */

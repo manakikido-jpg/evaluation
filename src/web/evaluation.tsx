@@ -8,6 +8,8 @@ import { emaPromotionEnabled, setEmaPromotion, ujikoBelowKeep } from '../service
 import { resetAllShuin, undoAllShuinReset, lastAllShuinReset } from '../services/shuin.js';
 import { perkUjikoEnabled, setPerkUjiko } from '../services/perkGate.js';
 import { loadOverrides, saveOverrides } from '../services/settings.js';
+import { ujikoWeekRequirement } from '../services/ujikoRequirement.js';
+import { jstWeekStart } from '../domain/ema.js';
 import { goenPerkSchema, emaThresholdsSchema, type GoenPerk } from '../config.js';
 import { namesOf } from '../services/members.js';
 
@@ -60,7 +62,9 @@ export function mountEvaluation(app: Hono<Env>, db: Db, cfg: () => GuildConfig, 
       const names = keepWarnings.length ? await namesOf(db, keepWarnings.map((w) => w.id)) : new Map<string, string>();
       const resetUndoable = session.level === 'guji' ? await lastAllShuinReset(db) : undefined;
       const perkUjiko = await perkUjikoEnabled(db);
-      return c.html(<EvaluationPage session={session} data={data} filter={filter} page={page} emaPromotion={emaPromotion} keepWarnings={keepWarnings} names={names} saved={c.req.query('ema') ?? undefined} resetFlash={c.req.query('reset') ?? undefined} resetUndoable={resetUndoable} perkUjiko={perkUjiko} perkFlash={c.req.query('perk') ?? undefined} goenPerksText={goenPerksToText(cfg().goenPerks)} goenPerksFlash={c.req.query('gp') ?? undefined} emaThresholds={cfg().emaThresholds} emaThresholdsFlash={c.req.query('th') ?? undefined}/>);
+      // 🎐 今週の「参拝者→氏子に要る絵馬の数」（毎週きまる）
+      const ujikoWeek = session.level === 'guji' ? await ujikoWeekRequirement(db, cfg(), jstWeekStart(now())) : undefined;
+      return c.html(<EvaluationPage ujikoWeek={ujikoWeek} session={session} data={data} filter={filter} page={page} emaPromotion={emaPromotion} keepWarnings={keepWarnings} names={names} saved={c.req.query('ema') ?? undefined} resetFlash={c.req.query('reset') ?? undefined} resetUndoable={resetUndoable} perkUjiko={perkUjiko} perkFlash={c.req.query('perk') ?? undefined} goenPerksText={goenPerksToText(cfg().goenPerks)} goenPerksFlash={c.req.query('gp') ?? undefined} emaThresholds={cfg().emaThresholds} emaThresholdsFlash={c.req.query('th') ?? undefined}/>);
     } catch (error) {
       if (!(error instanceof EvaluationSelectionError)) throw error;
       return c.text(error.message, 400);
@@ -130,13 +134,15 @@ export function mountEvaluation(app: Hono<Env>, db: Db, cfg: () => GuildConfig, 
     const body = await c.req.parseBody();
     const num = (name: string) => (typeof body[name] === 'string' && /^\d{1,3}$/.test(body[name] as string) ? Number(body[name]) : NaN);
     const parsed = emaThresholdsSchema.safeParse({
-      ujikoPromote: num('ujikoPromote'),
+      ujikoPercent: num('ujikoPercent'),
+      ujikoActiveMinutes: Number.isNaN(num('ujikoActiveHours')) ? NaN : num('ujikoActiveHours') * 60,
+      ujikoMin: num('ujikoMin'),
+      inviteSubstituteMax: num('inviteSubstituteMax'),
       ujikoKeep: num('ujikoKeep'),
       sewayakuPromote: num('sewayakuPromote'),
       sodaiPromote: num('sodaiPromote'),
     });
-    // 維持が昇格より多いと、氏子に上がった瞬間から「維持不足」になってしまうので断る
-    if (!parsed.success || parsed.data.ujikoKeep > parsed.data.ujikoPromote) return c.redirect('/evaluation?th=invalid', 303);
+    if (!parsed.success) return c.redirect('/evaluation?th=invalid', 303);
     await saveOverrides(db, { ...(await loadOverrides(db)), emaThresholds: parsed.data }, session.userId);
     await audit(db, { actorId: session.userId, action: 'ema.thresholds_edit', detail: parsed.data, via: 'web' });
     return c.redirect('/evaluation?th=saved', 303);

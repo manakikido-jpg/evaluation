@@ -49,11 +49,12 @@ it('絵馬での昇格の ON/OFF（既定は OFF）', async () => {
   expect(await emaPromotionEnabled(db)).toBe(false);
 });
 
-it('参拝者で有効な氏子の票5枚以上の人を昇格候補に出す（4枚以下・失効分は出さない）', async () => {
+it('参拝者は必要数（ここでは最低5枚）に届いた人を昇格候補に出す（お参り期間がなければ直近14日の票で・古い票は数えない）', async () => {
+  const five = withThresholds({ ujikoMin: 5 });
   await seedEma(SA, 5); // 候補
   await seedEma(SA2, 4); // 足りない
-  await seedEma(SA, 2, true); // 失効分は数えない（SAは有効5枚のまま）
-  expect(await emaPromotable(db, cfg, now)).toEqual([SA]);
+  await seedEma(SA2, 2, true); // 直近14日より前は数えない（SA2は4枚のまま）
+  expect(await emaPromotable(db, five, now)).toEqual([SA]);
 });
 
 it('氏子は世話役の票3枚で昇格候補に（氏子の票では上がらない・世話役の票は失効なし）', async () => {

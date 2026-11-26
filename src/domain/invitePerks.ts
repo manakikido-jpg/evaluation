@@ -17,5 +17,5 @@ export function inviteGoenTier(ranks: readonly Rank[], roleIds: readonly string[
 }
 
 /** 評価期間の延長：招待1人あたりの日数と、招待でのばせる合計の上限（日） */
-export const INVITE_OMAIRI_EXT_DAYS = 3;
-export const INVITE_OMAIRI_EXT_CAP_DAYS = 14;
+export const INVITE_OMAIRI_EXT_DAYS = 1;
+export const INVITE_OMAIRI_EXT_CAP_DAYS = Number.POSITIVE_INFINITY;

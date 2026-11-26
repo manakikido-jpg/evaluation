@@ -25,8 +25,14 @@ export const EMA_MINUTES_TOGETHER = 180; // 合計◯分以上
 /** 氏子の票は created_at から◯日で失効（世話役・総代の票は失効なし） */
 export const EMA_EXPIRE_DAYS = 30;
 
-/** 参拝者→氏子に必要な有効な絵馬の枚数 */
-export const EMA_UJIKO_PROMOTE = 5;
+/**
+ * 参拝者→氏子の必要数（毎週きまる）：直近7日に縁側で EMA_UJIKO_ACTIVE_MINUTES 分以上いた氏子以上の人数の
+ * EMA_UJIKO_PERCENT%（切り上げ・最低 EMA_UJIKO_MIN）。お参り期間中にもらった氏子の票＋招待の補い（EMA_INVITE_SUBSTITUTE_MAX まで）で数える。
+ */
+export const EMA_UJIKO_PERCENT = 60;
+export const EMA_UJIKO_ACTIVE_MINUTES = 600;
+export const EMA_UJIKO_MIN = 1;
+export const EMA_INVITE_SUBSTITUTE_MAX = 3;
 
 /** これを割ると維持の警告（自動では降格しない） */
 export const EMA_UJIKO_KEEP = 3;
@@ -73,7 +79,10 @@ export interface EmaStep {
 
 /** 絵馬の昇格・維持に要る票の枚数（宮司が社務所Webで変えられる。config.emaThresholds と同じ形） */
 export interface EmaThresholdCounts {
-  ujikoPromote: number;
+  ujikoPercent: number;
+  ujikoActiveMinutes: number;
+  ujikoMin: number;
+  inviteSubstituteMax: number;
   ujikoKeep: number;
   sewayakuPromote: number;
   sodaiPromote: number;
@@ -81,7 +90,10 @@ export interface EmaThresholdCounts {
 
 /** 既定の枚数（たたき台）。設定がないときのフォールバック。 */
 export const EMA_DEFAULT_THRESHOLDS: EmaThresholdCounts = {
-  ujikoPromote: EMA_UJIKO_PROMOTE,
+  ujikoPercent: EMA_UJIKO_PERCENT,
+  ujikoActiveMinutes: EMA_UJIKO_ACTIVE_MINUTES,
+  ujikoMin: EMA_UJIKO_MIN,
+  inviteSubstituteMax: EMA_INVITE_SUBSTITUTE_MAX,
   ujikoKeep: EMA_UJIKO_KEEP,
   sewayakuPromote: EMA_SEWAYAKU_PROMOTE,
   sodaiPromote: EMA_SODAI_PROMOTE,
@@ -90,7 +102,8 @@ export const EMA_DEFAULT_THRESHOLDS: EmaThresholdCounts = {
 /** 枚数の設定から、絵馬の昇格の段を作る。 */
 export function emaSteps(th: EmaThresholdCounts = EMA_DEFAULT_THRESHOLDS): EmaStep[] {
   return [
-    { from: 'sanpaisha', to: 'ujiko', tier: 'ujiko', promote: th.ujikoPromote },
+    // 参拝者→氏子の必要数は毎週きまる（ujikoRequirement）。ここの promote は最低の数（目安）
+    { from: 'sanpaisha', to: 'ujiko', tier: 'ujiko', promote: th.ujikoMin },
     { from: 'ujiko', to: 'sewayaku', tier: 'sewayaku', promote: th.sewayakuPromote },
     { from: 'sewayaku', to: 'sodai', tier: 'sodai', promote: th.sodaiPromote },
   ];
@@ -126,4 +139,30 @@ export function emaTierFor(opts: {
   }
   if (receiverKey === 'sewayaku') return atLeast(opts.sodaiWeight) ? 'sodai' : null;
   return null;
+}
+
+/** 参拝者→氏子の必要数：アクティブな氏子以上の人数 × percent%（切り上げ・最低 min） */
+export function ujikoRequirementFrom(activeCount: number, th: Pick<EmaThresholdCounts, 'ujikoPercent' | 'ujikoMin'>): number {
+  return Math.max(th.ujikoMin, Math.ceil((activeCount * th.ujikoPercent) / 100));
+}
+
+/** 日本時間で、その時刻が入っている週の月曜日（YYYY-MM-DD） */
+export function jstWeekStart(at: Date): string {
+  const d = new Date(new Date(at.getTime() + 9 * 3_600_000).toISOString().slice(0, 10) + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+}
+
+/** YYYY-MM-DD に日数を足す */
+export function addDays(date: string, days: number): string {
+  const d = new Date(date + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** 参拝者→氏子の必要数の決まりを、やさしい言葉で（掲示・案内に使う） */
+export function ujikoRuleText(th: Pick<EmaThresholdCounts, 'ujikoPercent' | 'ujikoActiveMinutes' | 'ujikoMin'>): string {
+  const time = th.ujikoActiveMinutes % 60 === 0 ? `${th.ujikoActiveMinutes / 60}時間` : `${th.ujikoActiveMinutes}分`;
+  const rate = th.ujikoPercent % 10 === 0 ? `${th.ujikoPercent / 10}割` : `${th.ujikoPercent}%`;
+  return `直近7日に縁側に${time}以上いた氏子以上の人数の${rate}（切り上げ・最低${th.ujikoMin}枚）`;
 }

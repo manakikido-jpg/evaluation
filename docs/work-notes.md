@@ -1,3 +1,16 @@
+## 2026年11月26日：参拝者→氏子の条件を「期間内に毎週きまる数の絵馬」に変更（Claude・全テスト待ち→push予定）
+- 依頼：14日のあいだに必要な数の絵馬を集める。必要な数は毎週変わる＝直近7日間に縁側で10時間以上いた氏子以上の人数の6割。招待で3つまで補える。招待すると14日の期間を延ばせる（1人1日・上限なし）。
+- 確認した決定（本人回答）：端数は切り上げ・最低1枚／その人のお参り期間が始まった週の数で固定／招待は「招待した人が参拝者になったら」1つ／数える絵馬はお参り期間中にもらったものだけ。
+- 守ること：新制度（絵馬での昇格ON）のときだけ効く＝スタート前の本番の動きは変えない。世話役・総代の段・維持（3枚）はそのまま。全テストを通してから push。
+- 実装（ローカル）：
+  - `src/services/ujikoRequirement.ts` 新規：activeUjikoPlusCount（週の前の月〜日・縁側 voice_usage.minutes の合計が基準以上の、在籍の氏子以上。BOT・抜けた人・運営サブ・承認ずみサブを除く）／ujikoWeekActive（settings `ema_ujiko_week:YYYY-MM-DD` に週の人数を固定。時間の基準を変えたら数え直す）／ujikoProgress（お参り期間 ongoing/review の [開始, 終了または今] の氏子の票＋その間に参拝者になった招待を inviteSubstituteMax まで。お参り期間がない参拝者は直近14日＋今週の数）。
+  - config emaThresholds：ujikoPromote をやめて ujikoPercent60・ujikoActiveMinutes600・ujikoMin1・inviteSubstituteMax3（保存ずみの上書きは zod が既定で補う）。domain/ema.ts に ujikoRequirementFrom・jstWeekStart・addDays・ujikoRuleText。
+  - emaPromotion.emaStepProgress（参拝者の段だけ ujikoProgress）を emaPromotable と app.emaPromote が使う。ご縁帳は「お参り期間中に絵馬 N 枚・いま M 枚・あと K 枚」。#お参り判定 カード・延長DM・掲示 {氏子の絵馬}（式の文）・新しい {招待の補い}・結びの掲示文（musubiSwitch FULL）・評価ページ（今週の必要数と編集欄）。
+  - invitePerks：招待1人+1日・上限なし。
+  - 説明書・設計書・手順書・user-decisions・更新履歴（announcement required）。
+- 検証：typecheck OK。関係テスト（ujikoRequirement 新規8件・emaPromotion・invites・notices・web・musubiTerms・changelog）通過。全テストは実行中。
+- 次：全テスト通過 → fetch → commit → push。
+
 ## 2026年11月26日：新制度のスタートは本人が押す（Claude・記録のみ）
 - 準備は完了（cf3ac2e・全テスト3128・通し稽古 app.test.ts「新制度ローンチの通し稽古」）。
 - 本人の決定：スタート（社務所Web「評価」で ③絵馬での昇格ON → ④ご縁のリセット → ⑤特典のゲートON）は**本人が自分で押す**。Claude は本番のスイッチを押さない（全員に影響・④は押した直後しか戻せない・本番の操作手段もない）。

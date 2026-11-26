@@ -520,7 +520,7 @@ describe('お参り期間（Discord）', () => {
     await app.checkOmairi(new Date('2026-08-20T00:00:00Z'));
     await app.checkOmairi(new Date('2026-09-20T00:00:00Z'));
     const card = sent.find((s) => s.channelId === OMAIRI)!;
-    expect(card.payload.embeds?.[0]?.description).toContain('絵馬（氏子の票） 0 / 5 枚');
+    expect(card.payload.embeds?.[0]?.description).toContain('絵馬（氏子の票） 0 / 1 枚（期間中の票 0・招待の補い 0）');
   });
 
   it('判定待ちになった人を #お参り判定 に出し、ボタンで判定', async () => {

@@ -734,15 +734,17 @@ describe('ShuinApp：絵馬を贈る（新制度②）', () => {
     expect(JSON.stringify(press.replies)).toContain(SA);
   });
 
-  it('絵馬での昇格がONでも、4枚では昇格しない', async () => {
+  it('絵馬での昇格がONでも、必要数（ここでは5枚）に届かない4枚では昇格しない', async () => {
     await seedMembers();
     await seedTogether(3);
     const { setEmaPromotion } = await import('../src/services/emaPromotion.js');
     await setEmaPromotion(db, true, 'guji');
     await seedExistingEma(SA, 3); // GUの1枚で4枚どまり
+    // 必要数は毎週きまる（縁側にいた氏子以上の6割）。ここでは最低を5枚にして確かめる
+    const strict = new ShuinApp((app as unknown as { client: never }).client, db, { ...cfg, emaThresholds: { ...cfg.emaThresholds, ujikoMin: 5 } });
     const giver = members.get(GU)!;
-    await app.onInteraction(interaction('button', giver, { customId: emaGiveId(SA) }).i as never);
-    await app.onInteraction(interaction('modal', giver, { customId: emaModalId(SA), fields: { getTextInputValue: () => 'よろしく' } }).i as never);
+    await strict.onInteraction(interaction('button', giver, { customId: emaGiveId(SA) }).i as never);
+    await strict.onInteraction(interaction('modal', giver, { customId: emaModalId(SA), fields: { getTextInputValue: () => 'よろしく' } }).i as never);
     expect([...members.get(SA)!.roles.cache.keys()]).not.toContain(ROLE.ujiko);
   });
 });
@@ -764,7 +766,7 @@ describe('🌸 新制度ローンチの通し稽古（③→④→⑤→元に�
       // ── 準備（ローンチ前の本番に近い状態） ──
       const SA = ['400000000000000081', '400000000000000082', '400000000000000083', '400000000000000084']; // 参拝者・氏子の票5枚
       const UJ = '400000000000000085'; // 氏子・世話役の票3枚
-      const SB = '400000000000000086'; // 参拝者・氏子の票2枚（まだ上がらない）
+      const SB = '400000000000000086'; // 参拝者・絵馬なし（まだ上がらない。必要数は縁側にいた氏子以上がいない週なので最低の1枚）
       const K = '400000000000000087'; // 氏子・旧制度のご縁300（特典の一斉払いの事故が起きやすい人）
       const join = async (id: string, role: string) => {
         await recordJoin(db, { id, username: id.slice(-3), displayName: `u${id.slice(-2)}`, avatarUrl: null, roleIds: [role], isBot: false, joinedAt: new Date() });
@@ -774,7 +776,7 @@ describe('🌸 新制度ローンチの通し稽古（③→④→⑤→元に�
         db.insert(ema).values(Array.from({ length: n }, (_, i) => ({ giverId: String(base + BigInt(i)), receiverId, tier, message: '', createdAt: new Date(), revokedAt: null })));
       for (const [k, id] of SA.entries()) { await join(id, ROLE.sanpaisha); await votes(id, 5, 'ujiko', 4780000000000000000n + BigInt(k * 10)); }
       await join(UJ, ROLE.ujiko); await votes(UJ, 3, 'sewayaku', 4790000000000000000n);
-      await join(SB, ROLE.sanpaisha); await votes(SB, 2, 'ujiko', 4791000000000000000n);
+      await join(SB, ROLE.sanpaisha);
       await join(K, ROLE.ujiko);
       await db.insert(shuin).values({ giverId: '401000000000000099', receiverId: K, weight: 300, giverRank: 'guji' });
 
@@ -826,7 +828,7 @@ describe('🌸 新制度ローンチの通し稽古（③→④→⑤→元に�
       await tick();
       for (const id of SA) expect([...members.get(id)!.roles.cache.keys()]).toContain(ROLE.ujiko); // 氏子の票5枚 → 氏子
       expect([...members.get(UJ)!.roles.cache.keys()]).toContain(ROLE.sewayaku); // 世話役の票3枚 → 世話役
-      expect([...members.get(SB)!.roles.cache.keys()]).not.toContain(ROLE.ujiko); // 2枚はまだ
+      expect([...members.get(SB)!.roles.cache.keys()]).not.toContain(ROLE.ujiko); // 絵馬なしはまだ
       const keiji = sent.filter((s) => s.channelId === cfg.channels.keiji);
       expect(keiji.filter((s) => s.embeds?.length)).toHaveLength(5); // 1人ずつのカード
       expect(keiji.filter((s) => s.embeds?.length).every((s) => !(s.content ?? '').includes('<@&'))).toBe(true); // 通知なし

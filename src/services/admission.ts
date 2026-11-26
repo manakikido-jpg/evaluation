@@ -26,6 +26,7 @@ import { notifyOf, notifyReady, setNotify } from './notify.js';
 import { checkTarget, SYSTEM, type Actor, type ModCtx } from './moderation.js';
 import { appendFromStaff, getSoudan, senderOf, setSoudanStatus } from './soudan.js';
 import { emaPromotionEnabled } from './emaPromotion.js';
+import { ujikoProgress } from './ujikoRequirement.js';
 
 /**
  * 入鯖申請・宵参り申請・お参り期間・年齢区分・相談の返信。
@@ -383,7 +384,7 @@ export async function checkOmairi(ctx: ModCtx, now = new Date()): Promise<{ prom
       await extendOmairi(ctx.db, o.memberId, ext, now);
       // 🎐 絵馬での昇格が ON のときは、氏子への道は「絵馬」なので、そう案内する
       const how = (await emaPromotionEnabled(ctx.db))
-        ? `引き続き、通話でいっしょに過ごしてください。氏子以上の方から絵馬（氏子の票）を ${ctx.cfg.emaThresholds.ujikoPromote} 枚もらうと氏子になれます。`
+        ? `引き続き、通話でいっしょに過ごしてください。お参り期間中に、氏子以上の方から絵馬（氏子の票）を ${(await ujikoProgress(ctx.db, ctx.cfg, o.memberId, now)).required} 枚あつめると氏子になれます（招待した人が参拝者になると、${ctx.cfg.emaThresholds.inviteSubstituteMax}つまで1つ分になります）。`
         : '引き続き、ご縁を結んでいってください。';
       await ctx.discord.sendDm(o.memberId, [SIGN, `お参り期間を ${ext} 日延長しました。${how}`].join('\n'));
       out.extended.push(o.memberId);

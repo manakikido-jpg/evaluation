@@ -179,7 +179,7 @@ export function goshuinchoReply(
   data: GoshuinchoData,
   coins?: { emoji: string; name: string; balance: number },
   profile: ProfileExtra = {},
-  ema?: { count: number; messages: { message: string; createdAt: Date }[]; promoteMode?: boolean; step?: { toName: string; need: number } },
+  ema?: { count: number; messages: { message: string; createdAt: Date }[]; promoteMode?: boolean; step?: { toName: string; need: number; have?: number; inPeriod?: boolean } },
   collection?: { total: number; met: number },
 ): Reply {
   const rank = highestRank(ranks, owner.roleIds);
@@ -189,7 +189,10 @@ export function goshuinchoReply(
   let nextText = '';
   if (auto) {
     if (ema?.promoteMode && ema.step) {
-      nextText = `（${ema.step.toName}の条件：絵馬 ${ema.step.need} 枚・あと ${Math.max(0, ema.step.need - ema.count)} 枚）`;
+      const have = ema.step.have ?? ema.count;
+      nextText = ema.step.inPeriod
+        ? `（${ema.step.toName}の条件：お参り期間中に絵馬 ${ema.step.need} 枚・いま ${have} 枚・あと ${Math.max(0, ema.step.need - have)} 枚）`
+        : `（${ema.step.toName}の条件：絵馬 ${ema.step.need} 枚・あと ${Math.max(0, ema.step.need - have)} 枚）`;
     } else if (!ema?.promoteMode && auto.key === 'sanpaisha') {
       nextText = '（氏子の条件：ご縁40＋縁側20時間）';
     } else if (!ema?.promoteMode && next) {

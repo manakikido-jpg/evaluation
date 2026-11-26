@@ -41,7 +41,7 @@ import type { Db } from '../db/client.js';
 import { currentAutoRank, decidePromotion, highestRank, voiceCapPercentOf, voicePercentOf, type Promotion } from '../domain/ranks.js';
 import { emaStepFrom, EMA_PROMOTION_BURST, EMA_TIER_LABEL } from '../domain/ema.js';
 import { w } from '../domain/terms.js';
-import { collectEmaKeepWarnings, emaPromotable, emaPromotionEnabled } from '../services/emaPromotion.js';
+import { collectEmaKeepWarnings, emaPromotable, emaPromotionEnabled, emaStepProgress } from '../services/emaPromotion.js';
 import { grantGoenPerks } from '../services/goenPerks.js';
 import { KeyedLock } from '../lib/lock.js';
 import { logger } from '../lib/logger.js';
@@ -562,7 +562,16 @@ export class ShuinApp {
       emaMessagesOf(this.db, ownerId, undefined, emaTier),
       emaPromotionEnabled(this.db),
     ]);
-    const emaStepInfo = ownerStep ? { toName: this.cfg.ranks.find((r) => r.key === ownerStep.to)?.name ?? ownerStep.to, need: ownerStep.promote } : undefined;
+    // 参拝者→氏子は「お参り期間中の票＋招待の補い」と「毎週きまる必要数」で案内する
+    const stepProgress = ownerStep && emaMode ? await emaStepProgress(this.db, this.cfg, ownerId, ownerStep) : undefined;
+    const emaStepInfo = ownerStep
+      ? {
+          toName: this.cfg.ranks.find((r) => r.key === ownerStep.to)?.name ?? ownerStep.to,
+          need: stepProgress?.need ?? ownerStep.promote,
+          have: stepProgress?.count,
+          inPeriod: ownerStep.from === 'sanpaisha',
+        }
+      : undefined;
     const ticketText = tickets ? allTicketsLine(tickets, await customHoldingsOf(this.db, ownerId)) : undefined;
     // 🧵 結びのコレクションは自分のプロフィールだけ
     const collection = interaction.user.id === ownerId ? await metCollection(this.db, ownerId) : undefined;
@@ -708,7 +717,7 @@ export class ShuinApp {
     this.checkingEvaluationPromotions = true;
     try {
       // 🎐 絵馬での昇格が ON のときは、昇格を全部「絵馬」で決める（ご縁・縁側時間は使わない）。
-      // 参拝者→氏子（氏子の票5）／氏子→世話役（世話役の票3）／世話役→総代（総代の票3）。
+      // 参拝者→氏子（お参り期間中・毎週きまる数・招待で補える）／氏子→世話役（世話役の票）／世話役→総代（総代の票）。
       if (await emaPromotionEnabled(this.db)) {
         const ids = await emaPromotable(this.db, this.cfg, now);
         // 🌸 切り替えた直後など、いっぺんに大勢が上がるときは、1人ずつの発表で役職の通知を鳴らしつづけない。
@@ -739,7 +748,7 @@ export class ShuinApp {
 
   /**
    * 🎐 絵馬での昇格。いまの役職の段に応じて票の種類と必要枚数を見る：
-   * 参拝者→氏子（氏子の票5）／氏子→世話役（世話役の票3）／世話役→総代（総代の票3）。
+   * 参拝者→氏子（お参り期間中・毎週きまる数・招待で補える）／氏子→世話役（世話役の票）／世話役→総代（総代の票）。
    * ご縁・縁側時間は見ない。自動降格はしない。運営（最上位が自動役職でない人）は対象外。
    */
   private async emaPromote(member: GuildMember, now = new Date(), opts: { quiet?: boolean } = {}): Promise<boolean> {
@@ -747,7 +756,10 @@ export class ShuinApp {
     // まずキャッシュの役職で「段があり、必要枚数に届いている」かを安く確かめる（毎回の force 取得を避ける）
     const cachedStep = emaStepFrom(highestRank(this.cfg.ranks, member.roles.cache.keys())?.key, this.cfg.emaThresholds);
     if (!cachedStep) return false;
-    if ((await validEmaCountOf(this.db, member.id, now, cachedStep.tier)) < cachedStep.promote) return false;
+    {
+      const p = await emaStepProgress(this.db, this.cfg, member.id, cachedStep, now);
+      if (p.count < p.need) return false;
+    }
     // 昇格しそうなときだけ、最新の役職を取り直して二重昇格を防ぐ
     const fresh = await member.guild.members.fetch({ user: member.id, force: true }).catch(() => undefined);
     if (!fresh || fresh.user.bot) return false;
@@ -757,8 +769,8 @@ export class ShuinApp {
     if (!step || !current || current.key !== step.from) return false;
     const to = this.cfg.ranks.find((r) => r.key === step.to);
     if (!to) return false;
-    const count = await validEmaCountOf(this.db, fresh.id, now, step.tier);
-    if (count < step.promote) return false;
+    const { count, need } = await emaStepProgress(this.db, this.cfg, fresh.id, step, now);
+    if (count < need) return false;
     const held = new Set(fresh.roles.cache.keys());
     const removeRoleIds = autoRanks(this.cfg.ranks).filter((r) => r.key !== step.to && held.has(r.roleId)).map((r) => r.roleId);
     return this.promote(fresh, { from: current, to, removeRoleIds }, await goenOf(this.db, fresh.id), count, opts);
