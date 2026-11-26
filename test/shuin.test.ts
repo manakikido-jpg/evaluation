@@ -20,19 +20,22 @@ const B = '200000000000000002';
 const C = '200000000000000003';
 
 describe('🧵 結びのコレクション', () => {
-  it('まだ結んでいない人を、最近きた順に出す（自分・結んだ相手はのぞく）', async () => {
+  it('通話でいっしょになった人のうち、まだ結んでいない人を、最近きた順に出す（いっしょになっていない人・自分・結んだ相手はのぞく）', async () => {
     const { metCollection } = await import('../src/services/shuin.js');
-    const { members } = await import('../src/db/schema.js');
+    const { members, voicePairs } = await import('../src/db/schema.js');
+    const D = '200000000000000004';
     await db.insert(members).values([
       { id: A, username: 'a', displayName: 'エー', roleIds: [] },
       { id: B, username: 'b', displayName: 'ビー', roleIds: [], lastActiveAt: new Date('2026-11-20') },
       { id: C, username: 'c', displayName: 'シー', roleIds: [], lastActiveAt: new Date('2026-11-23') },
+      { id: D, username: 'd', displayName: 'ディー', roleIds: [], lastActiveAt: new Date('2026-11-25') }, // 通話でいっしょになっていない
     ]);
+    await db.insert(voicePairs).values([{ memberA: A, memberB: B, date: '2026-11-20', minutes: 30 }, { memberA: A, memberB: C, date: '2026-11-21', minutes: 10 }]);
     await giveShuin(db, { giverId: A, receiverId: B, weight: 1, giverRank: 'sanpaisha' });
     const col = await metCollection(db, A);
-    expect(col.total).toBe(2); // B・C（自分Aはのぞく）
+    expect(col.total).toBe(2); // B・C（いっしょになっていないDと自分Aはのぞく）
     expect(col.met).toBe(1); // Bと結んだ
-    expect(col.unmet.map((u) => u.id)).toEqual([C]); // まだCだけ
+    expect(col.unmet.map((u) => u.id)).toEqual([C]); // まだCだけ（Dは出さない）
   });
 });
 

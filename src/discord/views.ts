@@ -23,7 +23,7 @@ import { emaCardId, emaGiveId, emaModalId, sewayakuVoteId, shuinId } from './ids
 import type { CandidateStatus, VoterStatus, VoteResult } from '../services/sewayakuElection.js';
 import type { UjikoProgress } from '../services/ujikoRequirement.js';
 import type { EmaThresholdCounts } from '../domain/ema.js';
-import { w } from '../domain/terms.js';
+import { w, isMusubiMode } from '../domain/terms.js';
 
 /** 朱色 */
 export const SHU = 0xd7003a;
@@ -374,7 +374,8 @@ export function goshuinchoReply(
     { name: w('最近の朱印', '最近結んでくれた人'), value: recent },
     { name: w('押した朱印', '結んだ人'), value: `${data.givenCount} 人`, inline: true },
   ];
-  const collectionField = profile.self && collection
+  // 🧵 結びのコレクションは結びの機能なので、④（新制度のご縁の時代）が始まるまで出さない
+  const collectionField = profile.self && collection && isMusubiMode()
     ? { name: '🧵 結びのコレクション', value: `${collection.met} / ${collection.total} 人${collection.met < collection.total ? '（下の「まだ結んでいない人」から結べます）' : '（コンプリート！）'}`, inline: true }
     : undefined;
   const embed = new EmbedBuilder().setColor(SHU);
@@ -395,7 +396,7 @@ export function goshuinchoReply(
     if (profile.bannerUrl) embed.setImage(profile.bannerUrl);
     const buttons = [
       ...(profile.self ? [] : [giveButton(owner.id)]),
-      ...(profile.self ? [unmetButton(owner.id)] : []),
+      ...(profile.self && isMusubiMode() ? [unmetButton(owner.id)] : []),
       listButton(owner.id),
     ];
     return { embeds: [embed.toJSON()], components: [row(...buttons)] };
@@ -408,7 +409,7 @@ export function goshuinchoReply(
     embed.addFields(...goenFields);
     if (collectionField) embed.addFields(collectionField);
     const buttons = [
-      ...(profile.self ? [unmetButton(owner.id)] : [giveButton(owner.id)]),
+      ...(profile.self ? (isMusubiMode() ? [unmetButton(owner.id)] : []) : [giveButton(owner.id)]),
       listButton(owner.id),
     ];
     return { embeds: [embed.toJSON()], components: [row(...buttons)] };

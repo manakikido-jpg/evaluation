@@ -40,7 +40,7 @@ import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { currentAutoRank, decidePromotion, highestRank, voiceCapPercentOf, voicePercentOf, type Promotion } from '../domain/ranks.js';
 import { emaStepFrom, EMA_PROMOTION_BURST, EMA_TIER_LABEL } from '../domain/ema.js';
-import { w } from '../domain/terms.js';
+import { w, isMusubiMode } from '../domain/terms.js';
 import { collectEmaKeepWarnings, emaPromotable, emaPromotionEnabled, emaStepProgress } from '../services/emaPromotion.js';
 import { ujikoProgress } from '../services/ujikoRequirement.js';
 import { candidateStatus, closeDueSewayakuElections, currentElectionOf, finishSewayakuElection, hasSewayakuVote, listSewayakuElections, openSewayakuElections, scheduleSewayakuElections, setSewayakuElectionMessage, toggleSewayakuVote, voterStatus } from '../services/sewayakuElection.js';
@@ -636,9 +636,12 @@ export class ShuinApp {
       return;
     }
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    // 結びは④（新制度のご縁の時代）が始まってから（前に出したボタンが残っていても）
+    if (!isMusubiMode()) return void (await interaction.editReply({ content: '🧵 結びは、新制度が始まってからです。', components: [] }));
     const { total, met, unmet } = await metCollection(this.db, viewerId);
+    if (!total) return void (await interaction.editReply({ content: '🧵 まだ通話でいっしょになった方がいません。通話でいっしょに過ごした方が、ここに出ます。', components: [] }));
     if (!unmet.length) {
-      await interaction.editReply({ content: `🧵 もうみなさんと結びました（${met} / ${total} 人・コンプリート！）。`, components: [] });
+      await interaction.editReply({ content: `🧵 通話でいっしょになったみなさんと結びました（${met} / ${total} 人・コンプリート！）。`, components: [] });
       return;
     }
     const menu = new StringSelectMenuBuilder()
@@ -646,7 +649,7 @@ export class ShuinApp {
       .setPlaceholder('結ぶ相手をえらぶ')
       .addOptions(unmet.map((x) => ({ label: x.name.slice(0, 100) || x.id, value: x.id })));
     await interaction.editReply({
-      content: `🧵 まだ結んでいない人（いま ${met} / ${total} 人）。最近きた順に ${unmet.length} 人出しています。えらぶと結べます。`,
+      content: `🧵 通話でいっしょになったのに、まだ結んでいない人（いま ${met} / ${total} 人）。最近きた順に ${unmet.length} 人出しています。えらぶと結べます。`,
       components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu)],
     });
   }

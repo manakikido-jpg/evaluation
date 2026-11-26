@@ -846,18 +846,34 @@ describe('ShuinApp：絵馬を贈る（新制度②）', () => {
     expect((await walletOf(db, RCV)).balance).toBe(500);
   });
 
-  it('🧵 自分の御朱印帳に結びのコレクションが出て、まだ結んでいない人を結べる', async () => {
+  it('🧵 結びのコレクションは④の前は出さない。④のあとは、通話でいっしょになったのにまだ結んでいない人を結べる', async () => {
     await seedMembers();
     const viewer = members.get(GU)!;
-    const show = interaction('slash', viewer, { commandName: 'goshuin', options: { getUser: () => viewer.user, getBoolean: () => null } });
-    await app.onInteraction(show.i as never);
-    const embed = show.replies.at(-1)?.embeds?.[0];
+    const showOwn = async () => {
+      const show = interaction('slash', viewer, { commandName: 'goshuin', options: { getUser: () => viewer.user, getBoolean: () => null } });
+      await app.onInteraction(show.i as never);
+      return show.replies.at(-1);
+    };
+    // ④の前：欄もボタンも出ない。前のボタンを押しても始まっていない
+    expect(JSON.stringify(await showOwn())).not.toContain('結びのコレクション');
+    expect(JSON.stringify(await showOwn())).not.toContain(`shuin:unmet:${GU}`);
+    const early = interaction('button', viewer, { customId: `shuin:unmet:${GU}` });
+    await app.onInteraction(early.i as never);
+    expect(JSON.stringify(early.replies)).toContain('新制度が始まってから');
+    // ④のあと（結びの言葉）：通話でいっしょになったSAが出る
+    const { setMusubiMode } = await import('../src/domain/terms.js');
+    const { setEmaPromotion } = await import('../src/services/emaPromotion.js');
+    await setEmaPromotion(db, true, 'guji');
+    setMusubiMode(true);
+    await seedTogether(1);
+    const embed = (await showOwn())?.embeds?.[0];
     const fields = (embed as { fields?: { name: string; value: string }[] } | undefined)?.fields ?? [];
     expect(fields.some((f) => f.name.includes('結びのコレクション'))).toBe(true);
     // 「まだ結んでいない人」ボタン → 選ぶ欄に参拝者SAが出る
     const press = interaction('button', viewer, { customId: `shuin:unmet:${GU}` });
     await app.onInteraction(press.i as never);
     expect(JSON.stringify(press.replies)).toContain(SA);
+    setMusubiMode(false);
   });
 
   it('絵馬での昇格がONでも、必要数（ここでは5枚）に届かない4枚では昇格しない', async () => {

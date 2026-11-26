@@ -1,7 +1,7 @@
 import { isRestrictedAccount as isStaffAlt } from './staffAlts.js';
 import { and, count, desc, eq, gte, inArray, isNotNull, isNull, sql, sum } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
-import { auditLogs as auditLog, members, settings, shuin, specialGoen } from '../db/schema.js';
+import { auditLogs as auditLog, members, settings, shuin, specialGoen, voicePairs } from '../db/schema.js';
 import { audit } from './audit.js';
 import { specialGoenOf } from './specialGoen.js';
 
@@ -165,13 +165,17 @@ export async function resetReceivedShuin(db: Db, receiverId: string, by: string,
 
 /**
  * 🧵 結びのコレクション：その人が「まだ結んでいない相手」の一覧（出会った人数のコンプリート用）。
- * total＝結べる相手（在籍・BOT/退出/自分をのぞく）の数、met＝もう結んだ数、unmet＝まだの相手（最近来た順・limit まで）。
+ * total＝通話でいっしょになったことのある相手（在籍・BOT/退出/自分をのぞく）の数、met＝そのうちもう結んだ数、unmet＝まだの相手（最近来た順・limit まで）。
  */
 export async function metCollection(db: Db, viewerId: string, limit = 24): Promise<{ total: number; met: number; unmet: { id: string; name: string }[] }> {
-  const [people, stampedRows] = await Promise.all([
+  // 出会った人＝通話でいっしょになったことのある人だけを数える（いっしょに過ごしていない人は出さない）
+  const [all, stampedRows, pairRows] = await Promise.all([
     db.select({ id: members.id, name: members.displayName, active: members.lastActiveAt }).from(members).where(and(eq(members.isBot, false), isNull(members.leftAt), sql`${members.id} <> ${viewerId}`)),
     db.select({ id: shuin.receiverId }).from(shuin).where(and(eq(shuin.giverId, viewerId), isNull(shuin.revokedAt))),
+    db.selectDistinct({ a: voicePairs.memberA, b: voicePairs.memberB }).from(voicePairs).where(sql`${voicePairs.memberA} = ${viewerId} or ${voicePairs.memberB} = ${viewerId}`),
   ]);
+  const together = new Set(pairRows.map((r) => (r.a === viewerId ? r.b : r.a)));
+  const people = all.filter((p) => together.has(p.id));
   const stamped = new Set(stampedRows.map((r) => r.id));
   const met = people.filter((p) => stamped.has(p.id)).length;
   const unmet = people
