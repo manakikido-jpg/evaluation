@@ -23,6 +23,7 @@ import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import type { SupportTicket } from '../db/schema.js';
 import type { DiscordActions, MessageBody } from '../lib/discordRest.js';
+import { TicketOperationError } from '../services/ticketOperations.js';
 import { logger } from '../lib/logger.js';
 import { audit } from '../services/audit.js';
 import {
@@ -220,8 +221,9 @@ export class TicketApp {
     } catch (err) {
       logger.warn({ err, id: interaction.customId }, 'ticket failed');
       if (interaction.isRepliable()) {
-        const content = 'うまくいきませんでした。時間をおいてもう一度お試しください。';
-        await (interaction.deferred || interaction.replied ? interaction.followUp({ content, ...EPHEMERAL }) : interaction.reply({ content, ...EPHEMERAL })).catch(() => undefined);
+        // 担当できない理由など、決まった理由はそのまま伝える（ほかは時間をおいてもう一度）
+        const content = err instanceof TicketOperationError ? err.message : 'うまくいきませんでした。時間をおいてもう一度お試しください。';
+        await (interaction.deferred && !interaction.replied ? interaction.editReply({ content }) : interaction.replied ? interaction.followUp({ content, ...EPHEMERAL }) : interaction.reply({ content, ...EPHEMERAL })).catch(() => undefined);
       }
     }
   }

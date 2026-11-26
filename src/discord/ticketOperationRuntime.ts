@@ -16,7 +16,12 @@ export class TicketOperationRuntime {
  constructor(private db:Db,private cfg:()=>GuildConfig,private discord:DiscordActions,private baseUrl?:string,private makeIntro?:(t:SupportTicket,type:TicketType,op:TicketOperation)=>MessageBody,private contentAvailable=true){}
  attach(guild:Guild){this.guild=guild;}
  private admins(){const c=this.cfg();return [...new Set([...(c.admin?.gujiRoleIds??[]),...(c.admin?.shinshokuRoleIds??[]),...c.ranks.filter(r=>['guji','shinshoku'].includes(r.key)).map(r=>r.roleId)])];}
- async actor(id:string):Promise<ops.TicketActor>{const m=await this.guild?.members.fetch({user:id,force:true});if(!m)throw new ops.TicketOperationError('在籍を確認できません。',403);const roles=[...m.roles.cache.keys()];return {id,roles,admin:!!adminLevelOf(this.cfg(),roles)};}
+ async actor(id:string):Promise<ops.TicketActor>{
+  const m=await this.guild?.members.fetch({user:id,force:true}).catch(()=>undefined);if(!m)throw new ops.TicketOperationError('在籍を確認できません。',403);const roles=[...m.roles.cache.keys()];
+  // 前の受付と同じく、サーバーの持ち主と Discord の「管理者」権限の人も運営として扱う（宮司・神職のロールがなくても）
+  const boss=this.guild?.ownerId===id||Boolean(m.permissions?.has?.(PermissionFlagsBits.Administrator));
+  return {id,roles,admin:!!adminLevelOf(this.cfg(),roles)||boss};
+ }
  async historyLink(i:Interaction & {user:{id:string}}){
   if(!i.isRepliable())return;await i.deferReply(i.inGuild()?{flags:64}:{});
   if(!this.baseUrl)return void await i.editReply('WEB_BASE_URLを設定してください。');

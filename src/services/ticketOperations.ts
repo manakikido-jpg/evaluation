@@ -32,7 +32,8 @@ async function change<T>(db:Db,id:number,actor:TicketActor,fn:(tx:Db,c:Awaited<R
 }
 export async function claimOperation(db:Db,id:number,actor:TicketActor,now=new Date()) {
   return change(db,id,actor,async(tx,c)=>{
-    if(!c.staff)throw new TicketOperationError('担当権限が必要です。',403);
+    if(c.owner)throw new TicketOperationError('ご自身が開いたチケットは担当できません（ほかの運営が担当します）。',403);
+    if(!c.staff)throw new TicketOperationError('担当権限が必要です（この種類の担当ロールか、宮司・神職）。',403);
     if(c.ticket.status!=='open')throw new TicketOperationError('完了しています。',409);
     if(c.ticket.assigneeId&&c.ticket.assigneeId!==actor.id)throw new TicketOperationError('担当済みです。引き継ぎ依頼・承諾を使ってください。',409);
     if(c.ticket.assigneeId===actor.id)return;

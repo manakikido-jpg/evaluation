@@ -35,3 +35,13 @@ it('再開は別のチャンネルを作り、旧チャンネルの整理で新�
  (guild.channels.create as any).mockResolvedValue(next);(guild.channels.fetch as any).mockImplementation(async(cid:string)=>cid===C?ch:next);
  await rt.tick(T);expect(guild.channels.create).toHaveBeenCalled();expect((await getTicket(db,id))!.channelId).toBe(next.id);expect(ch.delete).toHaveBeenCalledTimes(1);expect(next.delete).not.toHaveBeenCalled();
 });
+
+it('開いた本人は担当できず、理由を伝える。ロールがなくてもサーバーの持ち主は運営として担当できる',async()=>{
+ await expect(op.claimOperation(db,id,user,T)).rejects.toThrow('ご自身が開いたチケットは担当できません');
+ const O='870000000000000150';
+ (guild as any).ownerId=O;
+ const actor=await rt.actor(O);
+ expect(actor.admin).toBe(true);
+ await op.claimOperation(db,id,actor,T);
+ expect((await getTicket(db,id))!.assigneeId).toBe(O);
+});
