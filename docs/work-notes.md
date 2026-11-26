@@ -7,7 +7,8 @@
 - 関連3ファイル73件成功（/tmp/guide-entry-verified-focused.log）。最終レビューで設定外の不要な取得を省く変更後、ソースを固定して型/ビルド・全テストを実行中。以前の中間型エラー・中間テスト失敗を最終成功とは数えない。
 - 全体テスト中に本番b37a63c0へ更新。変更は本人が新制度のスイッチを押すという記録2ファイルだけで、双方のメモを保持して統合した。製品ソース・テストはbbe9961eから変更なし。新制度のスイッチやリセットは操作しない。
 - 最終検証：型チェック・ビルド成功（/tmp/guide-entry-final-{types,build}.log）、全294ファイル3,140件成功（747.52秒、4並列、/tmp/guide-entry-all.log）。統合後の製品ソース/テストが実装bbe9961eと同一であることも確認。保存前fetchでも本番b37a63c0のまま。
-- codex/guide-room-move-entryをpushして本番担当向けDraft PRに保存する。本番未反映・実Discordでの確認は未実施。
+- codex/guide-room-move-entryをpushし、Draft PR #180 https://github.com/manakikido-jpg/evaluation/pull/180 に保存済み。保存確認時head8dc0ad47・OPEN/MERGEABLE、GitHub CIは実行中で成功としては数えない。この追記は記録のみで、検証済みの製品ソースとテストに変更なし。
+- 本番未反映・実Discordでの確認は未実施。次はCIと担当者レビュー後、別途指示を受けて合流する。新制度のスイッチやリセットは対象外。
 
 ## 2026年11月26日：新制度のスタートは本人が押す（Claude・記録のみ）
 - 準備は完了（cf3ac2e・全テスト3128・通し稽古 app.test.ts「新制度ローンチの通し稽古」）。
