@@ -2710,6 +2710,8 @@ export const guideThreads = pgTable('guide_threads', {
   scheduleMessageId: text('schedule_message_id'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   closedAt: timestamp('closed_at', { withTimezone: true }),
+  /** 日程ボタンなど、本文を投稿しない本人の操作。 */
+  lastActivityAt: timestamp('last_activity_at', { withTimezone: true }),
 }, t => [index('guide_threads_thread_idx').on(t.threadId)]);
 export type GuideThread = typeof guideThreads.$inferSelect;
 

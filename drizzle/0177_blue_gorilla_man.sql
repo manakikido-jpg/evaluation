@@ -1,0 +1,1 @@
+ALTER TABLE "guide_threads" ADD COLUMN "last_activity_at" timestamp with time zone;

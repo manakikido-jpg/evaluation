@@ -15,6 +15,7 @@ export function GuideThreadsPage(p: { session: AdminSession; config: GuideThread
     {p.flash === 'saved' && <p role="status">保存しました。</p>}
     {p.error && <p class="flash warn" role="alert">{p.error}</p>}
     <p>入った人に、本人と @案内人 だけのプライベートスレッドを BOT が作り、あいさつと時間のボタンを送ります。時間を押すと、スレッドで @案内人 に知らせ、10 分前にもお知らせします。「今から」は案内所へ、「時間外」は希望の日時を書いてもらいます。案内待ちが外れた・抜けたら、スレッドを閉じます。</p>
+    <p class="note">3日間、投稿や本人の日程操作がない案内は一覧から外れます。履歴は残り、投稿すると再開できます。予約のあるもの・時間外の希望が確認待ちのものは残します。BOTの通知は期間に数えません。</p>
     <form method="post" action="/guide/thread" class="fields">{csrf}
       <section class="card"><h2>基本</h2>
         <label class="field check"><input type="checkbox" name="enabled" value="yes" checked={c.enabled} />案内スレッドを使う（これから入った人から）</label>

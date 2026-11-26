@@ -64,10 +64,14 @@ describe('Discord の案内スレッド', () => {
       await app.onInteraction({ ...base, customId: 'gth:slot:2026-10-27:22:00', user: { id: 'someone' } } as never);
       expect(JSON.stringify(replies)).toContain('本人だけ');
       expect(sent).toHaveLength(0);
+      expect((await threadById(db, 'thr'))!.lastActivityAt).toBeNull();
       await app.onInteraction({ ...base, customId: 'gth:slot:2026-10-27:22:00', user: { id: M } } as never);
       expect(JSON.stringify(sent)).toContain('<@&r1>');
       expect(JSON.stringify(sent)).toContain('10月27日 22:00');
       expect((await threadById(db, 'thr'))!.slotLabel).toBe('10月27日 22:00');
+      expect((await threadById(db, 'thr'))!.lastActivityAt).toEqual(now);
+      await app.onInteraction({ ...base, customId: 'gth:now', user: { id: M } } as never);
+      expect((await threadById(db, 'thr'))!.lastActivityAt).toEqual(now);
       await app.onInteraction({ ...base, customId: 'gth:slot:2026-10-27:20:00', user: { id: M } } as never);
       expect(JSON.stringify(replies.at(-1))).toContain('もう選べません');
     } finally { vi.useRealTimers(); }

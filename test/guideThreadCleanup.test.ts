@@ -1,3 +1,4 @@
+import { Collection } from 'discord.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GuideThreadApp } from '../src/discord/guideThreads.js';
 import { bookSlot, closeThread, guideThreadConfigSchema, saveGuideThreadConfig, recordThread, threadOf } from '../src/services/guideThreads.js';
@@ -120,4 +121,22 @@ describe('完了した案内スレッドの整理', () => {
     await closeThread(db, M, now, 'old');
     expect((await threadOf(db, M))!.closedAt).toBeNull();
   });
+});
+
+it('案内待ちロールが残っていても、承認済みの役職があれば完了分として整理する', async () => {
+ await recordThread(db, M, 'thr', false, now);
+ const { guild, thread, member } = fixture(); const m=member(true);m.roles.cache.set('approved',{});guild.members.cache.set(M,m);
+ const app=new GuideThreadApp(db,()=>({guildId:'g',roles:{},channels:{},ranks:[{roleId:'approved'}]}) as never);
+ await app.tick(guild as never,now);expect(thread.edit).toHaveBeenCalledWith(expect.objectContaining({locked:true,archived:true}));expect((await threadOf(db,M))!.closedAt).not.toBeNull();
+});
+it('未完了で3日止まった案内も5分ごとに確認し、DBを終了せず一覧から外す', async () => {
+ await recordThread(db,M,'thr',false,new Date(+now-5*86400000));const {guild,thread,member,app}=fixture();guild.members.cache.set(M,member(true));
+ Object.assign(thread,{id:'thr',messages:{fetch:vi.fn().mockResolvedValue(new Collection())}});
+ await app.tick(guild as never,now);expect(thread.edit.mock.calls[0]![0]).toEqual(expect.objectContaining({archived:true}));expect(thread.edit.mock.calls[0]![0]).not.toHaveProperty('locked');expect((await threadOf(db,M))!.closedAt).toBeNull();
+ await app.tick(guild as never,new Date(+now+60000));expect(thread.edit).toHaveBeenCalledTimes(1);
+});
+
+it('案内待ちの特定ができなくても、承認済みと分かるものは整理する',async()=>{
+ await recordThread(db,M,'thr',false,now);const {guild,thread,member}=fixture();guild.roles.cache.clear();const m=member();m.roles.cache.set('approved',{});guild.members.cache.set(M,m);
+ const app=new GuideThreadApp(db,()=>({guildId:'g',roles:{},channels:{},ranks:[{roleId:'approved'}]}) as never);await app.tick(guild as never,now);expect(thread.edit).toHaveBeenCalledWith(expect.objectContaining({locked:true,archived:true}));
 });
