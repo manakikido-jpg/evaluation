@@ -1,0 +1,1 @@
+ALTER TABLE "ticket_attachments" ADD COLUMN "source_channel_id" text;

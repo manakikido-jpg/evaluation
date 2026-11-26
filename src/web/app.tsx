@@ -1,3 +1,5 @@
+import { operationOf as supportOperationOf, ticketContext as supportTicketContext } from '../services/ticketOperations.js';
+import { mountTicketOperations } from './ticketOperations.js';
 import { memberEngawaMinutes } from '../services/ujikoEvaluation.js';
 import {ARCADE_KINDS,isArcadeKind} from '../domain/casinoArcade.js';
 import { deployRuns, reflectedTimes } from '../services/deployInfo.js';
@@ -442,6 +444,8 @@ export function createWebApp(deps: WebDeps) {
       ? bodyLimit({ maxSize: 1024 * 1024, onError: c => c.text('送る内容が大きすぎます。', 413) })(c, next)
       : c.req.method !== 'POST'
       ? smallBody(c, next)
+      : /^\/support\/\d+\/upload$/.test(c.req.path)
+      ? bodyLimit({ maxSize:101*1024*1024, onError:c=>c.text('添付が大きすぎます。',413) })(c,next)
       : c.req.path === '/office/icon'
       ? artBody(c, next)
       : c.req.path === '/visit/order'
@@ -607,6 +611,7 @@ export function createWebApp(deps: WebDeps) {
   mountVisit(app, { db, api, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
   mountMarketplace(app, { db, api, discord: deps.discord, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
   mountLottery(app, { db, api, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
+  mountTicketOperations(app, { db, api, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
   mountCasino(app, { db, api, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
 
   // ───────── ここから先はログイン必須 ─────────
@@ -6626,13 +6631,24 @@ export function createWebApp(deps: WebDeps) {
 
   app.get('/tickets', async (c) => {
     const [conf, open, closed, channels, roles] = await Promise.all([loadTicketConfig(db), openTickets(db), closedTickets(db, 50), loadChannels().catch(() => [] as GuildChannel[]), loadRoles()]);
-    const names = await namesOf(db, [...open, ...closed].flatMap((t) => [t.openerId, ...(t.assigneeId ? [t.assigneeId] : [])]));
+    const session=c.get('session');
+    let ticketRoles:string[]|null;
+    try{ticketRoles=await api.memberRoles(cfg.guildId,session.userId);}catch{return c.text('チケットの権限を確認できません。',503);}
+    if(!ticketRoles)return c.notFound();
+    const actor={id:session.userId,roles:ticketRoles,admin:!!adminLevelOf(cfg,ticketRoles)};
+    const visible=async(t:(typeof open)[number])=>{
+      if(await supportOperationOf(db,t.id)){try{await supportTicketContext(db,t.id,actor);return true;}catch{return false;}}
+      return t.openerId===actor.id||actor.admin||conf.types.find(x=>x.key===t.typeKey)?.roleIds.some(id=>actor.roles.includes(id));
+    };
+    const viewOpen=(await Promise.all(open.map(async t=>await visible(t)?t:undefined))).filter((t):t is typeof open[number]=>!!t);
+    const viewClosed=(await Promise.all(closed.map(async t=>await visible(t)?t:undefined))).filter((t):t is typeof closed[number]=>!!t);
+    const names = await namesOf(db, [...viewOpen, ...viewClosed].flatMap((t) => [t.openerId, ...(t.assigneeId ? [t.assigneeId] : [])]));
     return c.html(
       <TicketsPage
         session={c.get('session')}
         config={conf}
-        open={open}
-        closed={closed}
+        open={viewOpen}
+        closed={viewClosed}
         channels={textChannelsOf(channels).map((ch) => ({ id: ch.id, name: `#${ch.name}` }))}
         categories={channels.filter((ch) => ch.type === 4).map((ch) => ({ id: ch.id, name: ch.name }))}
         roles={(roles ?? []).filter((r) => r.id !== cfg.guildId && !r.managed).map((r) => ({ id: r.id, name: r.name }))}
@@ -6648,6 +6664,12 @@ export function createWebApp(deps: WebDeps) {
   app.get('/tickets/:id/transcript', async (c) => {
     const t = await getSupportTicket(db, Number(c.req.param('id')));
     if (!t?.transcript) return c.notFound();
+    const session=c.get('session');let roles:string[]|null;
+    try{roles=await api.memberRoles(cfg.guildId,session.userId);}catch{return c.text('権限を確認できません。',503);}
+    if(!roles)return c.notFound();
+    const actor={id:session.userId,roles,admin:!!adminLevelOf(cfg,roles)};
+    if(await supportOperationOf(db,t.id)){try{await supportTicketContext(db,t.id,actor);}catch{return c.notFound();}}
+    else {const conf=await loadTicketConfig(db);if(t.openerId!==actor.id&&!actor.admin&&!conf.types.find(x=>x.key===t.typeKey)?.roleIds.some(id=>roles!.includes(id)))return c.notFound();}
     return c.body(t.transcript, 200, { 'content-type': 'text/plain; charset=utf-8', 'x-content-type-options': 'nosniff', 'cache-control': 'private, no-store' });
   });
 
@@ -6766,7 +6788,7 @@ export function createWebApp(deps: WebDeps) {
     if (!conf.types.some((x) => x.key === key)) return c.redirect('/tickets');
     const t = ticketTypeInput(await c.req.parseBody({ all: true }), key);
     if (!t) return c.redirect('/tickets?msg=invalid');
-    await saveTicketConfig(db, { ...conf, types: conf.types.map((x) => (x.key === key ? t : x)) }, c.get('session').userId);
+    await saveTicketConfig(db, { ...conf, types: conf.types.map((x) => (x.key === key ? {...t,workflow:x.workflow} : x)) }, c.get('session').userId);
     await audit(db, { actorId: c.get('session').userId, action: 'ticket.type', detail: { op: 'edit', key }, via: 'web' });
     await ticketPanelNow();
     return c.redirect('/tickets?msg=type_saved');
