@@ -185,7 +185,7 @@ async function main(): Promise<void> {
   const presenceGifts = new PresenceGiftApp(db, cfg, actions);
   const voiceChatClear = new VoiceChatClearApp(cfg, () => Date.now(), channelId => rooms.preservesMessages(channelId));
   const afkMute = new AfkMuteApp(db, cfg);
-  const yakuVoice = new YakuVoiceApp(cfg);
+  const yakuVoice = new YakuVoiceApp(cfg, db);
   const serverMuteRoles = new ServerMuteRolesApp(db, cfg);
   const bell = new BellApp(client, db, cfg, actions);
   const bellSticky = new BellStickyApp(cfg);
