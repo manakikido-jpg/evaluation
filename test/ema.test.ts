@@ -92,17 +92,17 @@ it('参拝者は贈れない・相手が総代以上/世話役へは総代だけ
   expect(await giveEma(db, cfg, G, R, '', now)).toMatchObject({ ok: false, reason: 'left' });
 });
 
-it('票の種類は、贈る人と相手の役職で決まる（氏子→氏子は維持の氏子の票・世話役→氏子は世話役の票・総代/運営→世話役は総代の票）', async () => {
-  // 世話役 W → 氏子 G ＝ 世話役の票
+it('票の種類は、贈る人と相手の役職で決まる（氏子へはだれからも維持の氏子の票・総代/運営→世話役は総代の票。氏子→世話役は投票なので世話役の票はない）', async () => {
+  // 世話役 W → 氏子 G ＝ 氏子の票（維持用）
   await together(W, G, met);
-  expect(await giveEma(db, cfg, W, G, 'たよれる', now)).toMatchObject({ ok: true, tier: 'sewayaku', count: 1 });
-  // 氏子 G2 → 氏子 G ＝ 氏子の票（維持用）。世話役の票とは別に数える
+  expect(await giveEma(db, cfg, W, G, 'たよれる', now)).toMatchObject({ ok: true, tier: 'ujiko', count: 1 });
+  // 氏子 G2 → 氏子 G ＝ 氏子の票（維持用）
   const G2 = '860000000000000010';
   await db.insert(members).values({ id: G2, username: 'g2', displayName: '氏子ふたり', roleIds: [ROLE.ujiko] });
   await together(G2, G, met);
-  expect(await giveEma(db, cfg, G2, G, 'いつもありがとう', now)).toMatchObject({ ok: true, tier: 'ujiko', count: 1 });
-  expect(await validEmaCountOf(db, G, now, 'sewayaku')).toBe(1);
-  expect(await validEmaCountOf(db, G, now, 'ujiko')).toBe(1);
+  expect(await giveEma(db, cfg, G2, G, 'いつもありがとう', now)).toMatchObject({ ok: true, tier: 'ujiko', count: 2 });
+  expect(await validEmaCountOf(db, G, now, 'sewayaku')).toBe(0);
+  expect(await validEmaCountOf(db, G, now, 'ujiko')).toBe(2);
   // 総代 SD → 世話役 SW ＝ 総代の票／運営（宮司）GU → 世話役 SW も総代の票
   await together(SD, SW, met);
   expect(await giveEma(db, cfg, SD, SW, '', now)).toMatchObject({ ok: true, tier: 'sodai', count: 1 });

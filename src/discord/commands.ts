@@ -102,6 +102,14 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .addBooleanOption((o) => o.setName('public').setNameLocalizations({ ja: '公開' }).setDescription('Post in channel (default: only you)').setDescriptionLocalizations({ ja: 'はい にするとチャンネルのみんなに見せる（省略すると自分だけ）' }))
       .toJSON(),
 
+    new SlashCommandBuilder()
+      .setName('sewayaku')
+      .setNameLocalizations({ ja: '世話役の投票' })
+      .setDescription('See this month\'s candidates for sewayaku and your voting right')
+      .setDescriptionLocalizations({ ja: '今月の世話役の投票の候補と、自分が投票できるかを見る（自分にだけ表示）' })
+      .setContexts(InteractionContextType.Guild)
+      .toJSON(),
+
     new SlashCommandBuilder().setName('stickerdesk').setNameLocalizations({ ja: 'スタンプ製作' }).setDescription('Open the sticker creator desk').setDescriptionLocalizations({ ja: 'スタンプ製作者専用のページを開く（リンクは自分だけ）' }).setContexts(InteractionContextType.Guild).toJSON(),
 
     new SlashCommandBuilder()

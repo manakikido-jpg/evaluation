@@ -376,8 +376,18 @@ export const emaThresholdsSchema = z
     inviteSubstituteMax: z.number().int().min(0).max(20).default(3),
     /** これを割ると維持の注意（0なら注意なし・自動降格はしない） */
     ujikoKeep: z.number().int().min(0).max(100).default(3),
-    /** 氏子→世話役に要る「世話役の票」 */
-    sewayakuPromote: z.number().int().min(1).max(100).default(3),
+    /** 氏子→世話役は候補ごとの選挙（金・土・日）：投票できる人の何%を超えたら昇格するか */
+    sewayakuVotePercent: z.number().int().min(1).max(100).default(60),
+    /** 投票できる人（氏子・世話役・総代）：直近30日の縁側の浮上がこの分を超えている */
+    sewayakuVoterMinutes: z.number().int().min(0).max(43200).default(1440),
+    /** 投票される人（氏子）：氏子になってから縁側にこの分以上いた */
+    sewayakuCandidateMinutes: z.number().int().min(0).max(1000000).default(7200),
+    /** 投票される人（氏子）：氏子をこの月数つづけている */
+    sewayakuCandidateMonths: z.number().int().min(0).max(60).default(3),
+    /** 選挙で落ちた人：選挙が終わってから縁側にこの分いたら、また候補になる */
+    sewayakuRetryMinutes: z.number().int().min(0).max(1000000).default(2400),
+    /** 投票できる人がこの人数より少ない選挙は、不成立（昇格しない） */
+    sewayakuMinVoters: z.number().int().min(1).max(1000).default(5),
     /** 世話役→総代に要る「総代の票」 */
     sodaiPromote: z.number().int().min(1).max(100).default(3),
   });

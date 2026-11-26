@@ -58,6 +58,43 @@ export const ema = pgTable(
 export type Ema = typeof ema.$inferSelect;
 
 /**
+ * 🗳 世話役の選挙（候補ごと）。氏子を3か月つづけ・氏子になってから縁側120時間の氏子が条件を満たすと、
+ * その週（金曜0時より前なら）か次の週の金・土・日（日本時間）が選挙期間になる。
+ * 金曜0時に投票できる人（直近30日の縁側が24時間を超えている氏子・世話役。候補本人は除く）を固め、
+ * 月曜0時に締めて、票が投票できる人の6割を超えたら世話役にする。落ちたら、選挙が終わってから縁側40時間でまた候補になる。
+ * status: scheduled（決まった）/ open（投票中）/ passed（昇格）/ failed（届かず）/ cancelled（候補でなくなった）
+ */
+export const sewayakuElections = pgTable(
+  'sewayaku_elections',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    candidateId: text('candidate_id').notNull(),
+    qualifiedAt: timestamp('qualified_at', { withTimezone: true }).notNull(),
+    startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
+    endsAt: timestamp('ends_at', { withTimezone: true }).notNull(),
+    status: text('status').notNull().default('scheduled'),
+    /** 投票できる人（金曜0時に固める。画面には人数だけ出す） */
+    voterIds: jsonb('voter_ids').$type<string[]>(),
+    votes: integer('votes'),
+    closedAt: timestamp('closed_at', { withTimezone: true }),
+  },
+  (t) => [index('sewayaku_elections_candidate_idx').on(t.candidateId, t.endsAt), index('sewayaku_elections_status_idx').on(t.status, t.startsAt)],
+);
+
+export type SewayakuElection = typeof sewayakuElections.$inferSelect;
+
+/** 世話役の選挙の票（匿名。重複を防ぐためだけに投票した人を残す。だれにも見せない） */
+export const sewayakuVotes = pgTable(
+  'sewayaku_votes',
+  {
+    electionId: bigint('election_id', { mode: 'number' }).notNull(),
+    voterId: text('voter_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.electionId, t.voterId] })],
+);
+
+/**
  * ✨ 特別ご縁（宮司が社務所Web から振る）。朱印のご縁に足して数える。
  * 取り消しは revoked_at を入れる（役職は下げない）。nonce で二度押しを 1 回にする。
  * checked_at は、BOT が昇格を確かめたら入れる（社務所Web からは Discord のロールを変えないため）。

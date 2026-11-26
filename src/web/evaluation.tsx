@@ -10,6 +10,7 @@ import { perkUjikoEnabled, setPerkUjiko } from '../services/perkGate.js';
 import { loadOverrides, saveOverrides } from '../services/settings.js';
 import { ujikoWeekRequirement } from '../services/ujikoRequirement.js';
 import { jstWeekStart } from '../domain/ema.js';
+import { listSewayakuElections, sewayakuVoteCount } from '../services/sewayakuElection.js';
 import { goenPerkSchema, emaThresholdsSchema, type GoenPerk } from '../config.js';
 import { namesOf } from '../services/members.js';
 
@@ -64,7 +65,15 @@ export function mountEvaluation(app: Hono<Env>, db: Db, cfg: () => GuildConfig, 
       const perkUjiko = await perkUjikoEnabled(db);
       // 🎐 今週の「参拝者→氏子に要る絵馬の数」（毎週きまる）
       const ujikoWeek = session.level === 'guji' ? await ujikoWeekRequirement(db, cfg(), jstWeekStart(now())) : undefined;
-      return c.html(<EvaluationPage ujikoWeek={ujikoWeek} session={session} data={data} filter={filter} page={page} emaPromotion={emaPromotion} keepWarnings={keepWarnings} names={names} saved={c.req.query('ema') ?? undefined} resetFlash={c.req.query('reset') ?? undefined} resetUndoable={resetUndoable} perkUjiko={perkUjiko} perkFlash={c.req.query('perk') ?? undefined} goenPerksText={goenPerksToText(cfg().goenPerks)} goenPerksFlash={c.req.query('gp') ?? undefined} emaThresholds={cfg().emaThresholds} emaThresholdsFlash={c.req.query('th') ?? undefined}/>);
+      // 🗳 世話役の選挙（投票中・これから・最近の結果。票と投票できる人の数だけ）
+      let sewayaku: Parameters<typeof EvaluationPage>[0]['sewayaku'];
+      if (session.level === 'guji') {
+        const [active, recent] = await Promise.all([listSewayakuElections(db, ['open', 'scheduled', 'closing']), listSewayakuElections(db, ['passed', 'failed', 'cancelled'], 10)]);
+        const rows = await Promise.all(active.map(async (e) => ({ ...e, votes: e.status === 'scheduled' ? null : await sewayakuVoteCount(db, e.id) })));
+        const sNames = await namesOf(db, [...new Set([...active, ...recent].map((e) => e.candidateId))]);
+        sewayaku = { active: rows, recent, names: sNames };
+      }
+      return c.html(<EvaluationPage ujikoWeek={ujikoWeek} sewayaku={sewayaku} session={session} data={data} filter={filter} page={page} emaPromotion={emaPromotion} keepWarnings={keepWarnings} names={names} saved={c.req.query('ema') ?? undefined} resetFlash={c.req.query('reset') ?? undefined} resetUndoable={resetUndoable} perkUjiko={perkUjiko} perkFlash={c.req.query('perk') ?? undefined} goenPerksText={goenPerksToText(cfg().goenPerks)} goenPerksFlash={c.req.query('gp') ?? undefined} emaThresholds={cfg().emaThresholds} emaThresholdsFlash={c.req.query('th') ?? undefined}/>);
     } catch (error) {
       if (!(error instanceof EvaluationSelectionError)) throw error;
       return c.text(error.message, 400);
@@ -139,7 +148,12 @@ export function mountEvaluation(app: Hono<Env>, db: Db, cfg: () => GuildConfig, 
       ujikoMin: num('ujikoMin'),
       inviteSubstituteMax: num('inviteSubstituteMax'),
       ujikoKeep: num('ujikoKeep'),
-      sewayakuPromote: num('sewayakuPromote'),
+      sewayakuVotePercent: num('sewayakuVotePercent'),
+      sewayakuVoterMinutes: Number.isNaN(num('sewayakuVoterHours')) ? NaN : num('sewayakuVoterHours') * 60,
+      sewayakuCandidateMinutes: (() => { const v = typeof body.sewayakuCandidateHours === 'string' && /^\d{1,4}$/.test(body.sewayakuCandidateHours) ? Number(body.sewayakuCandidateHours) : NaN; return Number.isNaN(v) ? NaN : v * 60; })(),
+      sewayakuCandidateMonths: num('sewayakuCandidateMonths'),
+      sewayakuRetryMinutes: (() => { const v = typeof body.sewayakuRetryHours === 'string' && /^\d{1,4}$/.test(body.sewayakuRetryHours) ? Number(body.sewayakuRetryHours) : NaN; return Number.isNaN(v) ? NaN : v * 60; })(),
+      sewayakuMinVoters: (() => { const v = typeof body.sewayakuMinVoters === 'string' && /^\d{1,4}$/.test(body.sewayakuMinVoters) ? Number(body.sewayakuMinVoters) : NaN; return v; })(),
       sodaiPromote: num('sodaiPromote'),
     });
     if (!parsed.success) return c.redirect('/evaluation?th=invalid', 303);

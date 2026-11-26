@@ -3,8 +3,11 @@ import type { AdminSession } from '../../db/schema.js';
 import type { EvaluationData, EvaluationFilter } from '../../services/ujikoEvaluation.js';
 import { fmtMinutes } from '../../services/voiceUsage.js';
 import { UJIKO_RATING_ITEMS } from '../../services/ujikoRating.js';
-import { EMA_DEFAULT_THRESHOLDS, ujikoRuleText, type EmaThresholdCounts } from '../../domain/ema.js';
+import { EMA_DEFAULT_THRESHOLDS, sewayakuRuleText, ujikoRuleText, type EmaThresholdCounts } from '../../domain/ema.js';
+import type { SewayakuElection } from '../../db/schema.js';
 import { Layout } from './layout.js';
+
+const fmtJstDay = (d: Date) => d.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', weekday: 'short' });
 
 export function evaluationQuery(filter: EvaluationFilter, selectedIds: string[], page?: number): string {
   const query = new URLSearchParams({ scope: '1', q: filter.q, status: filter.status });
@@ -13,7 +16,7 @@ export function evaluationQuery(filter: EvaluationFilter, selectedIds: string[],
   return query.toString();
 }
 
-export function EvaluationPage({ session, data, filter, page, emaPromotion = false, keepWarnings = [], names, saved, resetFlash, resetUndoable, perkUjiko = false, perkFlash, goenPerksText = '', goenPerksFlash, emaThresholds = EMA_DEFAULT_THRESHOLDS, emaThresholdsFlash, ujikoWeek }: {
+export function EvaluationPage({ session, data, filter, page, emaPromotion = false, keepWarnings = [], names, saved, resetFlash, resetUndoable, perkUjiko = false, perkFlash, goenPerksText = '', goenPerksFlash, emaThresholds = EMA_DEFAULT_THRESHOLDS, emaThresholdsFlash, ujikoWeek, sewayaku }: {
   session: AdminSession; data: EvaluationData; filter: EvaluationFilter; page: number;
   emaPromotion?: boolean; keepWarnings?: { id: string; count: number }[]; names?: Map<string, string>; saved?: string;
   resetFlash?: string; resetUndoable?: { at: Date; remaining: number; specialRemaining: number };
@@ -21,6 +24,7 @@ export function EvaluationPage({ session, data, filter, page, emaPromotion = fal
   goenPerksText?: string; goenPerksFlash?: string;
   emaThresholds?: EmaThresholdCounts; emaThresholdsFlash?: string;
   ujikoWeek?: { week: string; active: number; required: number };
+  sewayaku?: { active: (SewayakuElection & { votes: number | null })[]; recent: SewayakuElection[]; names: Map<string, string> };
 }) {
   const pageSize = 100, pages = Math.max(1, Math.ceil(data.rows.length / pageSize));
   const current = Math.min(page, pages), rows = data.rows.slice((current - 1) * pageSize, current * pageSize);
@@ -43,7 +47,7 @@ export function EvaluationPage({ session, data, filter, page, emaPromotion = fal
         <label><input type="checkbox" name="confirm" value="yes"/> 切り替えてよい</label>
         <button type="submit">{emaPromotion ? '従来（ご縁40＋縁側20時間）に戻す' : '絵馬での昇格に切り替える'}</button>
       </form>
-      <p class="note">絵馬での昇格に切り替えると、昇格は全部<strong>絵馬</strong>で決まり、ご縁・縁側時間は使いません（参拝者→氏子は{ujikoRule}／氏子→世話役は世話役の票{emaThresholds.sewayakuPromote}枚／世話役→総代は総代の票{emaThresholds.sodaiPromote}枚）。枚数は下の「絵馬の枚数」で変えられます。切り替える前に、絵馬が十分にたまっているか下の「維持の注意」で確かめてください。</p>
+      <p class="note">絵馬での昇格に切り替えると、昇格は全部<strong>絵馬</strong>で決まり、ご縁・縁側時間は使いません（参拝者→氏子は{ujikoRule}／氏子→世話役は{sewayakuRuleText(emaThresholds)}／世話役→総代は総代の票{emaThresholds.sodaiPromote}枚）。数は下の「絵馬の枚数」で変えられます。切り替える前に、絵馬が十分にたまっているか下の「維持の注意」で確かめてください。</p>
       <details><summary>維持の注意：有効な絵馬が{emaThresholds.ujikoKeep}枚未満の氏子（{keepWarnings.length} 人）</summary>
         <p class="note">自動では降格しません。運営が手で判断するための一覧です（絵馬の少ない順）。</p>
         {keepWarnings.length
@@ -116,11 +120,29 @@ export function EvaluationPage({ session, data, filter, page, emaPromotion = fal
         <label>参拝者→氏子：いちばん少ないときの枚数<input type="number" name="ujikoMin" min={1} max={100} value={emaThresholds.ujikoMin}/></label>
         <label>参拝者→氏子：招待で補える数（招待した人が参拝者になったら1つ）<input type="number" name="inviteSubstituteMax" min={0} max={20} value={emaThresholds.inviteSubstituteMax}/></label>
         <label>氏子の維持（これ未満で注意・0で注意なし）<input type="number" name="ujikoKeep" min={0} max={100} value={emaThresholds.ujikoKeep}/></label>
-        <label>氏子→世話役（世話役の票）<input type="number" name="sewayakuPromote" min={1} max={100} value={emaThresholds.sewayakuPromote}/></label>
+        <label>氏子→世話役：投票できる人の何%を超えたら昇格<input type="number" name="sewayakuVotePercent" min={1} max={100} value={emaThresholds.sewayakuVotePercent}/></label>
+        <label>氏子→世話役：投票できる人（氏子・世話役・総代）の、直近30日の縁側の時間（時間・これを超える）<input type="number" name="sewayakuVoterHours" min={0} max={720} value={Math.round(emaThresholds.sewayakuVoterMinutes / 60)}/></label>
+        <label>氏子→世話役：候補になる、氏子になってからの縁側の時間（時間）<input type="number" name="sewayakuCandidateHours" min={0} max={9999} value={Math.round(emaThresholds.sewayakuCandidateMinutes / 60)}/></label>
+        <label>氏子→世話役：候補になる、氏子をつづけた月数<input type="number" name="sewayakuCandidateMonths" min={0} max={60} value={emaThresholds.sewayakuCandidateMonths}/></label>
+        <label>氏子→世話役：落ちたあと、もう一度候補になる縁側の時間（時間）<input type="number" name="sewayakuRetryHours" min={0} max={9999} value={Math.round(emaThresholds.sewayakuRetryMinutes / 60)}/></label>
+        <label>氏子→世話役：投票できる人がこれより少ない選挙は不成立（人）<input type="number" name="sewayakuMinVoters" min={1} max={1000} value={emaThresholds.sewayakuMinVoters}/></label>
         <label>世話役→総代（総代の票）<input type="number" name="sodaiPromote" min={1} max={100} value={emaThresholds.sodaiPromote}/></label>
         <button type="submit">絵馬の枚数を保存</button>
       </form>
-      <p class="note">票の種類は贈る人と相手の役職で自動で決まります（氏子へは世話役以上＋運営が「世話役の票」、世話役へは総代＋運営が「総代の票」）。世話役の票・総代の票は失効しません（氏子の票だけ30日で失効）。自動降格はしません。</p>
+      <p class="note">票の種類は贈る人と相手の役職で自動で決まります（参拝者・氏子へは氏子以上が「氏子の票」、世話役へは総代＋運営が「総代の票」）。総代の票は失効しません（氏子の票だけ30日で失効）。氏子→世話役は絵馬ではなく選挙です。自動降格はしません。</p>
+    </section>}
+    {session.level === 'guji' && sewayaku && <section class="card">
+      <h2>🗳 世話役の選挙（候補ごと・匿名）</h2>
+      <p>{sewayakuRuleText(emaThresholds)}。「🎐 絵馬での昇格」が ON のときだけ動きます。だれが投票したかは、どこにも出しません。</p>
+      {sewayaku.active.length
+        ? <ul>{sewayaku.active.map((e) => <li>
+            <a href={'/members/' + e.candidateId}>{sewayaku.names.get(e.candidateId) ?? e.candidateId}</a> … {fmtJstDay(e.startsAt)}〜{fmtJstDay(new Date(e.endsAt.getTime() - 1))}
+            {e.status === 'scheduled' ? '（これから）' : `（投票中：${e.votes ?? 0} 票／投票できる人 ${e.voterIds?.length ?? 0} 人・昇格には ${Math.floor((e.voterIds?.length ?? 0) * emaThresholds.sewayakuVotePercent / 100) + 1} 票）`}
+          </li>)}</ul>
+        : <p>いま決まっている選挙はありません。</p>}
+      {sewayaku.recent.length > 0 && <details><summary>最近の結果（{sewayaku.recent.length} 件）</summary>
+        <ul>{sewayaku.recent.map((e) => <li><a href={'/members/' + e.candidateId}>{sewayaku.names.get(e.candidateId) ?? e.candidateId}</a> … {fmtJstDay(e.startsAt)}〜 {e.status === 'passed' ? '世話役に昇格' : e.status === 'cancelled' ? '取りやめ（候補でなくなった）' : '届かず'}{e.status !== 'cancelled' ? `（${e.votes ?? 0} 票／${e.voterIds?.length ?? 0} 人）` : ''}</li>)}</ul>
+      </details>}
     </section>}
     <section class="card">
       <h2>ご縁40 ＋ 縁側の合計20時間</h2><p><strong>参拝者時間の計測開始：{EVALUATION_START_LABEL}から</strong><br/>ミュート除外に対応した反映後の分は、マイク・スピーカーの両方が非ミュートと確認できた時間だけを加算します。過去分は控除後の合計を使います。</p>

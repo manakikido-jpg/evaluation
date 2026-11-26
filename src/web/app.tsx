@@ -1052,7 +1052,7 @@ export function createWebApp(deps: WebDeps) {
     ]);
     const audits = await hideGujiAudit(db, cfg, audits0, session.userId);
     const goenRows = await specialGoenHistory(db, id);
-    // 🎐 絵馬は、その人の「次の段」の票を数える（参拝者=氏子の票／氏子=世話役の票／世話役=総代の票）
+    // 🎐 絵馬は、その人の「次の段」の票を数える（参拝者=氏子の票／氏子=氏子の票（維持）／世話役=総代の票）
     const emaTier = emaStepFrom(highestRank(cfg.ranks, member.roleIds)?.key, cfg.emaThresholds)?.tier ?? 'ujiko';
     const [emaCount, emaMessages] = await Promise.all([validEmaCountOf(db, id, undefined, emaTier), emaMessagesOf(db, id, undefined, emaTier)]);
     // 🎐 宮司だけ：取り消し用に、受け取った絵馬を全部（贈った人の名前は出さない）

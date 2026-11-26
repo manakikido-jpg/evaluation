@@ -457,7 +457,7 @@ describe('厄・BAN・キック・メモ（管理画面）', () => {
     const gcsrf = await csrfOf(g);
     const s = await login(STAFF);
     const scsrf = await csrfOf(s);
-    const ok = { ujikoPercent: '60', ujikoActiveHours: '10', ujikoMin: '1', inviteSubstituteMax: '3', ujikoKeep: '3', sewayakuPromote: '3', sodaiPromote: '3' };
+    const ok = { ujikoPercent: '60', ujikoActiveHours: '10', ujikoMin: '1', inviteSubstituteMax: '3', ujikoKeep: '3', sewayakuVotePercent: '60', sewayakuVoterHours: '24', sewayakuCandidateHours: '120', sewayakuCandidateMonths: '3', sewayakuRetryHours: '40', sewayakuMinVoters: '5', sodaiPromote: '3' };
     // 神職は403
     expect((await post('/evaluation/ema-thresholds', s, { _csrf: scsrf, ...ok })).status).toBe(403);
     // おかしな数（0や非数・範囲の外）は拒否
@@ -465,12 +465,14 @@ describe('厄・BAN・キック・メモ（管理画面）', () => {
     expect((await post('/evaluation/ema-thresholds', g, { _csrf: gcsrf, ...ok, ujikoActiveHours: '200' })).headers.get('location')).toBe('/evaluation?th=invalid');
     expect((await post('/evaluation/ema-thresholds', g, { _csrf: gcsrf, ...ok, ujikoMin: 'x' })).headers.get('location')).toBe('/evaluation?th=invalid');
     // 宮司が保存（時間は分にして残す）
-    expect((await post('/evaluation/ema-thresholds', g, { _csrf: gcsrf, ujikoPercent: '50', ujikoActiveHours: '8', ujikoMin: '2', inviteSubstituteMax: '0', ujikoKeep: '0', sewayakuPromote: '4', sodaiPromote: '2' })).headers.get('location')).toBe('/evaluation?th=saved');
-    expect((await loadOverrides(db)).emaThresholds).toEqual({ ujikoPercent: 50, ujikoActiveMinutes: 480, ujikoMin: 2, inviteSubstituteMax: 0, ujikoKeep: 0, sewayakuPromote: 4, sodaiPromote: 2 });
+    expect((await post('/evaluation/ema-thresholds', g, { _csrf: gcsrf, ujikoPercent: '50', ujikoActiveHours: '8', ujikoMin: '2', inviteSubstituteMax: '0', ujikoKeep: '0', sewayakuVotePercent: '70', sewayakuVoterHours: '10', sewayakuCandidateHours: '200', sewayakuCandidateMonths: '2', sewayakuRetryHours: '30', sewayakuMinVoters: '8', sodaiPromote: '2' })).headers.get('location')).toBe('/evaluation?th=saved');
+    expect((await loadOverrides(db)).emaThresholds).toEqual({ ujikoPercent: 50, ujikoActiveMinutes: 480, ujikoMin: 2, inviteSubstituteMax: 0, ujikoKeep: 0, sewayakuVotePercent: 70, sewayakuVoterMinutes: 600, sewayakuCandidateMinutes: 12000, sewayakuCandidateMonths: 2, sewayakuRetryMinutes: 1800, sewayakuMinVoters: 8, sodaiPromote: 2 });
     expect((await listAudit(db, { action: 'ema.thresholds_edit' })).length).toBe(1);
     // 評価ページに今の枚数と、今週の参拝者→氏子の数が出る
     const page = await (await get('/evaluation?th=saved', g)).text();
     expect(page).toContain('絵馬の枚数');
+    expect(page).toContain('🗳 世話役の選挙（候補ごと・匿名）');
+    expect(page).toContain('いま決まっている選挙はありません');
     expect(page).toContain('の参拝者→氏子：絵馬 1 枚'); // 縁側にいた氏子以上0人→最低1枚（設定の読み直しは60秒ごとなので既定の数で）
   });
 

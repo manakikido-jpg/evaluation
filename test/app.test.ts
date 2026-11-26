@@ -670,6 +670,75 @@ describe('ShuinApp：絵馬を贈る（新制度②）', () => {
     expect([...members.get(SA)!.roles.cache.keys()]).not.toContain(ROLE.ujiko);
   });
 
+  it('🗳 世話役の選挙：条件を満たすと金土日の選挙が決まり、ご縁帳のボタンで投票・取り消し、月曜に6割を超えたら世話役にして発表する', async () => {
+    const { setEmaPromotion } = await import('../src/services/emaPromotion.js');
+    const { resetAllShuin } = await import('../src/services/shuin.js');
+    const { recordJoin } = await import('../src/services/members.js');
+    const { sewayakuElections, sewayakuVotes, voiceChannels, voiceUsage } = await import('../src/db/schema.js');
+    const { jstDate } = await import('../src/services/activity.js');
+    const { eq } = await import('drizzle-orm');
+    await seedMembers();
+    const C = '400000000000000091'; // 候補の氏子
+    await recordJoin(db, { id: C, username: 'cand', displayName: '候補さん', avatarUrl: null, roleIds: [ROLE.ujiko], isBot: false, joinedAt: new Date() });
+    add(C, ROLE.ujiko);
+    const real = new Date();
+    await resetAllShuin(db, 'guji', new Date(real.getTime() - 120 * 86_400_000)); // 新制度は4か月前から
+    await db.insert(voiceChannels).values({ channelId: '400000000000000099', name: '縁側１' });
+    await db.insert(voiceUsage).values({ memberId: C, date: jstDate(new Date(real.getTime() - 60 * 86_400_000)), channelId: '400000000000000099', minutes: 7200 });
+    const vote = (who: string) => interaction('button', members.get(who)!, { customId: `ema:vote:${C}` });
+    const showC = async () => {
+      const show = interaction('slash', members.get(GU)!, { commandName: 'goshuin', options: { getUser: () => members.get(C)!.user, getBoolean: () => null } });
+      await app.onInteraction(show.i as never);
+      return JSON.stringify(show.replies.at(-1));
+    };
+    // ③の前は選挙がない
+    const before = vote(GU);
+    await app.onInteraction(before.i as never);
+    expect(before.replies.at(-1)?.content).toContain('新制度が始まってから');
+    await setEmaPromotion(db, true, 'guji');
+    // 見回りで選挙が決まる（ボタンはまだ出ない）
+    await app.checkSewayakuElection(guild as never, real);
+    const [e] = await db.select().from(sewayakuElections);
+    expect(e).toMatchObject({ candidateId: C, status: 'scheduled' });
+    expect(await showC()).toContain('世話役の選挙：');
+    expect(await showC()).not.toContain('お世話役になってほしい');
+    // 選挙をはじめる（金曜0時をすぎたことにする）：GU は投票できる人
+    await db.update(sewayakuElections).set({ status: 'open', voterIds: [GU, SA], startsAt: new Date(real.getTime() - 3_600_000), endsAt: new Date(real.getTime() + 3_600_000) }).where(eq(sewayakuElections.id, e!.id));
+    expect(await showC()).toContain('お世話役になってほしい');
+    const p1 = vote(GU);
+    await app.onInteraction(p1.i as never);
+    expect(p1.replies.at(-1)?.content).toContain('投票しました');
+    expect(await showC()).toContain('世話役の投票を取り消す');
+    const p2 = vote(GU);
+    await app.onInteraction(p2.i as never);
+    expect(p2.replies.at(-1)?.content).toContain('取り消しました');
+    // 固めた人に入っていない人は投票できない
+    const C2 = '400000000000000092';
+    await recordJoin(db, { id: C2, username: 'x', displayName: 'x', avatarUrl: null, roleIds: [ROLE.ujiko], isBot: false, joinedAt: new Date() });
+    add(C2, ROLE.ujiko);
+    const p3 = vote(C2);
+    await app.onInteraction(p3.i as never);
+    expect(p3.replies.at(-1)?.content).toContain('この選挙で投票できるのは');
+    // 締め：投票できる人5人のうち4票（80%）
+    const voters = ['400000000000000081', '400000000000000082', '400000000000000083', '400000000000000084', '400000000000000085'];
+    await db.update(sewayakuElections).set({ voterIds: voters, endsAt: new Date(real.getTime() - 60_000) }).where(eq(sewayakuElections.id, e!.id));
+    await db.insert(sewayakuVotes).values(voters.slice(0, 4).map((v) => ({ electionId: e!.id, voterId: v })));
+    await app.checkSewayakuElection(guild as never, real);
+    expect([...members.get(C)!.roles.cache.keys()]).toContain(ROLE.sewayaku);
+    expect([...members.get(C)!.roles.cache.keys()]).not.toContain(ROLE.ujiko);
+    const announce = sent.find((x) => x.channelId === cfg.channels.keiji && x.embeds?.length);
+    expect(JSON.stringify(announce?.embeds ?? [])).toContain('5 人中 4 票');
+    const log = sent.filter((x) => x.channelId === cfg.channels.log).map((x) => x.content ?? '').join('\n');
+    expect(log).toContain('世話役の選挙を締めました');
+    expect(log).toContain('4 票／投票できる人 5 人');
+    for (const v of voters) expect(log).not.toContain(v); // だれが投票したかは出さない
+    expect((await db.select().from(sewayakuElections))[0]?.status).toBe('passed');
+    // 2回目は締めない
+    const n = sent.length;
+    await app.checkSewayakuElection(guild as never, real);
+    expect(sent.length).toBe(n);
+  });
+
   it('🌸 いっぺんに4人以上が上がるときは、1人ずつのカードに通知を付けず、まとめて1回だけ通知する', async () => {
     const { setEmaPromotion } = await import('../src/services/emaPromotion.js');
     const { recordJoin } = await import('../src/services/members.js');
@@ -765,17 +834,17 @@ describe('🌸 新制度ローンチの通し稽古（③→④→⑤→元に�
     try {
       // ── 準備（ローンチ前の本番に近い状態） ──
       const SA = ['400000000000000081', '400000000000000082', '400000000000000083', '400000000000000084']; // 参拝者・氏子の票5枚
-      const UJ = '400000000000000085'; // 氏子・世話役の票3枚
+      const UJ = '400000000000000085'; // 世話役・総代の票3枚（氏子→世話役は毎月の投票なので、絵馬では世話役→総代を確かめる）
       const SB = '400000000000000086'; // 参拝者・絵馬なし（まだ上がらない。必要数は縁側にいた氏子以上がいない週なので最低の1枚）
       const K = '400000000000000087'; // 氏子・旧制度のご縁300（特典の一斉払いの事故が起きやすい人）
       const join = async (id: string, role: string) => {
         await recordJoin(db, { id, username: id.slice(-3), displayName: `u${id.slice(-2)}`, avatarUrl: null, roleIds: [role], isBot: false, joinedAt: new Date() });
         return add(id, role);
       };
-      const votes = (receiverId: string, n: number, tier: 'ujiko' | 'sewayaku', base: bigint) =>
+      const votes = (receiverId: string, n: number, tier: 'ujiko' | 'sodai', base: bigint) =>
         db.insert(ema).values(Array.from({ length: n }, (_, i) => ({ giverId: String(base + BigInt(i)), receiverId, tier, message: '', createdAt: new Date(), revokedAt: null })));
       for (const [k, id] of SA.entries()) { await join(id, ROLE.sanpaisha); await votes(id, 5, 'ujiko', 4780000000000000000n + BigInt(k * 10)); }
-      await join(UJ, ROLE.ujiko); await votes(UJ, 3, 'sewayaku', 4790000000000000000n);
+      await join(UJ, ROLE.sewayaku); await votes(UJ, 3, 'sodai', 4790000000000000000n);
       await join(SB, ROLE.sanpaisha);
       await join(K, ROLE.ujiko);
       await db.insert(shuin).values({ giverId: '401000000000000099', receiverId: K, weight: 300, giverRank: 'guji' });
@@ -816,6 +885,7 @@ describe('🌸 新制度ローンチの通し稽古（③→④→⑤→元に�
         await app.checkEvaluationPromotions(guild as never);
         await app.checkGoenPerks(guild as never);
         await app.checkEmaKeep(guild as never);
+        await app.checkSewayakuElection(guild as never); // 前の月の世話役の投票（投票なし＝だれも上がらない）
         await syncMusubi();
       };
       await tick(); // ローンチ前：何も変わらない
@@ -827,7 +897,7 @@ describe('🌸 新制度ローンチの通し稽古（③→④→⑤→元に�
       await setEmaPromotion(db, true, G);
       await tick();
       for (const id of SA) expect([...members.get(id)!.roles.cache.keys()]).toContain(ROLE.ujiko); // 氏子の票5枚 → 氏子
-      expect([...members.get(UJ)!.roles.cache.keys()]).toContain(ROLE.sewayaku); // 世話役の票3枚 → 世話役
+      expect([...members.get(UJ)!.roles.cache.keys()]).toContain(ROLE.sodai); // 総代の票3枚 → 総代
       expect([...members.get(SB)!.roles.cache.keys()]).not.toContain(ROLE.ujiko); // 絵馬なしはまだ
       const keiji = sent.filter((s) => s.channelId === cfg.channels.keiji);
       expect(keiji.filter((s) => s.embeds?.length)).toHaveLength(5); // 1人ずつのカード

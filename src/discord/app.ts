@@ -42,6 +42,7 @@ import { currentAutoRank, decidePromotion, highestRank, voiceCapPercentOf, voice
 import { emaStepFrom, EMA_PROMOTION_BURST, EMA_TIER_LABEL } from '../domain/ema.js';
 import { w } from '../domain/terms.js';
 import { collectEmaKeepWarnings, emaPromotable, emaPromotionEnabled, emaStepProgress } from '../services/emaPromotion.js';
+import { candidateStatus, closeDueSewayakuElections, currentElectionOf, finishSewayakuElection, hasSewayakuVote, listSewayakuElections, openSewayakuElections, scheduleSewayakuElections, toggleSewayakuVote, voterStatus } from '../services/sewayakuElection.js';
 import { grantGoenPerks } from '../services/goenPerks.js';
 import { KeyedLock } from '../lib/lock.js';
 import { logger } from '../lib/logger.js';
@@ -69,6 +70,9 @@ import {
   type ProfileExtra,
   promotionAnnouncement,
   promotionBurstAnnouncement,
+  sewayakuInfoReply,
+  type SewayakuCardInfo,
+  sewayakuVoteReply,
   promotionLog,
   revokeLog,
   revokeReply,
@@ -300,6 +304,7 @@ export class ShuinApp {
     await this.checkEvaluationPromotions(guild, now).catch(err => logger.warn({ err }, 'evaluation promotion check failed'));
     await this.checkGoenPerks(guild, now).catch(err => logger.warn({ err }, 'goen perk check failed'));
     await this.checkEmaKeep(guild, now).catch(err => logger.warn({ err }, 'ema keep check failed'));
+    await this.checkSewayakuElection(guild, now).catch(err => logger.warn({ err }, 'sewayaku election check failed'));
     await awardLongVoiceBonuses(this.db, this.cfg, now).catch(err => logger.warn({ err }, 'long voice bonus tick failed'));
     await notifyLongVoiceBonuses(this.db, this.cfg, { sendMessage: async (channelId, body) => {
       const ch = await this.client.channels.fetch(channelId);
@@ -358,6 +363,8 @@ export class ShuinApp {
         const target = interaction.options.getUser('user') ?? interaction.user;
         const isPublic = interaction.options.getBoolean('public') ?? false;
         return await this.card(interaction, target.id, isPublic);
+      } else if (interaction.isChatInputCommand() && interaction.commandName === COMMAND.sewayaku) {
+        return await this.sewayakuInfo(interaction);
       } else if (interaction.isButton() && interaction.customId === SHUIN_PICK_ID) {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         return void (await interaction.editReply(posterPicker(await this.posters(interaction), 0)));
@@ -371,6 +378,7 @@ export class ShuinApp {
       } else if (interaction.isButton() && interaction.customId.startsWith('ema:')) {
         const parsed = parseEmaId(interaction.customId);
         if (parsed?.kind === 'give') return await this.emaGive(interaction, parsed.userId);
+        if (parsed?.kind === 'vote') return await this.sewayakuVote(interaction, parsed.userId);
       } else if (interaction.isModalSubmit() && interaction.customId.startsWith('ema:')) {
         const parsed = parseEmaId(interaction.customId);
         if (parsed?.kind === 'modal') return await this.emaSubmit(interaction, parsed.userId);
@@ -517,6 +525,88 @@ export class ShuinApp {
     }
   }
 
+  /** 🗳 世話役の選挙の投票（ご縁帳のボタン）。押すと投票・もう一度で取り消し。匿名なので #記録 にも出さない */
+  private async sewayakuVote(interaction: ButtonInteraction<'cached'>, candidateId: string): Promise<void> {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    if (!(await emaPromotionEnabled(this.db))) {
+      await interaction.editReply({ content: '世話役の選挙は、新制度が始まってからです。', allowedMentions: NO_MENTIONS });
+      return;
+    }
+    const result = await toggleSewayakuVote(this.db, this.cfg, interaction.user.id, candidateId);
+    await interaction.editReply({ ...sewayakuVoteReply(candidateId, result, this.cfg.emaThresholds), allowedMentions: NO_MENTIONS });
+  }
+
+  /** 🗳 /世話役の投票：投票中・これからの選挙と、自分が投票できるか（自分にだけ表示） */
+  private async sewayakuInfo(interaction: ChatInputCommandInteraction<'cached'>): Promise<void> {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    if (!(await emaPromotionEnabled(this.db))) {
+      await interaction.editReply({ content: '🗳 世話役の選挙は、新制度が始まってからです。', allowedMentions: NO_MENTIONS });
+      return;
+    }
+    const [elections, voter] = await Promise.all([listSewayakuElections(this.db, ['open', 'scheduled']), voterStatus(this.db, this.cfg, interaction.user.id)]);
+    const me = interaction.user.id;
+    const open = await Promise.all(
+      elections.filter((e) => e.status === 'open').map(async (e) => ({
+        candidateId: e.candidateId,
+        endsAt: e.endsAt,
+        canVote: (e.voterIds ?? []).includes(me),
+        voted: await hasSewayakuVote(this.db, e.id, me),
+      })),
+    );
+    const scheduled = elections.filter((e) => e.status === 'scheduled').map((e) => ({ candidateId: e.candidateId, startsAt: e.startsAt, endsAt: e.endsAt }));
+    await interaction.editReply({ ...sewayakuInfoReply(open, scheduled, voter, this.cfg.emaThresholds), allowedMentions: NO_MENTIONS });
+  }
+
+  private checkingSewayaku = false;
+  private lastSewayakuScan = 0;
+  /**
+   * 🗳 世話役の選挙の見回り（「絵馬での昇格」が ON のときだけ）。
+   * - 10分ごと：条件を満たした氏子の選挙を決める（その週か次の週の金・土・日）。
+   * - 毎分：金曜0時をすぎた選挙をはじめて #慶事 で知らせる／月曜0時をすぎた選挙を締め、票が投票できる人の6割を超えたら世話役にする。
+   * 結果（票の数と投票できる人の数だけ。だれが投票したかは出さない）を #記録 に残す。落ちたことは #慶事 には出さない。
+   */
+  async checkSewayakuElection(guild: Guild, now = new Date()): Promise<void> {
+    if (guild.id !== this.cfg.guildId || this.checkingSewayaku) return;
+    this.checkingSewayaku = true;
+    try {
+      if (!(await emaPromotionEnabled(this.db))) return;
+      const th = this.cfg.emaThresholds;
+      const day = (d: Date) => d.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', weekday: 'short' });
+      if (now.getTime() - this.lastSewayakuScan >= 10 * 60_000) {
+        this.lastSewayakuScan = now.getTime();
+        for (const e of await scheduleSewayakuElections(this.db, this.cfg, now)) {
+          await this.log(`🗳 世話役の選挙が決まりました：<@${e.candidateId}>（${day(e.startsAt)}〜${day(new Date(e.endsAt.getTime() - 1))}）`);
+        }
+      }
+      for (const e of await openSewayakuElections(this.db, this.cfg, now)) {
+        await this.send(this.cfg.channels.keiji, {
+          content: `🗳 **世話役の選挙**がはじまりました：<@${e.candidateId}> さま（${day(new Date(e.endsAt.getTime() - 1))} 23:59 まで）\n投票できる方（直近30日の縁側の浮上が ${Math.floor(th.sewayakuVoterMinutes / 60)} 時間を超えている氏子・世話役・総代）は、その方のご縁帳の「🗳 お世話役になってほしい」から匿名で投票できます。くわしくは /世話役の投票`,
+          allowedMentions: { parse: [], users: [] },
+        });
+        await this.log(`🗳 世話役の選挙をはじめました：<@${e.candidateId}>（投票できる人 ${e.voterIds?.length ?? 0} 人）`);
+      }
+      const to = this.cfg.ranks.find((r) => r.key === 'sewayaku');
+      for (const c of await closeDueSewayakuElections(this.db, this.cfg, now)) {
+        const id = c.election.candidateId;
+        let ok = false;
+        if (c.passes && to) {
+          const fresh = await guild.members.fetch({ user: id, force: true }).catch(() => undefined);
+          const current = fresh ? currentAutoRank(this.cfg.ranks, fresh.roles.cache.keys()) : undefined;
+          if (fresh && !fresh.user.bot && current?.key === 'ujiko' && highestRank(this.cfg.ranks, fresh.roles.cache.keys())?.key === 'ujiko') {
+            const held = new Set(fresh.roles.cache.keys());
+            const removeRoleIds = autoRanks(this.cfg.ranks).filter((x) => x.key !== to.key && held.has(x.roleId)).map((x) => x.roleId);
+            ok = await this.lock.run(id, async () => this.promote(fresh, { from: current, to, removeRoleIds }, await goenOf(this.db, fresh.id), undefined, { vote: { votes: c.votes, voters: c.voters } }))
+              .catch((err) => { logger.warn({ err, memberId: id }, 'sewayaku election promotion failed'); return false; });
+          }
+        }
+        await finishSewayakuElection(this.db, c.election.id, ok ? 'passed' : 'failed', now);
+        await this.log(
+          `🗳 世話役の選挙を締めました：<@${id}> ${c.votes} 票／投票できる人 ${c.voters} 人（${th.sewayakuVotePercent}% を超えたら昇格）→ ${ok ? '世話役に昇格' : c.passes ? '票は届いたが昇格できず（役職を確かめてください）' : c.voters < th.sewayakuMinVoters ? `不成立（投票できる人が ${th.sewayakuMinVoters} 人未満）` : `届かず（縁側 ${Math.floor(th.sewayakuRetryMinutes / 60)} 時間でまた候補）`}`,
+        );
+      }
+    } finally { this.checkingSewayaku = false; }
+  }
+
   /** 🧵 まだ結んでいない人（結びのコレクション）: 自分のプロフィールから。選ぶと結べる（SHUIN_PICK_ONE で give） */
   private async unmetPick(interaction: ButtonInteraction<'cached'>, viewerId: string): Promise<void> {
     if (interaction.user.id !== viewerId) {
@@ -551,7 +641,7 @@ export class ShuinApp {
 
     // 残高は、自分の御朱印帳を自分だけに見えるように開いたときだけ（ほかの人の残高は見せない）
     const showCoins = interaction.user.id === ownerId && !isPublic;
-    // 🎐 絵馬は、その人の「次の段」の票を数える（参拝者=氏子の票／氏子=世話役の票／世話役=総代の票）
+    // 🎐 絵馬は、その人の「次の段」の票を数える（参拝者=氏子の票／氏子=氏子の票（維持）／世話役=総代の票）
     const ownerStep = emaStepFrom(highestRank(this.cfg.ranks, owner.roles.cache.keys())?.key, this.cfg.emaThresholds);
     const emaTier = ownerStep?.tier ?? 'ujiko';
     const [data, wallet, tickets, emaCount, emaMessages, emaMode] = await Promise.all([
@@ -572,6 +662,19 @@ export class ShuinApp {
           inPeriod: ownerStep.from === 'sanpaisha',
         }
       : undefined;
+    // 🗳 氏子のご縁帳：世話役の選挙（候補までの道のり・決まった選挙・投票中なら投票ボタン）
+    const ownerIsUjiko = highestRank(this.cfg.ranks, owner.roles.cache.keys())?.key === 'ujiko';
+    let sewayakuInfo: SewayakuCardInfo | undefined;
+    if (emaMode && ownerIsUjiko) {
+      const [cand, election] = await Promise.all([candidateStatus(this.db, this.cfg, ownerId), currentElectionOf(this.db, ownerId)]);
+      const isOpen = election?.status === 'open';
+      sewayakuInfo = {
+        status: cand,
+        ...(election ? { election: { status: election.status, startsAt: election.startsAt, endsAt: election.endsAt } } : {}),
+        showVote: isOpen && interaction.user.id !== ownerId,
+        voted: isOpen && election && interaction.user.id !== ownerId ? await hasSewayakuVote(this.db, election.id, interaction.user.id) : false,
+      };
+    }
     const ticketText = tickets ? allTicketsLine(tickets, await customHoldingsOf(this.db, ownerId)) : undefined;
     // 🧵 結びのコレクションは自分のプロフィールだけ
     const collection = interaction.user.id === ownerId ? await metCollection(this.db, ownerId) : undefined;
@@ -589,7 +692,7 @@ export class ShuinApp {
         data,
         wallet ? { emoji: e.currencyEmoji, name: e.currencyName, balance: wallet.balance } : undefined,
         { ...(await this.profileOf(owner, interaction.user.id === ownerId)), ...(ticketText ? { tickets: ticketText } : {}) },
-        { count: emaCount, messages: emaMessages, promoteMode: emaMode, ...(emaStepInfo ? { step: emaStepInfo } : {}) },
+        { count: emaCount, messages: emaMessages, promoteMode: emaMode, ...(emaStepInfo ? { step: emaStepInfo } : {}), ...(sewayakuInfo ? { sewayaku: sewayakuInfo } : {}) },
         collection ? { total: collection.total, met: collection.met } : undefined,
       ),
     );
@@ -717,7 +820,7 @@ export class ShuinApp {
     this.checkingEvaluationPromotions = true;
     try {
       // 🎐 絵馬での昇格が ON のときは、昇格を全部「絵馬」で決める（ご縁・縁側時間は使わない）。
-      // 参拝者→氏子（お参り期間中・毎週きまる数・招待で補える）／氏子→世話役（世話役の票）／世話役→総代（総代の票）。
+      // 参拝者→氏子（お参り期間中・毎週きまる数・招待で補える）／世話役→総代（総代の票）。氏子→世話役は候補ごとの選挙（checkSewayakuElection）。
       if (await emaPromotionEnabled(this.db)) {
         const ids = await emaPromotable(this.db, this.cfg, now);
         // 🌸 切り替えた直後など、いっぺんに大勢が上がるときは、1人ずつの発表で役職の通知を鳴らしつづけない。
@@ -748,7 +851,7 @@ export class ShuinApp {
 
   /**
    * 🎐 絵馬での昇格。いまの役職の段に応じて票の種類と必要枚数を見る：
-   * 参拝者→氏子（お参り期間中・毎週きまる数・招待で補える）／氏子→世話役（世話役の票）／世話役→総代（総代の票）。
+   * 参拝者→氏子（お参り期間中・毎週きまる数・招待で補える）／世話役→総代（総代の票）。氏子→世話役は候補ごとの選挙。
    * ご縁・縁側時間は見ない。自動降格はしない。運営（最上位が自動役職でない人）は対象外。
    */
   private async emaPromote(member: GuildMember, now = new Date(), opts: { quiet?: boolean } = {}): Promise<boolean> {
@@ -802,8 +905,10 @@ export class ShuinApp {
    * 役職ロールを付け替えて #慶事 で発表する（emaCount を渡すと「絵馬◯枚で昇格」になる）。
    * quiet: 発表のカードに役職の通知を付けない（大勢がいっぺんに上がるとき。通知はまとめて1回）。昇格できたら true。
    */
-  private async promote(member: GuildMember, promotion: Promotion, goen: number, emaCount?: number, opts: { quiet?: boolean } = {}): Promise<boolean> {
-    const reason = emaCount !== undefined ? `絵馬 ${emaCount} 枚で ${promotion.to.name} に昇格` : `ご縁 ${goen} で ${promotion.to.name} に昇格`;
+  private async promote(member: GuildMember, promotion: Promotion, goen: number, emaCount?: number, opts: { quiet?: boolean; vote?: { votes: number; voters: number } } = {}): Promise<boolean> {
+    const reason = opts.vote
+      ? `投票（${opts.vote.voters} 人中 ${opts.vote.votes} 票）で ${promotion.to.name} に昇格`
+      : emaCount !== undefined ? `絵馬 ${emaCount} 枚で ${promotion.to.name} に昇格` : `ご縁 ${goen} で ${promotion.to.name} に昇格`;
     try {
       await member.roles.add(promotion.to.roleId, reason);
     } catch (err) {
@@ -820,8 +925,10 @@ export class ShuinApp {
         await this.log(`⚠️ ${member} さまの前の役職ロールを外せませんでした。手で外してください。`);
       });
     }
-    await this.send(this.cfg.channels.keiji, promotionAnnouncement(member.id, promotion, goen, opts.quiet ? [] : pingRoleIds(this.cfg), member.displayAvatarURL(), emaCount));
-    await this.log(emaCount !== undefined ? `⬆️ 昇格 <@${member.id}> ${promotion.from.name} → ${promotion.to.name}（絵馬 ${emaCount} 枚）` : promotionLog(member.id, promotion, goen));
+    await this.send(this.cfg.channels.keiji, promotionAnnouncement(member.id, promotion, goen, opts.quiet ? [] : pingRoleIds(this.cfg), member.displayAvatarURL(), emaCount, opts.vote));
+    await this.log(opts.vote
+      ? `⬆️ 昇格 <@${member.id}> ${promotion.from.name} → ${promotion.to.name}（世話役の投票 ${opts.vote.voters} 人中 ${opts.vote.votes} 票）`
+      : emaCount !== undefined ? `⬆️ 昇格 <@${member.id}> ${promotion.from.name} → ${promotion.to.name}（絵馬 ${emaCount} 枚）` : promotionLog(member.id, promotion, goen));
     await recordPromotion(this.db, member.id, promotion.from.key, promotion.to.key, goen).catch((err) =>
       logger.warn({ err }, 'recordPromotion failed'),
     );

@@ -11,7 +11,7 @@ import { resetAllShuin } from '../src/services/shuin.js';
 import { specialGoenOf } from '../src/services/specialGoen.js';
 import { startOmairi, getOmairi, extendOmairiByInvite } from '../src/services/applications.js';
 import { ujikoProgress } from '../src/services/ujikoRequirement.js';
-import { inviteGoenTier, INVITE_OMAIRI_EXT_CAP_DAYS, INVITE_OMAIRI_EXT_DAYS } from '../src/domain/invitePerks.js';
+import { INVITE_OMAIRI_EXT_CAP_DAYS, INVITE_OMAIRI_EXT_DAYS } from '../src/domain/invitePerks.js';
 import { cfg as baseCfg, makeDb, ROLE } from './helpers.js';
 
 const INVITER = '870000000000000001';
@@ -36,15 +36,8 @@ afterEach(async () => {
   await close();
 });
 
-describe('🤝 新制度⑥：結び補填と評価期間の延長', () => {
+describe('🤝 新制度⑥：評価期間の延長（結び補填はなし）', () => {
   const ext = (o: { endsAt: Date } | undefined, from = T0) => Math.round(((o?.endsAt.getTime() ?? from.getTime()) - from.getTime()) / DAY);
-
-  it('inviteGoenTier：階級ごとの1人あたりと上限', () => {
-    expect(inviteGoenTier(cfg.ranks, [ROLE.sanpaisha])).toEqual({ amount: 2, cap: 5 });
-    expect(inviteGoenTier(cfg.ranks, [ROLE.ujiko])).toEqual({ amount: 2, cap: 10 });
-    expect(inviteGoenTier(cfg.ranks, [ROLE.sewayaku])).toMatchObject({ amount: 2 });
-    expect(inviteGoenTier(cfg.ranks, [])).toEqual({ amount: 1, cap: Number.POSITIVE_INFINITY });
-  });
 
   it('extendOmairiByInvite：1人+3日・合計14日まで・お参り中でなければ何もしない', async () => {
     expect(await extendOmairiByInvite(db, INVITER, 3, 14, T0)).toBe(false); // お参り中でない
@@ -70,7 +63,7 @@ describe('🤝 新制度⑥：結び補填と評価期間の延長', () => {
     expect(await specialGoenOf(db, INVITER)).toBe(0);
   });
 
-  it('ONでも④ご縁のリセット前は結び補填しない（リセットで消えて1回きりの印だけ残るのを防ぐ）。評価期間はのばす', async () => {
+  it('ONのとき、④ご縁のリセット前でも評価期間はのばす（ご縁は足さない）', async () => {
     await setEmaPromotion(db, true, 'guji'); // ③ON だけ（まだ④リセットしていない）
     await db.update(members).set({ roleIds: [ROLE.sanpaisha] }).where(eq(members.id, INVITER));
     await startOmairi(db, INVITER, 14, T0);
@@ -80,16 +73,13 @@ describe('🤝 新制度⑥：結び補填と評価期間の延長', () => {
     expect(ext(await getOmairi(db, INVITER))).toBe(15); // 評価期間は +1（ご縁とは別）
   });
 
-  it('ONのとき、参拝者になった招待で招待主へ結び補填（氏子は+2）', async () => {
+  it('ONで④のあとでも、招待主へのご縁（結び補填）は足さない（ご縁は結びだけで等しく1ずつ）', async () => {
     await setEmaPromotion(db, true, 'guji');
     await resetAllShuin(db, 'guji', T0); // ④ご縁のリセット＝新制度のご縁の時代が始まる
     await db.update(members).set({ roleIds: [ROLE.ujiko] }).where(eq(members.id, INVITER));
     await recordInvite(db, NEW, INVITER);
     await rewardInviter(ctx(), NEW, T0);
-    expect(await specialGoenOf(db, INVITER)).toBe(2);
-    // 同じ招待では二重に足さない
-    await rewardInviter(ctx(), NEW, T0);
-    expect(await specialGoenOf(db, INVITER)).toBe(2);
+    expect(await specialGoenOf(db, INVITER)).toBe(0);
   });
 
   it('ONのとき、参拝者の招待主は評価期間が+1日のびる（お参り中）。招待は氏子への絵馬の補いにも数える', async () => {
@@ -99,7 +89,7 @@ describe('🤝 新制度⑥：結び補填と評価期間の延長', () => {
     await startOmairi(db, INVITER, 14, T0);
     await recordInvite(db, NEW, INVITER);
     await rewardInviter(ctx(), NEW, T0);
-    expect(await specialGoenOf(db, INVITER)).toBe(2); // 参拝者は各2
+    expect(await specialGoenOf(db, INVITER)).toBe(0); // 結び補填はなし
     expect(ext(await getOmairi(db, INVITER))).toBe(15); // 14 + 1
     expect((await getOmairi(db, INVITER))?.inviteExtDays).toBe(1);
     const p = await ujikoProgress(db, cfg, INVITER, new Date(T0.getTime() + 60_000));

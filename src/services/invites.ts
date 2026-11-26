@@ -3,35 +3,25 @@ import { and, count, desc, eq, gte, inArray, isNotNull, isNull, or, sql } from '
 import { autoRanks } from '../domain/ranks.js';
 import { adminLevelOf, type GuildConfig, type Rank } from '../config.js';
 import type { Db } from '../db/client.js';
-import { activityDaily, inviteActive, inviteLinks, invites, members, specialGoen, type Invite, type InviteLink } from '../db/schema.js';
+import { activityDaily, inviteActive, inviteLinks, invites, members, type Invite, type InviteLink } from '../db/schema.js';
 import type { DiscordActions } from '../lib/discordRest.js';
 import { logger } from '../lib/logger.js';
 import { jstDate } from './activity.js';
 import { addCoins } from './economy.js';
 import { audit } from './audit.js';
 import { emaPromotionEnabled } from './emaPromotion.js';
-import { grantSpecialGoen } from './specialGoen.js';
-import { newSystemStartedAt } from './shuin.js';
 import { extendOmairiByInvite } from './applications.js';
-import { inviteGoenTier, INVITE_OMAIRI_EXT_CAP_DAYS, INVITE_OMAIRI_EXT_DAYS } from '../domain/invitePerks.js';
-
-const INVITE_GOEN_REASON = '🤝 結び補填（招待）';
+import { INVITE_OMAIRI_EXT_CAP_DAYS, INVITE_OMAIRI_EXT_DAYS } from '../domain/invitePerks.js';
 
 /**
- * 🤝 新制度⑥：招待した人が参拝者になったときの、招待主への結び補填（ご縁）と評価期間の延長。
- * 「絵馬での昇格」が ON のときだけ効く（新制度が始まってから）。1 人につき 1 回（nonce で重複しない）。
+ * 🤝 新制度⑥：招待した人が参拝者になったときの、お参り期間ののばし（招待1人で+1日・上限なし）。
+ * 「絵馬での昇格」が ON のときだけ効く（新制度が始まってから）。
+ * 招待主への結び補填（ご縁）は 2026-11-26 の本人の決定でなくした。
  */
-async function applyInvitePerks(ctx: RewardContext, inviterId: string, inviteeId: string, now: Date): Promise<void> {
+async function applyInvitePerks(ctx: RewardContext, inviterId: string, _inviteeId: string, now: Date): Promise<void> {
   if (!(await emaPromotionEnabled(ctx.db))) return;
   const [inviter] = await ctx.db.select().from(members).where(eq(members.id, inviterId));
   if (!inviter || inviter.leftAt || inviter.isBot) return;
-  // 結び補填：階級ごとの 1 人あたりのご縁と上限人数。
-  // ご縁を足すので、④ご縁のリセットが済んでから（リセット前に足すとリセットで消え、1回きりの印だけ残ってしまう）
-  const tier = inviteGoenTier(ctx.cfg.ranks, inviter.roleIds);
-  const [{ n } = { n: 0 }] = await ctx.db.select({ n: count() }).from(specialGoen).where(and(eq(specialGoen.memberId, inviterId), eq(specialGoen.reason, INVITE_GOEN_REASON), isNull(specialGoen.revokedAt)));
-  if (Number(n) < tier.cap && (await newSystemStartedAt(ctx.db))) {
-    await grantSpecialGoen(ctx.db, { memberId: inviterId, amount: tier.amount, reason: INVITE_GOEN_REASON, by: 'system', nonce: `invite_goen:${inviterId}:${inviteeId}` }).catch((err) => logger.warn({ err, inviterId, inviteeId }, 'invite goen grant failed'));
-  }
   // 評価期間の延長（お参り中の参拝者だけ・招待での合計は上限まで）
   await extendOmairiByInvite(ctx.db, inviterId, INVITE_OMAIRI_EXT_DAYS, INVITE_OMAIRI_EXT_CAP_DAYS, now).catch((err) => logger.warn({ err, inviterId }, 'invite omairi extend failed'));
 }
@@ -116,7 +106,7 @@ export async function rewardInviter(ctx: RewardContext, memberId: string, now = 
     return true;
   });
   if (!done) return { status: 'already' };
-  // 🤝 新制度⑥：参拝者になった招待は、招待主へ結び補填＋評価期間の延長（絵馬での昇格が ON のときだけ）
+  // 🤝 新制度⑥：参拝者になった招待は、招待主のお参り期間を+1日（絵馬での昇格が ON のときだけ）
   if (stage === 'sanpaisha') await applyInvitePerks(ctx, inv.inviterId, memberId, now);
   if (amount <= 0) return { status: 'disabled' };
   const e = ctx.cfg.economy;

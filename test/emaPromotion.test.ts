@@ -57,11 +57,10 @@ it('参拝者は必要数（ここでは最低5枚）に届いた人を昇格候
   expect(await emaPromotable(db, five, now)).toEqual([SA]);
 });
 
-it('氏子は世話役の票3枚で昇格候補に（氏子の票では上がらない・世話役の票は失効なし）', async () => {
-  await seedEma(UJ, 9); // 氏子の票は何枚あっても氏子→世話役には関係ない
-  await seedEma(UJ2, 3, false, 'sewayaku'); // 世話役の票3枚＝候補
-  await seedEma(UJ, 3, true, 'sewayaku'); // 世話役の票は失効しない（older でも有効）＝UJも候補
-  expect((await emaPromotable(db, cfg, now)).sort()).toEqual([UJ, UJ2].sort());
+it('氏子は絵馬では世話役に上がらない（氏子→世話役は毎月の投票）', async () => {
+  await seedEma(UJ, 9); // 氏子の票は何枚あっても関係ない
+  await seedEma(UJ2, 3, false, 'sewayaku'); // 前の決まりの世話役の票が残っていても上がらない
+  expect(await emaPromotable(db, cfg, now)).toEqual([]);
 });
 
 it('世話役は総代の票3枚で昇格候補に（2枚では出さない）', async () => {
@@ -84,10 +83,10 @@ it('維持の注意：有効な氏子の票3枚未満の氏子を、少ない順
   expect(await ujikoBelowKeep(db, cfg, now)).toEqual([{ id: UJ, count: 2 }]);
 });
 
-it('枚数の設定は宮司が変えられる（世話役の票2枚で候補・維持0枚で注意なし）', async () => {
-  await seedEma(UJ, 2, false, 'sewayaku'); // 既定(3)では足りないが…
+it('枚数の設定は宮司が変えられる（総代の票2枚で候補・維持0枚で注意なし）', async () => {
+  await seedEma(SW2, 2, false, 'sodai'); // 既定(3)では足りないが…
   expect(await emaPromotable(db, cfg, now)).toEqual([]);
-  expect(await emaPromotable(db, withThresholds({ sewayakuPromote: 2 }), now)).toEqual([UJ]); // 2に下げると候補
+  expect(await emaPromotable(db, withThresholds({ sodaiPromote: 2 }), now)).toEqual([SW2]); // 2に下げると候補
   // UJ2 は氏子で氏子の票0枚。維持0なら注意なし
   expect(await ujikoBelowKeep(db, withThresholds({ ujikoKeep: 0 }), now)).toEqual([]);
 });

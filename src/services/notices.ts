@@ -12,7 +12,7 @@ import { DEFAULT_GUIDES, DEFAULT_NOTICES, EMA_GUIDE, REQUEST_WINDOW_TEMPLATE, PR
 import { notifyReady, pingRoleIds } from './notify.js';
 import { describeStreakRewards, omikujiRange } from './omikuji.js';
 import { coreTimeRate, describeCoreTime } from './coreTime.js';
-import { emaSteps, EMA_DEFAULT_THRESHOLDS, EMA_TIER_LABEL, ujikoRuleText } from '../domain/ema.js';
+import { emaSteps, EMA_DEFAULT_THRESHOLDS, EMA_TIER_LABEL, sewayakuRuleText, ujikoRuleText } from '../domain/ema.js';
 import { musubiWeight } from '../domain/musubi.js';
 import { w } from '../domain/terms.js';
 
@@ -219,13 +219,17 @@ export function noticeVariables(cfg: GuildConfig): NoticeVariable[] {
       : `絵馬（${EMA_TIER_LABEL[s.tier]}）${s.promote} 枚`;
   const emaRankLine = (r: (typeof ranks)[number]) => {
     const step = steps.find((s) => s.to === r.key);
-    const how = !r.auto ? (r.key === 'guji' ? '鯖主' : '運営') : r === firstAuto ? '入ったとき' : step ? stepText(step) : `ご縁 ${r.requiredGoen}`;
+    const how = !r.auto ? (r.key === 'guji' ? '鯖主' : '運営') : r === firstAuto ? '入ったとき' : step ? stepText(step) : r.key === 'sewayaku' ? sewayakuRuleText(th) : `ご縁 ${r.requiredGoen}`;
     return `- ${r.emoji} **${r.name}** … ${how} ・ 結び ${musubiWeight(r.key)}`;
   };
-  const emaSummary = steps
+  const emaParts = steps
     .filter((s) => ranks.some((r) => r.key === s.to))
-    .map((s) => `${ranks.find((r) => r.key === s.from)?.name ?? s.from}→${ranks.find((r) => r.key === s.to)?.name ?? s.to}は${s.from === 'sanpaisha' ? `お参り期間中に${EMA_TIER_LABEL[s.tier]}を毎週きまる数（${ujikoRuleText(th)}・招待で${th.inviteSubstituteMax}つまで補える）` : `${EMA_TIER_LABEL[s.tier]} ${s.promote} 枚`}`)
-    .join('／');
+    .map((s) => `${ranks.find((r) => r.key === s.from)?.name ?? s.from}→${ranks.find((r) => r.key === s.to)?.name ?? s.to}は${s.from === 'sanpaisha' ? `お参り期間中に${EMA_TIER_LABEL[s.tier]}を毎週きまる数（${ujikoRuleText(th)}・招待で${th.inviteSubstituteMax}つまで補える）` : `${EMA_TIER_LABEL[s.tier]} ${s.promote} 枚`}`);
+  // 氏子→世話役は選挙（参拝者→氏子のあとに入れる）
+  if (ranks.some((r) => r.key === 'sewayaku') && ranks.some((r) => r.key === 'ujiko')) {
+    emaParts.splice(Math.min(1, emaParts.length), 0, `${ranks.find((r) => r.key === 'ujiko')!.name}→${ranks.find((r) => r.key === 'sewayaku')!.name}は${sewayakuRuleText(th)}`);
+  }
+  const emaSummary = emaParts.join('／');
   return [
     { name: '通貨', value: e.currencyName, note: '通貨の名前' },
     { name: '通貨絵文字', value: e.currencyEmoji, note: '通貨の絵文字' },
@@ -254,7 +258,8 @@ export function noticeVariables(cfg: GuildConfig): NoticeVariable[] {
     { name: '絵馬の昇格', value: emaSummary, note: '新制度：絵馬での昇格の決まり（1行）' },
     { name: '氏子の絵馬', value: `毎週きまる数（${ujikoRuleText(th)}）`, note: '新制度：参拝者→氏子に要る氏子の票（お参り期間中に集める・毎週きまる）' },
     { name: '招待の補い', value: String(th.inviteSubstituteMax), note: '新制度：参拝者→氏子で、招待で補える数（招待した人が参拝者になったら1つ）' },
-    { name: '世話役の絵馬', value: String(th.sewayakuPromote), note: '新制度：氏子→世話役に要る世話役の票' },
+    { name: '世話役の投票', value: sewayakuRuleText(th), note: '新制度：氏子→世話役の決まり（候補ごとの金・土・日の選挙・匿名）' },
+    { name: '世話役の絵馬', value: sewayakuRuleText(th), note: '（前の名前）{世話役の投票} と同じ。氏子→世話役は選挙になった' },
     { name: '総代の絵馬', value: String(th.sodaiPromote), note: '新制度：世話役→総代に要る総代の票' },
     { name: '維持の絵馬', value: String(th.ujikoKeep), note: '新制度：氏子の維持に要る氏子の票（これ未満で注意）' },
     { name: 'コマンド一覧', value: commandsText(), note: 'メンバーが使えるコマンドの箇条書き（コマンドを足すと自動で増える）' },

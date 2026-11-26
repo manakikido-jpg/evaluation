@@ -55,7 +55,7 @@ export async function emaStepProgress(db: Db, cfg: GuildConfig, memberId: string
 /**
  * 絵馬が必要枚数そろって、次の役職に昇格できる人の ID。
  * いまの役職の段（emaStepFrom）に応じて、数える票の種類と必要枚数が変わる：
- * 参拝者→氏子（お参り期間中・毎週きまる数・招待で補える）／氏子→世話役（世話役の票）／世話役→総代（総代の票）。
+ * 参拝者→氏子（お参り期間中・毎週きまる数・招待で補える）／世話役→総代（総代の票）。氏子→世話役は候補ごとの選挙（sewayakuElection.ts）。
  * 運営（神職・宮司など自動役職でない位が最上位の人）は対象外。
  */
 export async function emaPromotable(db: Db, cfg: GuildConfig, now = new Date()): Promise<string[]> {

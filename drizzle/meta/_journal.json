@@ -1205,6 +1205,13 @@
       "when": 1795608326692,
       "tag": "0171_motionless_grey_gargoyle",
       "breakpoints": true
+    },
+    {
+      "idx": 172,
+      "version": "7",
+      "when": 1795664635927,
+      "tag": "0172_fixed_chronomancer",
+      "breakpoints": true
     }
   ]
 }
