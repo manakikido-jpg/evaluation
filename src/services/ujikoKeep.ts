@@ -235,7 +235,7 @@ export async function setMotoByStaff(db: Db, cfg: GuildConfig, memberId: string,
   });
 }
 
-export type MotoBulkRow = { id: string; name: string; total: number; fromSanpai: number; need: number; needSanpai: number; short: number; met: boolean; judgeAt: Date | null };
+export type MotoBulkRow = { id: string; name: string; username: string; total: number; fromSanpai: number; need: number; needSanpai: number; short: number; met: boolean; judgeAt: Date | null };
 
 /**
  * 🍂 まとめて切り替える画面の一覧。氏子（いまの絵馬とキープに足りるか）と、元氏子（氏子に戻るまで）。
@@ -244,7 +244,7 @@ export type MotoBulkRow = { id: string; name: string; total: number; fromSanpai:
 export async function motoBulkList(db: Db, cfg: GuildConfig, now = new Date()): Promise<{ ujiko: MotoBulkRow[]; moto: MotoBulkRow[] }> {
   const period = cfg.emaThresholds.keepDays * DAY;
   const [people, alts, altRows, rows] = await Promise.all([
-    db.select({ id: members.id, name: members.displayName, roleIds: members.roleIds }).from(members).where(and(eq(members.isBot, false), isNull(members.leftAt))),
+    db.select({ id: members.id, name: members.displayName, username: members.username, roleIds: members.roleIds }).from(members).where(and(eq(members.isBot, false), isNull(members.leftAt))),
     staffAlts(db),
     db.select({ id: memberAlts.altId }).from(memberAlts).where(eq(memberAlts.status, 'approved')),
     db.select().from(ujikoKeepState),
@@ -259,13 +259,42 @@ export async function motoBulkList(db: Db, cfg: GuildConfig, now = new Date()): 
     if (rank === 'ujiko') {
       const judgeAt = row?.state === 'ujiko' ? row.nextJudgeAt : null;
       const p = await keepProgress(db, cfg, m.id, new Date((judgeAt ?? new Date(now.getTime() + period)).getTime() - period), now);
-      out.ujiko.push({ id: m.id, name: m.name, total: p.total + p.inviteUsed, fromSanpai: p.fromSanpai + p.inviteUsed, need: p.need, needSanpai: p.needSanpai, short: p.short, met: p.met, judgeAt });
+      out.ujiko.push({ id: m.id, name: m.name, username: m.username, total: p.total + p.inviteUsed, fromSanpai: p.fromSanpai + p.inviteUsed, need: p.need, needSanpai: p.needSanpai, short: p.short, met: p.met, judgeAt });
     } else if (rank === 'sanpaisha' && row?.state === 'moto') {
       const p = await motoProgress(db, cfg, m.id, row.since, now);
-      out.moto.push({ id: m.id, name: m.name, total: p.total + p.inviteUsed, fromSanpai: p.fromSanpai + p.inviteUsed, need: p.need, needSanpai: p.needSanpai, short: p.short, met: p.met, judgeAt: null });
+      out.moto.push({ id: m.id, name: m.name, username: m.username, total: p.total + p.inviteUsed, fromSanpai: p.fromSanpai + p.inviteUsed, need: p.need, needSanpai: p.needSanpai, short: p.short, met: p.met, judgeAt: null });
     }
   }
   out.ujiko.sort((a, b) => b.short - a.short || a.name.localeCompare(b.name, 'ja'));
   out.moto.sort((a, b) => a.short - b.short || a.name.localeCompare(b.name, 'ja'));
   return out;
+}
+
+/**
+ * 「残す人」の名簿（1行に1つ・Discord のユーザー名）を読む。行の頭の「1. 」のような番号と、前後の空白は外す。
+ * 大文字と小文字は区別しない。
+ */
+export function parseKeepNames(text: string): string[] {
+  const out = new Set<string>();
+  for (const raw of text.split(/\r?\n/)) {
+    const name = raw.trim().replace(/^\d+[.．)）]\s+/, '').replace(/^@/, '').trim().toLowerCase();
+    if (name) out.add(name);
+  }
+  return [...out];
+}
+
+/**
+ * 名簿にない氏子（＝元氏子にする人）を出す。名簿の名前のうち、氏子でない人・見つからない名前も返す（書きまちがいを見つけるため）。
+ */
+export async function keepListPreview(db: Db, cfg: GuildConfig, text: string, now = new Date()): Promise<{ demote: MotoBulkRow[]; kept: MotoBulkRow[]; notUjiko: string[]; unknown: string[] }> {
+  const names = parseKeepNames(text);
+  const want = new Set(names);
+  const { ujiko } = await motoBulkList(db, cfg, now);
+  const kept = ujiko.filter((x) => want.has(x.username.toLowerCase()));
+  const keptNames = new Set(kept.map((x) => x.username.toLowerCase()));
+  const rest = names.filter((n) => !keptNames.has(n));
+  const known = rest.length
+    ? new Set((await db.select({ username: members.username }).from(members).where(and(eq(members.isBot, false), isNull(members.leftAt)))).map((m) => m.username.toLowerCase()))
+    : new Set<string>();
+  return { demote: ujiko.filter((x) => !want.has(x.username.toLowerCase())), kept, notUjiko: rest.filter((n) => known.has(n)), unknown: rest.filter((n) => !known.has(n)) };
 }

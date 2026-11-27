@@ -1,4 +1,4 @@
-import { isMotoUjiko, motoBulkList, newSystemRoles, setMotoByStaff, type MotoChange } from '../services/ujikoKeep.js';
+import { isMotoUjiko, keepListPreview, motoBulkList, newSystemRoles, setMotoByStaff, type MotoChange } from '../services/ujikoKeep.js';
 import { MotoUjikoPage } from './views/motoUjiko.js';
 import { newSystemActive } from '../services/perkGate.js';
 import { aramitamaRoleId } from '../services/aramitama.js';
@@ -3183,6 +3183,17 @@ export function createWebApp(deps: WebDeps) {
     const [active, roles, list] = await Promise.all([newSystemActive(db), newSystemRoles(db), motoBulkList(db, cfg, now())]);
     const shortOnly = c.req.query('short') === '1';
     return c.html(<MotoUjikoPage session={session} active={active} roleSet={Boolean(roles.motoUjiko)} ujiko={shortOnly ? list.ujiko.filter((x) => !x.met) : list.ujiko} moto={list.moto} shortOnly={shortOnly} th={cfg.emaThresholds} flash={c.req.query('msg') ?? undefined} done={Number(c.req.query('n') ?? 0)} failed={Number(c.req.query('f') ?? 0)} />);
+  });
+  // 🍂 「残す人」の名簿を貼って、それ以外の氏子を出す（まだ変えない。下の「この一覧の全員」で変える）
+  app.post('/evaluation/moto-ujiko/keep', async (c) => {
+    c.header('Cache-Control', 'private, no-store');
+    const session = c.get('session');
+    if (session.level !== 'guji') return c.text('元氏子への切り替えは宮司だけです。', 403);
+    const body = await c.req.parseBody();
+    const text = typeof body.keep === 'string' ? body.keep.slice(0, 20000) : '';
+    const [active, roles, list, pre] = await Promise.all([newSystemActive(db), newSystemRoles(db), motoBulkList(db, cfg, now()), keepListPreview(db, cfg, text, now())]);
+    return c.html(<MotoUjikoPage session={session} active={active} roleSet={Boolean(roles.motoUjiko)} ujiko={pre.demote} moto={list.moto} shortOnly={false} th={cfg.emaThresholds}
+      keep={{ text, kept: pre.kept.length, notUjiko: pre.notUjiko, unknown: pre.unknown }} />);
   });
   app.post('/evaluation/moto-ujiko', async (c) => {
     c.header('Cache-Control', 'private, no-store');

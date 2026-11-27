@@ -420,6 +420,20 @@ describe('厄・BAN・キック・メモ（管理画面）', () => {
     expect(await isMotoUjiko(db, B)).toBe(true);
     expect(await isMotoUjiko(db, C)).toBe(false);
     expect((await listAudit(db, { action: 'ujiko.to_moto' })).length).toBe(2);
+    // 📋 「残す人」の名簿：名簿にない氏子だけを出す（まだ変えない）。書きまちがい・氏子でない人も知らせる
+    const { parseKeepNames, keepListPreview } = await import('../src/services/ujikoKeep.js');
+    expect(parseKeepNames('1. U2\n  u9.. \n\n@Abc\n154cm\n73167.')).toEqual(['u2', 'u9..', 'abc', '154cm', '73167.']);
+    const pre = await keepListPreview(db, cfg, '1. U2\nnobody_x\nu0', clock);
+    expect(pre.kept.map((x) => x.id)).toEqual([C]);
+    expect(pre.demote.map((x) => x.id)).not.toContain(C);
+    expect(pre.unknown).toEqual(['nobody_x']);
+    expect(pre.notUjiko).toEqual(['u0']); // A はもう元氏子（氏子ではない）
+    const keepPage = await (await app.request('/evaluation/moto-ujiko/keep', { method: 'POST', headers: { cookie: `shamusho_session=${g}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ _csrf: await csrfOf(g), keep: '1. U2\nnobody_x' }).toString() })).text();
+    expect(keepPage).toContain('名簿で残る氏子 <strong>1 人</strong>');
+    expect(keepPage).toContain('nobody_x');
+    expect(keepPage).not.toContain(`name="listed" value="${C}"`);
+    expect(await isMotoUjiko(db, C)).toBe(false);
+    expect((await app.request('/evaluation/moto-ujiko/keep', { method: 'POST', headers: { cookie: `shamusho_session=${s}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ _csrf: await csrfOf(s), keep: 'u2' }).toString() })).status).toBe(403);
     // 元氏子の一覧に出る → まとめて氏子に戻す
     const page = await (await get('/evaluation/moto-ujiko', g)).text();
     expect(page).toContain('元氏子 <strong>2 人</strong>');
