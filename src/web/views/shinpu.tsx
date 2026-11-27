@@ -11,17 +11,17 @@ export function ShinpuTestPage({ csrf, name, staff = true }: { csrf: string; nam
     <html lang="ja">
       <head>
         <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
         <title>神符合戦 | 咲楽ノ宮・招待制無料β</title>
         <link rel="stylesheet" href="${assetUrl('shinpu.css')}" />
       </head>
       <body data-csrf="${csrf}" data-art="${art}" data-art-full="${fullArt}">
         <header>
           <div class="brand"><span class="crest" aria-hidden="true">✿</span><span>咲楽ノ宮 / 神符合戦</span></div>
-          <nav>${staff ? html`<a href="/economy/shinpu">社務所へ</a>` : html`<a href="/casino/shinpu/cards">神器図鑑</a>`}<span class="tag">招待制無料β</span><button data-dialog="rules">遊び方</button><button id="leave">部屋を退出</button></nav>
+          <nav>${staff ? html`<a href="/economy/shinpu">社務所へ</a>` : html`<a href="/casino/shinpu/cards">神器図鑑</a>`}<span class="tag">招待制無料β</span><button id="viewport-toggle" aria-label="画面内表示" data-presentation-control aria-pressed="true" title="画面内表示と通常表示を切り替える">通常表示</button><button data-dialog="presentation" data-presentation-control>音・演出</button><button data-dialog="rules">遊び方</button><button id="leave">部屋を退出</button></nav>
         </header>
         <section id="connection-banner" class="connection-banner" role="status" hidden><span id="connection-message"></span><button id="reconnect" data-presentation-control>再接続</button><button id="back-lobby" data-presentation-control>ロビーへ</button></section>
-        <details class="presentation-settings"><summary>音・演出</summary><button id="sound-toggle" data-presentation-control aria-pressed="false">音 OFF</button><label>音量<input id="sound-volume" type="range" min="0" max="1" step="0.05" value="0.3"/></label><label>演出<select id="effect-mode"><option value="normal">通常</option><option value="short">短い</option><option value="off">なし</option></select></label><span id="effects-status" role="status"></span></details>
+
         <div id="battle-fx" class="battle-fx" aria-hidden="true" hidden></div>
         <main class="wrap" id="lobby">
           <section class="arena">
@@ -60,9 +60,7 @@ export function ShinpuTestPage({ csrf, name, staff = true }: { csrf: string; nam
             </div>
             <span class="statuspill" id="round"></span>
           </div>
-          <details id="previous-outcome" class="match-history" hidden><summary>前の対戦結果</summary><p id="previous-outcome-body"></p></details>
-          <section id="match-outcome" class="match-outcome" hidden><h2 id="outcome-title"></h2><p id="outcome-reason"></p><p id="outcome-hit"></p><div id="outcome-stats" class="outcome-stats"></div><p class="hint">ダメージは攻撃・反射の解決値です（火傷は含めません）。</p><p id="rematch-status" role="status"></p><button id="rematch" class="primary">同じ人で再戦する</button><p class="hint">残っている人間の参加者全員が準備すると、同じ席で新しく始まります。部屋の保存期限も2時間に更新します。</p></section>
-          <section class="players" id="players" aria-label="相手・攻撃対象"></section>
+
           <section id="battle-result" class="battle-result" role="status" aria-live="polite" hidden></section>
           <div class="board">
             <aside class="logbox">
@@ -74,28 +72,22 @@ export function ShinpuTestPage({ csrf, name, staff = true }: { csrf: string; nam
                 <h1 id="phase"></h1>
                 <span id="deadline" class="deadline" aria-live="off"></span>
               </div>
+              <div class="battle-tools"><button id="target-open" data-dialog="target-picker">相手を選ぶ</button><button id="selection-open" data-dialog="selection-popup">選んだ札 0枚</button><button id="forecast-open" data-dialog="forecast-popup" hidden>防御の見込み</button><button id="choice-open" data-dialog="choice-popup" hidden>候補から選ぶ</button></div>
               <div id="summon-effect" class="summon-effect" role="status" aria-live="polite" hidden></div>
               <div class="selection-stage">
-                <div id="selected-cards" class="selected-cards" aria-label="選んだ札"></div>
+
                 <div class="calculation">
                   <h2 id="message"></h2>
                   <div class="summary" id="summary"></div>
-                  <div id="defense-forecast" class="defense-forecast" role="status" aria-live="polite" hidden></div>
+                  <p id="defense-brief" class="defense-brief" role="status" hidden></p>
                 </div>
                 <div id="target-preview" class="target-preview"></div>
               </div>
-              <fieldset id="card-options" hidden><legend>札の使い方</legend>
-                <label id="heal-target-label" hidden>回復する人<select id="heal-target"></select></label>
-                <label id="second-target-label" hidden>2人目の攻撃対象<select id="second-target"></select></label>
-                <label id="element-label" hidden>選ぶ属性<select id="chosen-element"><option>火</option><option>水</option><option>風</option><option>雷</option><option>土</option><option>光</option><option>闇</option></select></label>
-                <label id="optional-pay-label" hidden><input type="checkbox" id="optional-pay" /><span id="optional-pay-description">追加の霊銭・MPを払う</span></label>
-              </fieldset>
-              <section id="card-choice" hidden><h2 id="choice-label"></h2><div id="choice-cards" class="choice-cards"></div><p id="choice-count"></p></section>
             </section>
             <section class="handarea">
               <section id="self-resources" class="self-resources" aria-label="自分のHP・MP・霊銭"></section>
               <div class="handheading">
-                <span id="hand-title">あなたの神器</span><span class="small">札を押して選択・「拡大・効果」で詳しく見る</span>
+                <span id="hand-title">あなたの神器</span><div class="hand-pager fit-only" aria-label="手札のページ"><button id="hand-prev" data-presentation-control aria-label="前の手札">‹</button><span id="hand-page" aria-live="polite"></span><button id="hand-next" data-presentation-control aria-label="次の手札">›</button></div>
               </div>
               <div class="hand" id="hand" aria-label="あなたの手札"></div>
             </section>
@@ -104,10 +96,7 @@ export function ShinpuTestPage({ csrf, name, staff = true }: { csrf: string; nam
               <div class="actions">
                 <button class="primary" id="main-action"></button>
                 <button id="clear-selection">選択解除</button>
-                <details id="more-actions" class="more-actions"><summary>その他</summary><div class="more-actions-menu">
-                  <button id="exchange-open">両替</button><button id="pass">様子を見る</button>
-                  <button data-dialog="history">戦いの記録</button>
-                </div></details>
+                <button id="more-actions" data-dialog="action-menu">その他</button>
               </div>
               <p class="muted" id="hint"></p>
             </section>
@@ -125,6 +114,7 @@ export function ShinpuTestPage({ csrf, name, staff = true }: { csrf: string; nam
         <footer>
           神符合戦・招待制無料β · 招待された人同士＋CPU / テスト専用<br />HP・MP・霊銭は上限なしの招待制無料βです。対戦内の「霊銭」はサーバーの銭と別です。本番の残高には影響しません。
         </footer>
+        <dialog id="presentation" class="presentation-settings"><button class="close" data-close>閉じる</button><h2>音・演出</h2><button id="sound-toggle" data-presentation-control aria-pressed="false">音 OFF</button><label>音量<input id="sound-volume" type="range" min="0" max="1" step="0.05" value="0.3"/></label><label>演出<select id="effect-mode"><option value="normal">通常</option><option value="short">短い</option><option value="off">なし</option></select></label><span id="effects-status" role="status"></span></dialog>
         <dialog id="rules">
           <button class="close" data-close>閉じる</button>
           <h2>遊び方</h2>
@@ -159,9 +149,29 @@ export function ShinpuTestPage({ csrf, name, staff = true }: { csrf: string; nam
           </div>
           <p class="hint">試作用のレートです。サーバーの銭には影響しません。</p>
         </dialog>
+        <dialog id="action-menu" aria-label="その他の操作"><button class="close" data-close>閉じる</button><h2>その他の操作</h2><div class="popup-actions">
+                  <button id="exchange-open">両替</button><button id="pass">様子を見る</button>
+                  <button data-dialog="player-details">参加者の状態</button><button data-dialog="history">結果・戦いの記録</button><button data-dialog="rules">遊び方</button>
+                </div></dialog>
+        <dialog id="target-picker" aria-label="相手を選ぶ"><button class="close" data-close>閉じる</button><h2>相手を選ぶ</h2><p class="hint">攻撃する相手を押すと盤面に戻ります。</p>          <section class="players" id="players" aria-label="相手・攻撃対象"></section></dialog>
+        <dialog id="selection-popup" aria-label="選んだ札"><button class="close" data-close>閉じる</button><h2>選んだ札・公開された攻撃札</h2><button id="options-open" data-dialog="options-popup" hidden>使い方を選ぶ</button><div id="selected-cards" class="selected-cards" aria-label="選んだ札"></div><div class="popup-pager"><button id="preview-prev" data-presentation-control aria-label="前の選択札">‹</button><span id="preview-page" aria-live="polite"></span><button id="preview-next" data-presentation-control aria-label="次の選択札">›</button></div></dialog>
+        <dialog id="forecast-popup" aria-label="防御の見込み"><button class="close" data-close>閉じる</button><h2>防御の見込み</h2><div id="defense-forecast" class="defense-forecast" role="status" aria-live="polite" hidden></div></dialog>
+        <dialog id="options-popup" aria-label="札の使い方"><button class="close" data-close>盤面に戻る</button><h2>札の使い方</h2>              <fieldset id="card-options" hidden><legend>札の使い方</legend>
+                <label id="heal-target-label" hidden>回復する人<select id="heal-target"></select></label>
+                <label id="second-target-label" hidden>2人目の攻撃対象<select id="second-target"></select></label>
+                <label id="element-label" hidden>選ぶ属性<select id="chosen-element"><option>火</option><option>水</option><option>風</option><option>雷</option><option>土</option><option>光</option><option>闇</option></select></label>
+                <label id="optional-pay-label" hidden><input type="checkbox" id="optional-pay" /><span id="optional-pay-description">追加の霊銭・MPを払う</span></label>
+              </fieldset></dialog>
+        <dialog id="choice-popup" aria-label="候補の札を選ぶ"><button class="close" data-close>盤面に戻る</button>
+              <section id="card-choice" hidden><h2 id="choice-label"></h2><div id="choice-cards" class="choice-cards"></div><p id="choice-count"></p></section>
+<div class="popup-pager"><button id="choice-prev" data-presentation-control aria-label="前の候補">‹</button><span id="choice-page" aria-live="polite"></span><button id="choice-next" data-presentation-control aria-label="次の候補">›</button></div><button id="choice-confirm" class="primary">選択を確定</button></dialog>
+        <dialog id="player-details"><button class="close" data-close>閉じる</button><h2>参加者の状態</h2><div id="player-details-body" class="outcome-stats"></div></dialog>
         <dialog id="history">
           <button class="close" data-close>閉じる</button>
           <h2>対戦の記録</h2>
+          <details id="previous-outcome" class="match-history" hidden><summary>前の対戦結果</summary><p id="previous-outcome-body"></p></details>
+          <section id="match-outcome" class="match-outcome" hidden><h2 id="outcome-title"></h2><p id="outcome-reason"></p><p id="outcome-hit"></p><div id="outcome-stats" class="outcome-stats"></div><p class="hint">ダメージは攻撃・反射の解決値です（火傷は含めません）。</p><p id="rematch-status" role="status"></p><button id="rematch" class="primary">同じ人で再戦する</button><p class="hint">残っている人間の参加者全員が準備すると、同じ席で新しく始まります。部屋の保存期限も2時間に更新します。</p></section>
+
           <div class="log" id="history-log"></div>
         </dialog>
         <script src="${assetUrl('shinpu-effects.js')}" defer></script>

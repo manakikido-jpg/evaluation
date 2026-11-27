@@ -33,3 +33,18 @@ it('画像の対応表と選択プレビューをCSPに対応したHTMLに出す
   expect(text).toContain('id="deadline"');
   expect(text).not.toMatch(/<script>\s*\S|onclick=|style=/);
 });
+
+it('画面内表示を通常表示へ戻せ、設定・結果・記録を閉じられる', async () => {
+  const page = String(await ShinpuTestPage({ csrf: 'test-csrf', name: 'テスト' }));
+  expect(page).toContain('viewport-fit=cover');
+  expect(page).toMatch(/id="viewport-toggle"[^>]*data-presentation-control[^>]*aria-pressed="true"/);
+  for (const id of ['presentation', 'history', 'rules', 'card-detail', 'player-details', 'action-menu', 'target-picker', 'selection-popup', 'options-popup', 'choice-popup', 'forecast-popup']) {
+    const dialog = new RegExp('<dialog id="' + id + '"[\\s\\S]*?<\\/dialog>').exec(page)?.[0];
+    expect(dialog, id).toContain('data-close');
+    if (id === 'history') expect(dialog).toContain('id="match-outcome"');
+  }
+  for (const id of ['hand-prev', 'hand-next', 'choice-prev', 'choice-next', 'choice-confirm', 'preview-prev', 'preview-next']) expect(page).toContain(`id="${id}"`);
+  const ids = [...page.matchAll(/\bid="([^" ]+)"/g)].map(m => m[1]);
+  expect(new Set(ids).size).toBe(ids.length);
+  expect(page).not.toMatch(/<script>\s*\S|onclick=|style=/);
+});
