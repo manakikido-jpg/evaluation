@@ -1,3 +1,4 @@
+import { promotionHold, rankMutation, runUjikoDemotions } from '../services/ujikoDemotion.js';
 import { eligibleVisitMembers, recordVisitMinute } from '../services/visitProfile.js';
 import { ReturnerRoles } from './returnerRoles.js';
 import { pingRoleIds } from '../services/notify.js';
@@ -773,6 +774,23 @@ export class ShuinApp {
     await this.reply(interaction, giversReply(ownerId, givers, total, names));
   }
 
+  private checkingUjikoDemotions = false;
+  /** リストで確認された氏子だけを、最新の在籍と役職を見て変更する。 */
+  async checkUjikoDemotions(guild: Guild): Promise<void> {
+    if (this.checkingUjikoDemotions || guild.id !== this.cfg.guildId) return;
+    this.checkingUjikoDemotions = true;
+    try {
+      await runUjikoDemotions(this.db, this.cfg, {
+        fetch: async id => {
+          const m = await guild.members.fetch({ user: id, force: true }).catch((e: {code?: number}) => { if(e.code===10007)return null;throw e; });
+          return m ? {id:m.id,name:m.displayName,roles:[...m.roles.cache.keys()],bot:m.user.bot,protected:m.id===guild.ownerId||m.permissions.has(8n)} : null;
+        },
+        add: async(id,role,reason)=>{await (await guild.members.fetch({user:id,force:true})).roles.add(role,reason);},
+        remove: async(id,role,reason)=>{await (await guild.members.fetch({user:id,force:true})).roles.remove(role,reason);},
+      }, (id,fn)=>this.lock.run(id,fn));
+    } finally { this.checkingUjikoDemotions=false; }
+  }
+
   /** 1 分ごと: ✨ 特別ご縁を振られた人の昇格を確かめる（社務所Web から振ったもの） */
   async checkSpecialGoen(guild: Guild): Promise<void> {
     for (const id of await takeUncheckedSpecialGoen(this.db)) {
@@ -938,21 +956,24 @@ export class ShuinApp {
     const reason = opts.vote
       ? `投票（${opts.vote.voters} 人中 ${opts.vote.votes} 票）で ${promotion.to.name} に昇格`
       : emaCount !== undefined ? `絵馬 ${emaCount} 枚で ${promotion.to.name} に昇格` : `ご縁 ${goen} で ${promotion.to.name} に昇格`;
+    let removeError: unknown;
     try {
-      await member.roles.add(promotion.to.roleId, reason);
+      const changed = await rankMutation(this.db, member.id, async tx => {
+        if (await promotionHold(tx, member.id)) return false;
+        await member.roles.add(promotion.to.roleId, reason);
+        if (promotion.removeRoleIds.length) await member.roles.remove(promotion.removeRoleIds, reason).catch(err => { removeError = err; });
+        return true;
+      });
+      if (!changed) return false;
     } catch (err) {
-      // BOT のロールが役職ロールより下にある、権限がない など
       logger.error({ err, userId: member.id, to: promotion.to.key }, 'promotion role update failed');
       await this.log(`⚠️ ${member} さまの昇格（${promotion.to.name}）でロールを変更できませんでした。BOT のロールの位置と権限を確認してください。`);
       return false;
     }
     await this.rewardInvites(member);
-    // 新しい役職は付いた。古い役職を外せなくても、昇格の発表と記録はする（あとから手で外せばよい）
-    if (promotion.removeRoleIds.length) {
-      await member.roles.remove(promotion.removeRoleIds, reason).catch(async (err) => {
-        logger.warn({ err, userId: member.id }, 'old rank role removal failed');
-        await this.log(`⚠️ ${member} さまの前の役職ロールを外せませんでした。手で外してください。`);
-      });
+    if (removeError) {
+      logger.warn({ err: removeError, userId: member.id }, 'old rank role removal failed');
+      await this.log(`⚠️ ${member} さまの前の役職ロールを外せませんでした。手で外してください。`);
     }
     await this.send(this.cfg.channels.keiji, promotionAnnouncement(member.id, promotion, goen, opts.quiet ? [] : pingRoleIds(this.cfg), member.displayAvatarURL(), emaCount, opts.vote));
     await this.log(opts.vote

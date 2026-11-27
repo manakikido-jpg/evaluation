@@ -32,7 +32,7 @@ export function EvaluationPage({ session, data, filter, page, emaPromotion = fal
   // 参拝者→氏子の決まり（毎週きまる数）
   const ujikoRule = `お参り期間中に氏子の票を毎週きまる数（${ujikoRuleText(emaThresholds)}）・招待で${emaThresholds.inviteSubstituteMax}つまで補える`;
   return <Layout title="評価" nav="evaluation" session={session} wide>
-    <div class="evaluation-page"><h1>氏子への評価</h1>
+    <div class="evaluation-page"><h1>氏子への評価</h1><p><a href="/evaluation/ujiko-demotion">氏子をリストで参拝者へ戻す（宮司のみ）</a></p>
     {saved === 'on' && <p class="flash ok" role="status">🎐 絵馬での昇格に切り替えました。これからは参拝者は{ujikoRule}で氏子になります。</p>}
     {saved === 'off' && <p class="flash ok" role="status">従来（ご縁40＋縁側20時間）に戻しました。</p>}
     {saved === 'confirm' && <p class="flash warn" role="alert">「切り替えてよい」にチェックを入れてから押してください。</p>}

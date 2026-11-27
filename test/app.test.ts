@@ -5,7 +5,7 @@ import { ShuinApp } from '../src/discord/app.js';
 import { shuinId } from '../src/discord/ids.js';
 import { walletOf, grantJoinBonus } from '../src/services/economy.js';
 import { giveShuin } from '../src/services/shuin.js';
-import { shuin, voiceChannels, voiceUsage, evaluationTimeDeductions } from '../src/db/schema.js';
+import { settings, shuin, voiceChannels, voiceUsage, evaluationTimeDeductions } from '../src/db/schema.js';
 import { recordJoin } from '../src/services/members.js';
 import { cfg, makeDb, ROLE } from './helpers.js';
 
@@ -20,6 +20,7 @@ function fakeMember(id: string, roleIds: string[], bot = false) {
     get guild() {
       return guild;
     },
+    permissions: { has: (_p: bigint) => false },
     user: { id, bot, username: `user${id.slice(-2)}` },
     displayName: `user${id.slice(-2)}`,
     send: vi.fn(async (_p: unknown) => undefined),
@@ -28,7 +29,7 @@ function fakeMember(id: string, roleIds: string[], bot = false) {
     roles: {
       cache,
       add: vi.fn(async (roleId: string) => void cache.set(roleId, {})),
-      remove: vi.fn(async (ids: string[]) => ids.forEach((r) => cache.delete(r))),
+      remove: vi.fn(async (ids: string[] | string) => (Array.isArray(ids)?ids:[ids]).forEach((r) => cache.delete(r))),
     },
   };
 }
@@ -1029,4 +1030,21 @@ describe('🌸 新制度ローンチの通し稽古（③→④→⑤→元に�
       setMusubiMode(false);
     }
   });
+});
+
+it('氏子の見直しで保留した人は、旧ご縁・絵馬・選挙の共通の昇格処理で上げない',async()=>{
+ const m=add(R,ROLE.sanpaisha);await db.insert(settings).values({key:`rank.promotion_hold:${R}`,updatedBy:G,value:{id:R,batch:'test',by:G,at:new Date().toISOString(),reason:'見直し'}});
+ const promotion={from:cfg.ranks.find(r=>r.key==='sanpaisha')!,to:cfg.ranks.find(r=>r.key==='ujiko')!,removeRoleIds:[ROLE.sanpaisha]};
+ const call=app as unknown as {promote:(m:unknown,p:unknown,g:number,e?:number,o?:unknown)=>Promise<boolean>};
+ expect(await call.promote(m,promotion,100)).toBe(false);expect(await call.promote(m,promotion,100,20)).toBe(false);expect(await call.promote(m,promotion,100,undefined,{vote:{votes:10,voters:10}})).toBe(false);expect(m.roles.add).not.toHaveBeenCalled();
+ const {releasePromotionHold}=await import('../src/services/ujikoDemotion.js');await releasePromotionHold(db,R,G,'確認を終了');
+ expect(await call.promote(m,promotion,100)).toBe(true);expect(m.roles.add).toHaveBeenCalledWith(ROLE.ujiko,expect.any(String));
+});
+
+it('氏子のリスト変更をBOTの見回りで処理し、本人の保留を残す',async()=>{
+ const target=add(R,ROLE.ujiko);add(G,ROLE.guji);
+ const op=await import('../src/services/ujikoDemotion.js');
+ const j=await op.previewDemotion(db,cfg,[R],G,'見直し',{fetch:async id=>{const m=members.get(id);return m?{id,name:m.displayName,roles:[...m.roles.cache.keys()],bot:m.user.bot}:null;}});
+ await op.queueDemotion(db,j.id,G);await app.checkUjikoDemotions(guild as never);
+ expect(target.roles.cache.has(ROLE.sanpaisha)).toBe(true);expect(target.roles.cache.has(ROLE.ujiko)).toBe(false);expect(await op.promotionHold(db,R)).toBeDefined();expect((await op.demotionJob(db,j.id))!.state).toBe('finished');
 });
