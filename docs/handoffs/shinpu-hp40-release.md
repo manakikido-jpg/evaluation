@@ -2,7 +2,7 @@
 
 本人の指示：「ごっふぃを初期HPを40にして」「対戦相手のHPももっと確認できるようにして」。対象は神符合戦です。
 
-ブランチ `codex/shinpu-initial-hp-40`。本番b200b16dから分岐。本番ブランチへCodexから直接push/mergeしていません。
+保存先：[PR #186](https://github.com/manakikido-jpg/sakuranomiya/pull/186)。ブランチ `codex/shinpu-initial-hp-40`。本番b200b16dから分岐。本番ブランチへCodexから直接push/mergeしていません。
 
 ## 変更内容
 
