@@ -205,7 +205,7 @@ it('社務所の経済ページ権限がない人は直URLでも入場できな�
   expect((await app.request('/economy/shinpu/enter', { method: 'POST', headers })).status).toBe(403);
 });
 
-it('運営テストの実APIでHP60/MP20を超えて回復・両替でき、実残高は変えない', async () => {
+it('運営テストの実APIで初期HP40から回復・両替でき、実残高は変えない', async () => {
   await recordJoin(db, {id:A,username:'fixture',displayName:'確認用',avatarUrl:null,roleIds:roles,isBot:false,joinedAt:new Date()});
   await addCoins(db,A,500,'admin_grant');
   const other=await createMemberSession(db,{id:B,username:'other',displayName:'確認用の相手',avatarUrl:null});
@@ -216,15 +216,16 @@ it('運営テストの実APIでHP60/MP20を超えて回復・両替でき、実�
   let view=await(await post({operation:'create',capacity:2})).json() as RoomView;
   view=await(await post({operation:'join',roomId:view.roomId},otherHeaders)).json() as RoomView;
   view=await(await post({operation:'start',roomId:view.roomId,revision:view.revision})).json() as RoomView;
+  expect(view.state!.players.map(p=>p.hp)).toEqual([40,40]);
   const heal=view.state!.players[0]!.hand.find(c=>c.id==='SK-217')!;
   view=await(await post({operation:'move',roomId:view.roomId,revision:view.revision,action:'use',ids:[heal.uid],target:0})).json() as RoomView;
-  expect(view.state!.players[0]!.hp).toBe(72);
+  expect(view.state!.players[0]!.hp).toBe(52);
   for(let i=0;i<3;i++){
     view=await(await post({operation:'move',roomId:view.roomId,revision:view.revision,action:'pass'},otherHeaders)).json() as RoomView;
     const response=await post({operation:'move',roomId:view.roomId,revision:view.revision,action:'exchange',target:'mp'});
     expect(response.status).toBe(200);view=await response.json() as RoomView;
   }
-  expect(view.state!.players[0]).toMatchObject({hp:72,mp:24,money:8});
+  expect(view.state!.players[0]).toMatchObject({hp:52,mp:24,money:8});
   expect(view.state!.players[1]!.hand).toEqual([]);
   expect((await walletOf(db,A)).balance).toBe(500);
   const attack=view.state!.players[0]!.hand.find(c=>c.id==='SK-004')!;
@@ -232,7 +233,7 @@ it('運営テストの実APIでHP60/MP20を超えて回復・両替でき、実�
   view=await(await post({operation:'move',roomId:view.roomId,revision:view.revision,action:'attack',ids:[attack.uid],target:1})).json() as RoomView;
   view=await(await post({operation:'move',roomId:view.roomId,revision:view.revision,action:'defend',ids:[],damage:0},otherHeaders)).json() as RoomView;
   expect(view.state!.result).toMatchObject({defender:1,damage:5});
-  expect(view.state!.players[1]!.hp).toBe(55);
+  expect(view.state!.players[1]!.hp).toBe(35);
   expect((await walletOf(db,A)).balance).toBe(500);
 });
 

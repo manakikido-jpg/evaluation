@@ -1,5 +1,5 @@
 import { html } from 'hono/html';
-import { cards, playableCards } from '../../services/shinpu/engine.js';
+import { cards, playableCards, INITIAL_HP } from '../../services/shinpu/engine.js';
 import { assetUrl } from '../assets.js';
 
 export function ShinpuTestPage({ csrf, name, staff = true }: { csrf: string; name: string; staff?: boolean }) {
@@ -15,7 +15,7 @@ export function ShinpuTestPage({ csrf, name, staff = true }: { csrf: string; nam
         <title>神符合戦 | 咲楽ノ宮</title>
         <link rel="stylesheet" href="${assetUrl('shinpu.css')}" />
       </head>
-      <body data-csrf="${csrf}" data-art="${art}" data-art-full="${fullArt}">
+      <body data-initial-hp="${INITIAL_HP}" data-csrf="${csrf}" data-art="${art}" data-art-full="${fullArt}">
         <header>
           <div class="brand"><span class="crest" aria-hidden="true">✿</span><span>咲楽ノ宮 / 神符合戦</span></div>
           <nav>${staff ? html`<a href="/economy/shinpu">社務所へ</a>` : html`<a href="/casino/shinpu/cards">神器図鑑</a>`}<span class="tag">無料</span><button id="viewport-toggle" aria-label="画面内表示" data-presentation-control aria-pressed="true" title="画面内表示と通常表示を切り替える">通常表示</button><button data-dialog="presentation" data-presentation-control>音・演出</button><button data-dialog="rules">遊び方</button><button id="leave">部屋を退出</button></nav>
@@ -72,6 +72,7 @@ export function ShinpuTestPage({ csrf, name, staff = true }: { csrf: string; nam
                 <h1 id="phase"></h1>
                 <span id="deadline" class="deadline" aria-live="off"></span>
               </div>
+              <div id="opponent-health" class="opponent-health" role="group" aria-label="対戦相手のHP"></div>
               <div class="battle-tools"><button id="target-open" data-dialog="target-picker">相手を選ぶ</button><button id="selection-open" data-dialog="selection-popup">選んだ札 0枚</button><button id="forecast-open" data-dialog="forecast-popup" hidden>防御の見込み</button><button id="choice-open" data-dialog="choice-popup" hidden>候補から選ぶ</button></div>
               <div id="summon-effect" class="summon-effect" role="status" aria-live="polite" hidden></div>
               <div class="selection-stage">
@@ -124,7 +125,7 @@ export function ShinpuTestPage({ csrf, name, staff = true }: { csrf: string; nam
               <li>自分の手番に通常の攻撃札を1枚まで選び、＋付きの攻撃札を追加できます。＋付きだけでも攻撃できます。上の相手を押して「攻撃する」。攻撃力とMP消費を合算します。</li>
               <li>攻撃されたら防御札を必要な枚数選び「この札で防御」。選ばず受けることもできます。</li>
               <li>回復や道具は1枚で使います。使用・両替・様子見で手番が進みます。</li>
-              <li>自分の次の手番に手札が7枚まで補充されます。初期HP60・MP12・霊銭20。HP・MP・霊銭に上限はなく、手札は10枚まで。「HPが満タン」の札はHP60以上を対象にします。</li>
+              <li>自分の次の手番に手札が7枚まで補充されます。初期HP${INITIAL_HP}・MP12・霊銭20。HP・MP・霊銭に上限はなく、手札は10枚まで。「HPが満タン」の札はHP${INITIAL_HP}以上を対象にします。</li>
             </ol>
             <p class="hint">
               両替は霊銭4→MP4、霊銭4→HP8、MP3→霊銭4。火傷は次の自分の番の開始に2ダメージ・1回です。山札は札ごとの出現重みで用意し、なくなったら捨て札を混ぜます。札の選択も2分で時間切れとなり、サーバーが有効な候補を選んで進めます。

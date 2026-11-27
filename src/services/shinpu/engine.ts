@@ -1,4 +1,6 @@
 import { catalogCards, ELEMENTS } from './cardRules.js';
+/** 新規対戦・再戦の初期HP。満タン判定もこの値を使う（上限ではない）。 */
+export const INITIAL_HP = 40;
 /** 運営テスト用の対戦ルール。サーバー通貨は扱わない。 */
 export type CardDefinition = {
   id: string;
@@ -210,7 +212,7 @@ export function create(
   s.deck = shuffle(s, playableCards.flatMap(c => Array(c.weight ?? 1).fill(c.id) as string[]));
   const names = [name, 'あおい', 'こはく', 'すずね', 'みこと', 'つばき'];
   for (let i = 0; i < count; i++)
-    s.players.push({ name: names[i]!, hp: 60, mp: 12, money: 20, burn: 0, hand: [], avatar: ['狐', '花', '月', '鈴', '鳥', '葉'][i]!, attackBoost: 0, attackPenalty: 0, guardBoost: 0, statusGuard: false, weaponElement: null, lastBasic: null });
+    s.players.push({ name: names[i]!, hp: INITIAL_HP, mp: 12, money: 20, burn: 0, hand: [], avatar: ['狐', '花', '月', '鈴', '鳥', '葉'][i]!, attackBoost: 0, attackPenalty: 0, guardBoost: 0, statusGuard: false, weaponElement: null, lastBasic: null });
   // 初回の操作を試しやすい札を配る。その後の補充はランダム。
   s.players[0]!.hand = ['SK-004', 'SK-038', 'SK-156', 'SK-108', 'SK-217', 'SK-222', 'summon'].map((id) => {
     s.deck.splice(s.deck.indexOf(id), 1);
@@ -499,7 +501,7 @@ function catalogAct(s: State, action: string, a: Card[], target: number | string
       for (const c of a) {
         let value = c.power;
         if (c.effect === 'double_hit') value *= 2;
-        if (c.effect === 'opening_strike' && s.players[to]!.hp >= 60) value += 3;
+        if (c.effect === 'opening_strike' && s.players[to]!.hp >= INITIAL_HP) value += 3;
         if (c.effect === 'low_hp_attack' && p.hp <= 20) value += 4;
         if (c.effect === 'underdog_attack' && s.players[to]!.hp > p.hp) value += 3;
         if (c.effect === 'small_hand_attack' && p.hand.length <= 3) value += 3;

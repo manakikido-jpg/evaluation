@@ -23,7 +23,7 @@ test('multi-card attacks spend MP, remove cards and wait for defense', () => {
   assert.equal(s.players[0]!.hand.length, 0);
   const d = hand(s, 1, ['shield']);
   E.defend(s, d);
-  assert.equal(s.players[1]!.hp, 51);
+  assert.equal(s.players[1]!.hp, 31);
   assert.equal(s.turn, 1);
   assert.equal(s.players[1]!.hand.length, 7);
 });
@@ -49,10 +49,10 @@ test('invalid defense or insufficient MP does not resolve incoming attack', () =
   const d = hand(s, 1, ['mirror']);
   s.players[1]!.mp = 0;
   assert.throws(() => E.defend(s, d));
-  assert.equal(s.players[1]!.hp, 60);
+  assert.equal(s.players[1]!.hp, 40);
   assert.equal(s.phase, 'defense');
   E.defend(s, []);
-  assert.equal(s.players[1]!.hp, 55);
+  assert.equal(s.players[1]!.hp, 35);
 });
 test('reflection damages attacker and may end match', () => {
   const s = E.create(2, () => 0),
@@ -70,17 +70,17 @@ test('drain heals only half actual unblocked damage', () => {
   E.act(s, 'attack', hand(s, 0, ['drain']), 1);
   E.defend(s, hand(s, 1, ['veil']));
   assert.equal(s.players[0]!.hp, 41);
-  assert.equal(s.players[1]!.hp, 58);
+  assert.equal(s.players[1]!.hp, 38);
 });
 test('burn applies on next turns and cleanse clears it', () => {
   const s = game();
   E.act(s, 'attack', hand(s, 0, ['curse']), 1);
   E.defend(s, []);
-  assert.equal(s.players[1]!.hp, 54);
+  assert.equal(s.players[1]!.hp, 34);
   assert.equal(s.players[1]!.burn, 2);
   E.act(s, 'use', hand(s, 1, ['cleanse']));
   assert.equal(s.players[1]!.burn, 0);
-  assert.equal(s.players[1]!.hp, 59);
+  assert.equal(s.players[1]!.hp, 39);
 });
 test('exchange spends resources without HP/MP caps', () => {
   const s = game();
@@ -170,7 +170,7 @@ test('combined attack MP costs are validated before mutation', () => {
 test('ordinary defenses can combine more than three cards', () => {
   const s = game(); E.act(s, 'attack', hand(s, 0, ['sun']), 1);
   E.defend(s, hand(s, 1, ['veil', 'veil', 'veil', 'veil']));
-  assert.equal(s.players[1]!.hp, 60); assert.equal(s.turn, 1);
+  assert.equal(s.players[1]!.hp, 40); assert.equal(s.turn, 1);
 });
 test('defense MP costs are paid once and insufficient MP preserves state', () => {
   const s = game(); E.act(s, 'attack', hand(s, 0, ['sun']), 1);
@@ -186,7 +186,7 @@ test('CPU combines at most one ordinary attack and can use all defenses', () => 
     assert.equal(s.pending!.cards.length, 4);
     hand(s, 1, ['shield', 'veil', 'veil', 'veil']); E.cpu(s);
     // 光の祈りを含む場合は防御3無視で1ダメージ。
-    assert.equal(s.players[1]!.hp, ids[0] === 'blade' ? 59 : 60);
+    assert.equal(s.players[1]!.hp, ids[0] === 'blade' ? 39 : 40);
   }
 });
 test('召喚は運営の名前と肖像を記録し、MP3でHP10回復と燐火解除を一度行う', () => {

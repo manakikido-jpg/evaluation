@@ -1512,3 +1512,22 @@ body.battle-fit:has(#game:not([hidden])) {
 .battle-fit:has(#forecast-open:not([hidden])) #summary,
 .battle-fit:has(#forecast-open:not([hidden])) #message,
 .battle-fit:has(#choice-open:not([hidden])) #summary { display: none; }
+
+/* 全員のHPを主画面に残し、詳細では大きな数字とバーで確認する。 */
+.opponent-health{display:grid;grid-template-columns:repeat(var(--health-count,5),minmax(0,1fr));gap:5px;flex:0 0 auto;width:100%;max-width:900px;margin:0 auto}
+.opponent-hp{display:grid;grid-template-columns:auto minmax(0,1fr);gap:0 4px;align-items:baseline;text-align:center;min-width:0;min-height:46px;padding:4px 7px;background:#fff9f0;border:1px solid #b9a07e;border-radius:7px;color:#4c3528;font-variant-numeric:tabular-nums}
+.opponent-hp:disabled{opacity:1;cursor:default}.opponent-hp.selected{border:2px solid #ac362d;background:#fff0e8;padding:3px 6px}.opponent-hp.low{background:#fff0ee;color:#a11e2b}.opponent-hp.defeated{background:#e7e2dd;color:#756c67}
+.opponent-name{grid-column:1/-1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:1.2}.opponent-hp-label{font-size:10px;line-height:1.2}.opponent-hp strong{font-size:23px;line-height:1.2;min-width:0;white-space:nowrap}.opponent-hp strong.compact{font-size:14px}.opponent-hp:focus-visible{outline:3px solid #216a99;outline-offset:1px}
+#target-picker .resource-line.hp{display:flex;gap:8px;margin:3px 0 5px;align-items:center;font-size:12px;font-weight:700;color:#932a2c}#target-picker .resource-line.hp strong{font-size:25px;font-variant-numeric:tabular-nums}#target-picker .resource-line.hp strong.large-value{font-size:18px}#target-picker .resource-line.hp .resource-bar{display:inline-block;flex:1;max-width:190px;min-width:25px;height:8px}
+@media(max-width:600px){.opponent-health{gap:4px}.opponent-hp{padding:4px;gap:0 2px}.opponent-hp.selected{padding:3px}.opponent-hp strong{font-size:20px}.opponent-hp strong.compact{font-size:12px}.opponent-name{font-size:10px}.opponent-hp-label{font-size:9px}}
+/* HP一覧の分を確保し、狭い画面では重複する操作説明を畳む。 */
+.battle-fit .selection-empty{display:none}
+@media(max-width:600px) and (max-height:700px){
+  .battle-fit .board{grid-template-rows:minmax(190px,.8fr) minmax(150px,1fr) auto}
+  .battle-fit .summary{display:flex;flex-wrap:wrap;gap:2px 10px}
+  .battle-fit .metric{gap:6px;font-size:11px}.battle-fit .metric strong{font-size:18px}
+  .battle-fit .calculation{padding:4px 7px}
+}
+
+#target-open{display:flex;align-items:center;justify-content:center;gap:7px}#target-open[hidden]{display:none}#target-open .target-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}#target-open .target-hp{flex:none;font-variant-numeric:tabular-nums}
+.opponent-hp:has(strong.compact) .opponent-hp-label{display:none}.opponent-hp strong.compact{grid-column:1/-1}

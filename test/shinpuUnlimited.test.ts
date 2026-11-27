@@ -5,9 +5,9 @@ function hand(s:E.State,i:number,id:string){
  const definition=[...E.playableCards,...E.cards].find(c=>c.id===id)!;
  const card={...definition,uid:++s.seq};s.players[i]!.hand=[card];return[card.uid];
 }
-it('初期値を維持し、通常の回復でHP60・MP20を超えて増える',()=>{
- const hp=game();expect(hp.players[0]).toMatchObject({hp:60,mp:12,money:20});
- E.act(hp,'use',hand(hp,0,'SK-217'),0);expect(hp.players[0]!.hp).toBe(72);
+it('初期HP40・MP12・霊銭20で始まり、回復は初期値を超えて増える',()=>{
+ const hp=game();expect(hp.players[0]).toMatchObject({hp:40,mp:12,money:20});
+ E.act(hp,'use',hand(hp,0,'SK-217'),0);expect(hp.players[0]!.hp).toBe(52);
  const mp=game();mp.players[0]!.mp=30;E.act(mp,'use',hand(mp,0,'SK-222'));expect(mp.players[0]!.mp).toBe(36);
 });
 it('高いHP/MPでも両替でき、霊銭も大きな値から増やせる',()=>{
@@ -34,8 +34,8 @@ it('回復対象が退場していれば、上限なしでも復活させず消�
  const s=E.create(3,()=>0);s.players[1]!.hp=0;const ids=hand(s,0,'SK-217'),before=JSON.stringify(s);
  expect(()=>E.act(s,'use',ids,1)).toThrow();expect(JSON.stringify(s)).toBe(before);
 });
-it('満タン条件は初期HP60以上で働き、カードの追加威力3は維持する',()=>{
- for(const [hp,power] of [[59,5],[60,8],[72,8]]){const s=game();s.players[1]!.hp=hp!;E.act(s,'attack',hand(s,0,'SK-085'),1);expect(s.pending!.power).toBe(power);}
+it('満タン条件は初期HP40以上で働き、カードの追加威力3は維持する',()=>{
+ for(const [hp,power] of [[39,5],[40,8],[52,8]]){const s=game();s.players[1]!.hp=hp!;E.act(s,'attack',hand(s,0,'SK-085'),1);expect(s.pending!.power).toBe(power);}
 });
 it('HPが初期値を超えても80手番で終了し、残りHPの最多と同点を判定する',()=>{
  for(const tied of [false,true]){const s=game();s.turns=80;s.players[0]!.hp=150;s.players[1]!.hp=tied?150:120;E.act(s,'pass');expect(s.phase).toBe('over');expect(s.winner).toBe(tied?-1:0);}
