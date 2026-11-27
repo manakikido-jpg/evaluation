@@ -86,7 +86,7 @@ export function ModerationSection(props: {
   yaku: Yaku[];
   activeYaku: number;
   menzaifuUsed: number;
-  /** 厄祓いの面接待ちなら、申し込んだ日時 */
+  /** 免罪符の面接待ちなら、申し込んだ日時 */
   yakubaraiSince?: Date;
   /** 👹厄年ロールが付いているか（厄の記録がないのにロールだけ残っているときに「取り消す」を出す） */
   hasYakuRole?: boolean;
@@ -112,12 +112,12 @@ export function ModerationSection(props: {
             厄 <span class={props.activeYaku ? 'tag red' : 'tag gray'}>{props.activeYaku ? `👹 今 ${props.activeYaku} つ` : 'なし'}</span>
           </h2>
           <p class="note">
-            1 つ目は注意、2 つ目で BAN。厄のあいだは通話は縁側だけ・使えるのはお問い合わせ・おみくじ・物御籤だけ。厄祓い（{e.currencyEmoji}
+            1 つ目は注意、2 つ目で BAN。厄のあいだは通話は縁側だけ・使えるのはお問い合わせ・おみくじ・物御籤だけ。免罪符（{e.currencyEmoji}
             {e.menzaifuPrice}）を受けると面接待ちになる: あと {Math.max(0, e.menzaifuMaxUses - props.menzaifuUsed)} 回
           </p>
           {props.yakubaraiSince && (
             <p class="flash ok">
-              🙏 厄祓いの面接待ち（{fmtDateTime(props.yakubaraiSince)} に申し込み）。面接のあと、下の「取り消す」で厄を祓うと、厄祓いが終わります（#記録 の「面接して祓う」ボタンでも同じ）。
+              🙏 免罪符の面接待ち（{fmtDateTime(props.yakubaraiSince)} に申し込み）。面接のあと、下の「取り消す」で厄を祓うと、免罪符が終わります（#記録 の「面接して祓う」ボタンでも同じ）。
             </p>
           )}
           {props.yaku.length === 0 ? (
@@ -133,7 +133,7 @@ export function ModerationSection(props: {
                       <small class="reason">
                         付けた人: {who(props.names, y.issuedBy)}
                         {y.clearedAt &&
-                          ` ／ ${y.clearedReason === 'menzaifu' ? '厄祓い（免罪符）で祓った' : y.clearedReason === 'unban' ? 'BAN 解除で祓った' : `取り消し（${who(props.names, y.clearedBy)}${y.clearedNote ? `: ${y.clearedNote}` : ''}）`} ${fmtDate(y.clearedAt)}`}
+                          ` ／ ${y.clearedReason === 'menzaifu' ? '免罪符で祓った' : y.clearedReason === 'unban' ? 'BAN 解除で祓った' : `取り消し（${who(props.names, y.clearedBy)}${y.clearedNote ? `: ${y.clearedNote}` : ''}）`} ${fmtDate(y.clearedAt)}`}
                       </small>
                     </td>
                   </tr>
@@ -186,7 +186,7 @@ export function ModerationSection(props: {
               {(props.activeYaku > 0 || props.hasYakuRole) && (
                 <form method="post" action={`${base}/yaku/clear`}>
                   <input type="hidden" name="_csrf" value={csrf} />
-                  <h3>{props.activeYaku > 0 ? '厄を取り消す（間違えて付けたとき・厄祓いの面接のあと）' : '👹厄年ロールだけ残っています（厄の記録はありません）。取り消すとロールを外します'}</h3>
+                  <h3>{props.activeYaku > 0 ? '厄を取り消す（間違えて付けたとき・免罪符の面接のあと）' : '👹厄年ロールだけ残っています（厄の記録はありません）。取り消すとロールを外します'}</h3>
                   <input type="text" name="note" maxlength={300} placeholder="取り消す理由（必須）" required />
                   <button type="submit">取り消す</button>
                 </form>
@@ -373,16 +373,16 @@ export function YakuPage(props: {
   session: AdminSession;
   rows: { memberId: string; active: number; latest: Date; displayName: string | null; username: string | null; avatarUrl: string | null; leftAt: Date | null }[];
   now: Date;
-  /** 厄祓いの面接待ちの人（申し込んだ日時） */
+  /** 免罪符の面接待ちの人（申し込んだ日時） */
   waiting?: Map<string, Date>;
 }) {
   return (
     <Layout title="厄" session={props.session} nav="yaku">
       <h1>👹 厄が付いている方</h1>
-      <p class="note">1 つ目は注意、2 つ目で BAN。本人が授与所で厄祓いを受けると「面接待ち」になります。面接のあと、その方のページの「取り消す」で祓ってください。</p>
+      <p class="note">1 つ目は注意、2 つ目で BAN。本人が授与所で免罪符を受けると「面接待ち」になります。面接のあと、その方のページの「取り消す」で祓ってください。</p>
       {props.waiting && [...props.waiting.keys()].some((id) => !props.rows.some((r) => r.memberId === id)) && (
         <p class="flash warn">
-          🙏 厄の記録はないが 👹厄年ロールで厄祓いを申し込んだ方:{' '}
+          🙏 厄の記録はないが 👹厄年ロールで免罪符を申し込んだ方:{' '}
           {[...props.waiting.keys()]
             .filter((id) => !props.rows.some((r) => r.memberId === id))
             .map((id) => (
@@ -401,7 +401,7 @@ export function YakuPage(props: {
                 <th>名前</th>
                 <th class="num">厄</th>
                 <th>最後に付いた日</th>
-                <th>厄祓い</th>
+                <th>免罪符</th>
               </tr>
             </thead>
             <tbody>

@@ -212,10 +212,10 @@ export function noticeVariables(cfg: GuildConfig): NoticeVariable[] {
   // 掲示の差し込みは全部の掲示で使うので、枚数の設定がない形の設定でも止まらないようにする
   const th = cfg.emaThresholds ?? EMA_DEFAULT_THRESHOLDS;
   const steps = emaSteps(th);
-  // 参拝者→氏子は「お参り期間中に、毎週きまる数」。それ以外は決まった枚数
+  // 参拝者→氏子は「お参り期間中に、2週間ごとにきまる数」。それ以外は決まった枚数
   const stepText = (s: (typeof steps)[number]) =>
     s.from === 'sanpaisha'
-      ? `お参り期間中に絵馬（${EMA_TIER_LABEL[s.tier]}）を毎週きまる数（${ujikoRuleText(th)}）・招待で${th.inviteSubstituteMax}つまで補える`
+      ? `お参り期間中に絵馬（${EMA_TIER_LABEL[s.tier]}）を2週間ごとにきまる数（${ujikoRuleText(th)}）・招待で${th.inviteSubstituteMax}つまで補える`
       : `絵馬（${EMA_TIER_LABEL[s.tier]}）${s.promote} 枚`;
   const emaRankLine = (r: (typeof ranks)[number]) => {
     const step = steps.find((s) => s.to === r.key);
@@ -224,7 +224,7 @@ export function noticeVariables(cfg: GuildConfig): NoticeVariable[] {
   };
   const emaParts = steps
     .filter((s) => ranks.some((r) => r.key === s.to))
-    .map((s) => `${ranks.find((r) => r.key === s.from)?.name ?? s.from}→${ranks.find((r) => r.key === s.to)?.name ?? s.to}は${s.from === 'sanpaisha' ? `お参り期間中に${EMA_TIER_LABEL[s.tier]}を毎週きまる数（${ujikoRuleText(th)}・招待で${th.inviteSubstituteMax}つまで補える）` : `${EMA_TIER_LABEL[s.tier]} ${s.promote} 枚`}`);
+    .map((s) => `${ranks.find((r) => r.key === s.from)?.name ?? s.from}→${ranks.find((r) => r.key === s.to)?.name ?? s.to}は${s.from === 'sanpaisha' ? `お参り期間中に${EMA_TIER_LABEL[s.tier]}を2週間ごとにきまる数（${ujikoRuleText(th)}・招待で${th.inviteSubstituteMax}つまで補える）` : `${EMA_TIER_LABEL[s.tier]} ${s.promote} 枚`}`);
   // 氏子→世話役は選挙（参拝者→氏子のあとに入れる）
   if (ranks.some((r) => r.key === 'sewayaku') && ranks.some((r) => r.key === 'ujiko')) {
     emaParts.splice(Math.min(1, emaParts.length), 0, `${ranks.find((r) => r.key === 'ujiko')!.name}→${ranks.find((r) => r.key === 'sewayaku')!.name}は${sewayakuRuleText(th)}`);
@@ -256,7 +256,7 @@ export function noticeVariables(cfg: GuildConfig): NoticeVariable[] {
     { name: '役職一覧', value: [...ranks].map(rankLine).join('\n'), note: '役職・昇格ライン・格の箇条書き' },
     { name: '役職一覧（絵馬）', value: [...ranks].map(emaRankLine).join('\n'), note: '新制度：役職・絵馬での上がり方・結びの重みの箇条書き（ローンチ時に {役職一覧} と差し替える）' },
     { name: '絵馬の昇格', value: emaSummary, note: '新制度：絵馬での昇格の決まり（1行）' },
-    { name: '氏子の絵馬', value: `毎週きまる数（${ujikoRuleText(th)}）`, note: '新制度：参拝者→氏子に要る氏子の票（お参り期間中に集める・毎週きまる）' },
+    { name: '氏子の絵馬', value: `2週間ごとにきまる数（${ujikoRuleText(th)}）`, note: '新制度：参拝者→氏子に要る氏子の票（お参り期間中に集める・毎週きまる）' },
     { name: '招待の補い', value: String(th.inviteSubstituteMax), note: '新制度：参拝者→氏子で、招待で補える数（招待した人が参拝者になったら1つ）' },
     { name: '世話役の投票', value: sewayakuRuleText(th), note: '新制度：氏子→世話役の決まり（候補ごとの金・土・日の選挙・匿名）' },
     { name: '世話役の絵馬', value: sewayakuRuleText(th), note: '（前の名前）{世話役の投票} と同じ。氏子→世話役は選挙になった' },

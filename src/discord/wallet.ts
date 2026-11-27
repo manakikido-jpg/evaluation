@@ -76,7 +76,7 @@ export function walletView(
       { name: '🎟 持っている券', value: tickets.length ? [...tickets.slice(0, 12), ...(tickets.length > 12 ? [`ほか${tickets.length - 12}種類（/物御籤で確認）`] : [])].join('\n').slice(0, 1000) : '持っている券はありません', inline: false },
       { name: '📒 最近の出入り', value: d.recent.length ? d.recent.slice(0, 8).map(t => `**${t.amount > 0 ? '＋' : '－'}${fmt(Math.abs(t.amount))}枚**　${COIN_REASON_LABEL[t.reason] ?? t.reason}\n<t:${unix(t.at)}:R>`).join('\n').slice(0, 1000) : 'まだありません', inline: false },
     ],
-    footer: { text: '使いみち：授与所・市場・/物御籤・/厄祓い' },
+    footer: { text: '使いみち：授与所・市場・/物御籤・/免罪符' },
   }], components: [{ type: 1, components: [button('wallet:book:0:30', '📒 通帳を見る（どこで増えた・減った）', false, 1)] }] };
 
 }

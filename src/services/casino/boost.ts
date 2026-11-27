@@ -1,7 +1,8 @@
 import { and, eq, gt, sql } from 'drizzle-orm';
 import type { CasinoConfig, GuildConfig } from '../../config.js';
 import type { Db } from '../../db/client.js';
-import { memberBuffs } from '../../db/schema.js';
+import { memberBuffs, members } from '../../db/schema.js';
+import { isYakudoshi } from '../yakuGate.js';
 import { jstDate } from '../activity.js';
 import { useTicket } from '../tickets.js';
 
@@ -63,6 +64,14 @@ export function baseCasino(c: CasinoConfig): CasinoConfig {
 /** その人に使う設定（札が効いていれば上限を上げる。ほかの人の札で上がった設定を渡されても、その人の分で決め直す） */
 export async function casinoCfgFor(db: Db, cfg: GuildConfig, memberId: string, now = new Date()): Promise<GuildConfig> {
   const base = cfg.casino.boostBase ? { ...cfg, casino: baseCasino(cfg.casino) } : cfg;
+  // 👹 厄のあいだは、1日の合計を決まった数（500）までにする。札でも上がらない
+  if (cfg.roles.yakudoshi) {
+    const [m] = await db.select({ roleIds: members.roleIds }).from(members).where(eq(members.id, memberId));
+    if (m && isYakudoshi(cfg, m.roleIds)) {
+      const limit = base.casino.yakuDailyBetLimit;
+      return { ...base, casino: { ...base.casino, dailyBetLimit: limit, maxBet: Math.max(base.casino.minBet, Math.min(base.casino.maxBet, limit)) } };
+    }
+  }
   const b = await casinoBoostOf(db, memberId, now);
   return b ? { ...base, casino: boostCasino(base.casino, b.level, b.ex) } : base;
 }

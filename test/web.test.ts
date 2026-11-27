@@ -468,12 +468,12 @@ describe('厄・BAN・キック・メモ（管理画面）', () => {
     expect((await post('/evaluation/ema-thresholds', g, { _csrf: gcsrf, ujikoPercent: '50', ujikoActiveHours: '8', ujikoMin: '2', inviteSubstituteMax: '0', ujikoKeep: '0', sewayakuVotePercent: '70', sewayakuVoterHours: '10', sewayakuCandidateHours: '200', sewayakuCandidateMonths: '2', sewayakuRetryHours: '30', sewayakuMinVoters: '8', sodaiPromote: '2' })).headers.get('location')).toBe('/evaluation?th=saved');
     expect((await loadOverrides(db)).emaThresholds).toEqual({ ujikoPercent: 50, ujikoActiveMinutes: 480, ujikoMin: 2, inviteSubstituteMax: 0, ujikoKeep: 0, sewayakuVotePercent: 70, sewayakuVoterMinutes: 600, sewayakuCandidateMinutes: 12000, sewayakuCandidateMonths: 2, sewayakuRetryMinutes: 1800, sewayakuMinVoters: 8, sodaiPromote: 2 });
     expect((await listAudit(db, { action: 'ema.thresholds_edit' })).length).toBe(1);
-    // 評価ページに今の枚数と、今週の参拝者→氏子の数が出る
+    // 評価ページに今の枚数と、いまの参拝者→氏子の数が出る
     const page = await (await get('/evaluation?th=saved', g)).text();
     expect(page).toContain('絵馬の枚数');
     expect(page).toContain('🗳 世話役の選挙（候補ごと・匿名）');
     expect(page).toContain('いま決まっている選挙はありません');
-    expect(page).toContain('今週の参拝者→氏子：<strong>絵馬 1 枚'); // 縁側にいた氏子以上0人→最低1枚（設定の読み直しは60秒ごとなので既定の数で）
+    expect(page).toContain('いまの参拝者→氏子：<strong>絵馬 1 枚'); // 縁側にいた氏子以上0人→最低1枚（設定の読み直しは60秒ごとなので既定の数で）
   });
 
   it('🔄 ご縁のリセット: 宮司だけ・絵馬昇格ONと合言葉が要る・元に戻せる', async () => {
@@ -920,7 +920,7 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     app = createWebApp({ db, cfg: () => store.current, fileCfg: cfg, onSettingsSaved: () => store.refresh(), api: fakeApi, discord: fakeActions, baseUrl: BASE, now: () => clock });
     const g = await login(GUJI);
     const page = await (await get('/settings', g)).text();
-    expect(page).toContain('厄祓いの値段');
+    expect(page).toContain('免罪符の値段');
     expect(page).toContain('7時間の浮上ボーナス');
     expect(page).toContain('name="roomCoreTimeMultiplier"');
     expect(page).toContain('name="longVoiceBonusChannel"');

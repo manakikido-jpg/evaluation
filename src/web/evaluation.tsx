@@ -9,7 +9,7 @@ import { resetAllShuin, undoAllShuinReset, lastAllShuinReset, newSystemStartedAt
 import { perkUjikoEnabled, setPerkUjiko } from '../services/perkGate.js';
 import { loadOverrides, saveOverrides } from '../services/settings.js';
 import { ujikoWeekRequirement } from '../services/ujikoRequirement.js';
-import { jstWeekStart } from '../domain/ema.js';
+import { jstPeriodStart } from '../domain/ema.js';
 import { listSewayakuElections, sewayakuVoteCount } from '../services/sewayakuElection.js';
 import { goenPerkSchema, emaThresholdsSchema, type GoenPerk } from '../config.js';
 import { namesOf } from '../services/members.js';
@@ -63,8 +63,8 @@ export function mountEvaluation(app: Hono<Env>, db: Db, cfg: () => GuildConfig, 
       const names = keepWarnings.length ? await namesOf(db, keepWarnings.map((w) => w.id)) : new Map<string, string>();
       const resetUndoable = session.level === 'guji' ? await lastAllShuinReset(db) : undefined;
       const perkUjiko = await perkUjikoEnabled(db);
-      // 🎐 今週の「参拝者→氏子に要る絵馬の数」（毎週きまる）
-      const ujikoWeek = session.level === 'guji' ? await ujikoWeekRequirement(db, cfg(), jstWeekStart(now())) : undefined;
+      // 🎐 今週の「参拝者→氏子に要る絵馬の数」（2週間ごとにきまる）
+      const ujikoWeek = session.level === 'guji' ? await ujikoWeekRequirement(db, cfg(), jstPeriodStart(now())) : undefined;
       // 🗳 世話役の選挙（投票中・これから・最近の結果。票と投票できる人の数だけ）
       let sewayaku: Parameters<typeof EvaluationPage>[0]['sewayaku'];
       if (session.level === 'guji') {

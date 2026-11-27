@@ -41,7 +41,7 @@ export const DEFAULT_TERMS: GlossaryDefault[] = [
   { category: 'system', emoji: '🎀', term: 'ご縁', reading: 'ごえん', description: '評価ポイント。貯まると役職が上がる' },
   { category: 'system', emoji: '⚖', term: '格', reading: 'かく', description: '朱印 1 回で渡せるご縁（役職が上がると増える）' },
   { category: 'system', emoji: '👹', term: '厄', reading: 'やく', description: '警告。付いている間は 👹厄年' },
-  { category: 'system', emoji: '🙏', term: '厄祓い', reading: 'やくばらい', description: '{通貨}で申し込み、運営との面接のあとに厄を祓う（`/厄祓い`）', aliases: '免罪符' },
+  { category: 'system', emoji: '🙏', term: '免罪符', reading: 'めんざいふ', description: '{通貨}で申し込み、運営との面接のあとに厄を祓う（`/免罪符`）', aliases: '免罪符' },
   { category: 'system', emoji: '🗓', term: 'お参り期間', reading: 'おまいりきかん', description: '入ってから最初の {お参り期間} 日' },
   { category: 'system', emoji: '🔔', term: '呼び鈴', reading: 'よびりん', description: '運営を呼ぶボタン（`/呼び鈴`）' },
   { category: 'system', emoji: '📮', term: '相談', reading: 'そうだん', description: '神職に匿名で相談できる（`/相談`）' },

@@ -11,6 +11,7 @@ import { recordJoin } from '../src/services/members.js';
 import { listItems, seedDefaultItems } from '../src/services/shop.js';
 import { activeYakuCount, yakubaraiWaiting } from '../src/services/yaku.js';
 import { isYakudoshi, yakuBlocks, YAKU_BLOCKED } from '../src/services/yakuGate.js';
+import { yaku as yakuTable } from '../src/db/schema.js';
 import { cfg, makeDb, ROLE } from './helpers.js';
 
 const USER = '770000000000000010';
@@ -22,11 +23,11 @@ describe('👹 厄の制限: どれを止めるか', () => {
     expect(isYakudoshi(cfg, [ROLE.ujiko])).toBe(false);
   });
 
-  it('送金・市場・キャスト・カジノ・じゃんけん・贈る・お年玉・絵馬は止め、チケット・おみくじ・物御籤・授与所は通す', () => {
-    for (const command of ['sokin', 'ichiba', 'cast', 'casino', 'shinpu', 'janken', 'present']) expect(yakuBlocks({ command })).toBe(true);
+  it('送金・市場・キャスト・じゃんけん・贈る・お年玉・絵馬は止め、チケット・おみくじ・物御籤・授与所・カジノは通す', () => {
+    for (const command of ['sokin', 'ichiba', 'cast', 'shinpu', 'janken', 'present']) expect(yakuBlocks({ command })).toBe(true);
     for (const customId of ['sokin:ok:1', 'market:buy:1', 'cast:pick:1', 'otoshi:claim:3', 'koban:give:1', 'items:give:x', 'ema:give:1', 'ema:vote:1', 'lottery:enter', 'janken:pick'])
       expect(yakuBlocks({ customId })).toBe(true);
-    for (const command of ['omikuji', 'gacha', 'soudan', 'menzaifu', 'shop', 'help', 'items', 'zandaka']) expect(yakuBlocks({ command })).toBe(false);
+    for (const command of ['omikuji', 'gacha', 'soudan', 'menzaifu', 'shop', 'help', 'items', 'zandaka', 'casino']) expect(yakuBlocks({ command })).toBe(false);
     for (const customId of ['ticket:open', 'omikuji:draw', 'gacha:draw', 'shop:open', 'menzaifu:buy', 'items:pick', 'ema:card:1'])
       expect(yakuBlocks({ customId })).toBe(false);
   });
@@ -54,8 +55,17 @@ describe('👹 厄の制限: どれを止めるか', () => {
     expect(yakuInteractionBlocked(cfg, inter([ROLE.ujiko, ROLE.yakudoshi], { customId: 'otoshi:claim:1' }) as unknown as Interaction)).toBe(true);
   });
 
-  it('カジノWeb には入れない', () => {
-    expect(casinoAllowed(cfg, [ROLE.ujiko, ROLE.yakudoshi])).toBe(false);
+  it('カジノWeb には入れるが、1日の合計は500銭まで（札でも上がらない）', async () => {
+    expect(casinoAllowed(cfg, [ROLE.ujiko, ROLE.yakudoshi])).toBe(true);
+    const { db, close } = await makeDb();
+    const { recordJoin } = await import('../src/services/members.js');
+    const { casinoCfgFor } = await import('../src/services/casino/boost.js');
+    await recordJoin(db, { id: USER, username: USER, displayName: USER, avatarUrl: null, roleIds: [ROLE.ujiko, ROLE.yakudoshi], isBot: false, joinedAt: null });
+    await recordJoin(db, { id: STAFF, username: STAFF, displayName: STAFF, avatarUrl: null, roleIds: [ROLE.ujiko], isBot: false, joinedAt: null });
+    expect((await casinoCfgFor(db, cfg, USER)).casino.dailyBetLimit).toBe(500);
+    expect((await casinoCfgFor(db, cfg, USER)).casino.maxBet).toBeLessThanOrEqual(500);
+    expect((await casinoCfgFor(db, cfg, STAFF)).casino.dailyBetLimit).toBe(cfg.casino.dailyBetLimit);
+    await close();
   });
 });
 
@@ -89,7 +99,7 @@ describe('👹 厄の制限: 通話は縁側だけ', () => {
   });
 });
 
-describe('👹 厄の制限: 授与所は厄祓いだけ', () => {
+describe('👹 厄の制限: 授与所は免罪符だけ', () => {
   function inter(customId: string, roleIds: string[], value?: string) {
     const i = {
       customId, guildId: cfg.guildId, user: { id: USER }, values: value ? [value] : [],
@@ -105,7 +115,7 @@ describe('👹 厄の制限: 授与所は厄祓いだけ', () => {
     return i;
   }
 
-  it('ほかの品は選べず・受けられず、厄祓いは申し込める（面接待ち）', async () => {
+  it('ほかの品は選べず・受けられず、免罪符は申し込める（面接待ち）', async () => {
     const { db, close } = await makeDb();
     const sent: string[] = [];
     const discord = { sendDm: async () => true, sendMessage: async (c: string) => { sent.push(c); return { id: '1' }; }, addRole: async () => undefined, removeRole: async () => undefined } as unknown as DiscordActions;
@@ -113,11 +123,12 @@ describe('👹 厄の制限: 授与所は厄祓いだけ', () => {
     await recordJoin(db, { id: USER, username: USER, displayName: USER, avatarUrl: null, roleIds: [ROLE.ujiko], isBot: false, joinedAt: null });
     expect((await giveYaku({ db, cfg, discord }, { id: STAFF, level: 'shinshoku', via: 'web' }, USER, '誹謗中傷', false)).status).toBe('warned');
     await addCoins(db, USER, cfg.economy.menzaifuPrice + 500, 'adjust');
+    await db.update(yakuTable).set({ createdAt: new Date(Date.now() - 8 * 86_400_000) });
     const shop = new ShopApp(db, () => cfg, discord);
     const items = await listItems(db);
     const omikuji = items.find((x) => x.kind === 'omikuji_extra')!;
     const harai = items.find((x) => x.kind === 'menzaifu')!;
-    expect(harai.name).toBe('厄祓い');
+    expect(harai.name).toBe('免罪符');
     const yaku = [ROLE.ujiko, ROLE.yakudoshi];
 
     const pick = inter('shop:pick:fun', yaku, String(omikuji.id));

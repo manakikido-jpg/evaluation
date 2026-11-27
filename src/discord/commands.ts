@@ -229,9 +229,9 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
 
     new SlashCommandBuilder()
       .setName('menzaifu')
-      .setNameLocalizations({ ja: '厄祓い' })
+      .setNameLocalizations({ ja: '免罪符' })
       .setDescription('Apply for yakubarai to clear a yaku (after an interview)')
-      .setDescriptionLocalizations({ ja: '厄祓いを申し込む（運営との面接のあとに祓われる。厄と銭の確認もできる）' })
+      .setDescriptionLocalizations({ ja: '免罪符を申し込む（運営との面接のあとに祓われる。厄と銭の確認もできる）' })
       .setContexts(InteractionContextType.Guild)
       .toJSON(),
 

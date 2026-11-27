@@ -114,9 +114,9 @@ export const economySchema = z.object({
   /** 朱印を押した人・押された人がもらえる量 */
   shuinGive: z.number().int().min(0).default(3),
   shuinReceive: z.number().int().min(0).default(5),
-  /** 厄祓いの値段（買うと面接待ちになり、運営との面接のあとに祓う。本人の決定 2026-11-26） */
+  /** 免罪符の値段（買うと面接待ちになり、運営との面接のあとに祓う。本人の決定 2026-11-26） */
   menzaifuPrice: z.number().int().positive().default(10000),
-  /** 厄祓いを買える回数（1 人あたり、ずっと） */
+  /** 免罪符を買える回数（1 人あたり、ずっと） */
   menzaifuMaxUses: z.number().int().min(0).default(1),
   /** 贈り物（ショップ）: 1 回に贈れる量と、1 人が 1 日に贈れる合計 */
   giftMin: z.number().int().positive().default(10),
@@ -133,7 +133,7 @@ export const economySchema = z.object({
   omikujiBase: z.number().int().min(0).default(10),
   /** おみくじは通話に入っているときだけ引ける（AFK・数えない通話はのぞく） */
   omikujiVoiceOnly: z.boolean().default(true),
-  /** 奉納している人の授与品の割引（%。厄祓い・贈り物はのぞく。0 で割引なし） */
+  /** 奉納している人の授与品の割引（%。免罪符・贈り物はのぞく。0 で割引なし） */
   boostDiscountPercent: z.number().int().min(0).max(90).default(20),
   /** コアタイム中の通話の花びら（%。150 で 1.5 倍。増えた分は 1 日の上限に数えない） */
   coreTimePercent: z.number().int().min(100).max(500).default(150),
@@ -727,6 +727,8 @@ export const casinoSchema = z.object({
   boostMult: z.number().int().min(2).max(20).default(5),
   /** 🎰 大勝負の札（極）: 1 回の最高・ルーレットの 1 か所の最高・1 日の合計を何倍にするか（社務所Web で決める） */
   boostExMult: z.number().int().min(2).max(100).default(20),
+  /** 👹 厄のあいだの、カジノで1日に賭けられる合計（札では上がらない。本人の決定 2026-11-27） */
+  yakuDailyBetLimit: z.number().int().min(0).max(100_000_000).default(500),
   /** 札が効く長さ（時間。0 なら使った日の日本時間の 0 時まで） */
   boostHours: z.number().int().min(0).max(168).default(0),
   /** 上がる上限を別々に（0 なら boostMult と同じ・1 なら上げない）: 1 回の最高・ルーレットの 1 か所の最高・1 日の合計 */

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '../src/db/client.js';
 import { ema, invites, members, omairi, voiceChannels, voiceUsage } from '../src/db/schema.js';
-import { jstWeekStart, ujikoRequirementFrom, ujikoRuleText, EMA_DEFAULT_THRESHOLDS } from '../src/domain/ema.js';
+import { jstWeekStart, jstPeriodStart, ujikoRequirementFrom, ujikoRuleText, EMA_DEFAULT_THRESHOLDS } from '../src/domain/ema.js';
 import { activeUjikoPlusCount, ujikoProgress, ujikoWeekActive, ujikoWeekRequirement } from '../src/services/ujikoRequirement.js';
 import { emaPromotable } from '../src/services/emaPromotion.js';
 import type { GuildConfig } from '../src/config.js';
@@ -63,6 +63,11 @@ describe('🎐 参拝者→氏子の必要数（毎週きまる）', () => {
     expect(ujikoRequirementFrom(10, EMA_DEFAULT_THRESHOLDS)).toBe(6);
     expect(ujikoRequirementFrom(0, { ujikoPercent: 60, ujikoMin: 2 })).toBe(2);
     expect(jstWeekStart(now)).toBe('2026-11-23');
+    // 見直しは2週間ごと（2026-01-05 の月曜から2週間ずつ）
+    expect(jstPeriodStart(now)).toBe('2026-11-23');
+    expect(jstPeriodStart(new Date('2026-11-17T03:00:00Z'))).toBe('2026-11-09');
+    expect(jstPeriodStart(new Date('2026-12-01T03:00:00Z'))).toBe('2026-11-23');
+    expect(jstPeriodStart(new Date('2026-12-07T03:00:00Z'))).toBe('2026-12-07');
     expect(jstWeekStart(new Date('2026-11-22T15:30:00Z'))).toBe('2026-11-23'); // 月曜 0:30（日本時間）
     expect(jstWeekStart(new Date('2026-11-22T14:59:00Z'))).toBe('2026-11-16'); // 日曜 23:59（日本時間）
     expect(ujikoRuleText(EMA_DEFAULT_THRESHOLDS)).toBe('直近7日に縁側に10時間以上いた氏子以上の人数の6割（切り上げ・最低1枚）');
@@ -92,13 +97,13 @@ describe('🎐 参拝者→氏子の必要数（毎週きまる）', () => {
 });
 
 describe('🎐 参拝者→氏子の進み具合（お参り期間中の票＋招待の補い）', () => {
-  /** 11/16 の週は 4 人（必要 3 枚）、11/23 の週は 1 人（必要 1 枚） */
+  /** 11/9 からの2週間は 4 人（必要 3 枚）、11/23 からの2週間は 1 人（必要 1 枚） */
   async function seedWeeks() {
-    for (const id of UJ.slice(0, 4)) await voice(id, '2026-11-12', 600);
+    for (const id of UJ.slice(0, 4)) await voice(id, '2026-11-05', 600);
     await voice(UJ[0]!, '2026-11-19', 600);
   }
 
-  it('必要数は、お参り期間が始まった週の数で固定。期間の前・取り消しの票は数えない', async () => {
+  it('必要数は、お参り期間が始まった2週間の区切りの数で固定。期間の前・取り消しの票は数えない', async () => {
     await seedWeeks();
     const start = new Date('2026-11-17T03:00:00Z');
     await omairiOf(SA, start);
@@ -107,7 +112,7 @@ describe('🎐 参拝者→氏子の進み具合（お参り期間中の票＋�
     await vote(SA, new Date('2026-11-25T03:00:00Z'));
     await vote(SA, new Date('2026-11-25T04:00:00Z'), true); // 取り消し
     const p = await ujikoProgress(db, cfg, SA, now);
-    expect(p).toMatchObject({ week: '2026-11-16', active: 4, required: 3, votes: 2, invites: 0, total: 2, inOmairi: true, met: false });
+    expect(p).toMatchObject({ week: '2026-11-09', active: 4, required: 3, votes: 2, invites: 0, total: 2, inOmairi: true, met: false });
     // 今週始まった人は今週の数（1枚）
     await omairiOf(SA2, new Date('2026-11-24T03:00:00Z'));
     expect(await ujikoProgress(db, cfg, SA2, now)).toMatchObject({ week: '2026-11-23', required: 1, total: 0, met: false });

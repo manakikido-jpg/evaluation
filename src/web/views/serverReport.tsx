@@ -27,7 +27,7 @@ const gameName = (g: string) => `${CASINO_LABEL[g as CasinoGame]?.name ?? g}${BO
 const roomName = (name: string) => name.split(' / ').at(-1) ?? name;
 const DAY_OPTIONS = [7, 30, 90] as const;
 /** 記録のキーを、画面の名前に */
-const SHOP_NAME: Record<string, string> = { role: 'ロール', hanafubuki: '花吹雪', gift: '贈り物', ema_pin: '絵馬の奉納', omikuji_extra: 'おみくじもう 1 回', menzaifu: '厄祓い', otoshidama: 'お年玉袋', mycolor: 'マイカラー', casino_boost: '大勝負の札', casino_boost_ex: '大勝負の札（極）', casino_style: 'カジノの着せかえ', name_change: '名前変更の札', koban_1000: '小判 1000', koban_3000: '小判 3000', koban_5000: '小判 5000', koban_10000: '小判 10000' };
+const SHOP_NAME: Record<string, string> = { role: 'ロール', hanafubuki: '花吹雪', gift: '贈り物', ema_pin: '絵馬の奉納', omikuji_extra: 'おみくじもう 1 回', menzaifu: '免罪符', otoshidama: 'お年玉袋', mycolor: 'マイカラー', casino_boost: '大勝負の札', casino_boost_ex: '大勝負の札（極）', casino_style: 'カジノの着せかえ', name_change: '名前変更の札', koban_1000: '小判 1000', koban_3000: '小判 3000', koban_5000: '小判 5000', koban_10000: '小判 10000' };
 const INVITE_NAME: Record<string, string> = { link: '招待リンク', admin: '運営が登録', unknown: '不明', answer: '申請の答え' };
 const TICKET_NAME: Record<string, string> = { role: 'ロール', inquiry: 'お問い合わせ', soudan: '相談', stamp: 'スタンプ' };
 const fortuneName = (k: string) => FORTUNES.find((f) => f.key === k)?.name ?? k;

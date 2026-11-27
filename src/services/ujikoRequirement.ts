@@ -3,13 +3,13 @@ import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { ema, invites, memberAlts, members, omairi, settings, voiceUsage } from '../db/schema.js';
 import { highestRank } from '../domain/ranks.js';
-import { addDays, jstWeekStart, ujikoRequirementFrom } from '../domain/ema.js';
+import { addDays, jstPeriodStart, ujikoRequirementFrom } from '../domain/ema.js';
 import { engawaChannelIds } from './ujikoEvaluation.js';
 import { staffAlts } from './staffAlts.js';
 
 /**
  * 🎐 参拝者→氏子の条件（絵馬での昇格が ON のとき）。
- * - 必要数は毎週きまる：その週（月曜はじまり・日本時間）の前の 7 日間に、縁側に ujikoActiveMinutes 分以上いた
+ * - 必要数は2週間ごとにきまる（2026-11-27〜）：その2週間のはじめの月曜（日本時間）の前の 7 日間に、縁側に ujikoActiveMinutes 分以上いた
  *   「氏子以上」の人数 × ujikoPercent%（切り上げ・最低 ujikoMin）。
  * - 一人ひとりの必要数は「お参り期間が始まった週」の数で固定（週の人数は、はじめて数えたときに settings に残す）。
  * - 数えるのは、お参り期間中にもらった氏子の票（取り消しを除く）＋招待の補い
@@ -103,7 +103,7 @@ export async function ujikoProgress(db: Db, cfg: GuildConfig, memberId: string, 
   const inOmairi = Boolean(o && (o.status === 'ongoing' || o.status === 'review'));
   const since = inOmairi ? o!.startedAt : new Date(now.getTime() - ROLLING_DAYS * DAY);
   const until = inOmairi && o!.endsAt < now ? o!.endsAt : now;
-  const { week, active, required } = await ujikoWeekRequirement(db, cfg, jstWeekStart(inOmairi ? o!.startedAt : now));
+  const { week, active, required } = await ujikoWeekRequirement(db, cfg, jstPeriodStart(inOmairi ? o!.startedAt : now));
   const [[v], [i]] = await Promise.all([
     db.select({ n: count() }).from(ema).where(and(eq(ema.receiverId, memberId), eq(ema.tier, 'ujiko'), isNull(ema.revokedAt), gte(ema.createdAt, since), lte(ema.createdAt, until))),
     // 招待の補い：招待された人が通話に4時間いて「1人」と数えた招待（2026-11-27〜）

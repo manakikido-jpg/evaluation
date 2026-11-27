@@ -54,7 +54,7 @@ export const dm = {
       'もう 1 つ厄が付くと BAN になります。',
       '厄のあいだは、通話は縁側だけ・使えるのはお問い合わせ・おみくじ・物御籤だけになります。',
       e.menzaifuMaxUses > 0
-        ? `#授与所 で厄祓い（${e.currencyEmoji}${e.currencyName} ${e.menzaifuPrice}）を受けると、運営との面接のあとに厄が祓われます（${e.menzaifuMaxUses} 回まで）。`
+        ? `#授与所 で免罪符（${e.currencyEmoji}${e.currencyName} ${e.menzaifuPrice}）を受けると、運営との面接のあとに厄が祓われます（${e.menzaifuMaxUses} 回まで）。`
         : '',
     ]
       .filter(Boolean)
@@ -63,7 +63,7 @@ export const dm = {
   bannedByYaku: (reason: string) => [SIGN, `厄が 2 つになったため BAN となりました（理由: ${reason}）。`].join('\n'),
   bannedInstantly: (reason: string) => [SIGN, `重大な違反（${reason}）のため BAN となりました。`].join('\n'),
   cleared: () => [SIGN, '厄が祓われました。'].join('\n'),
-  yakubaraiWaiting: () => [SIGN, '厄祓いを受け付けました。運営との面接のあとに厄が祓われます。運営から声がかかるまでお待ちください。'].join('\n'),
+  yakubaraiWaiting: () => [SIGN, '免罪符を受け付けました。運営との面接のあとに厄が祓われます。運営から声がかかるまでお待ちください。'].join('\n'),
   kicked: (reason: string) => [SIGN, `サーバーから退出となりました（理由: ${reason}）。`].join('\n'),
 };
 
@@ -172,7 +172,7 @@ export async function clearYaku(ctx: ModCtx, actor: Actor, targetId: string, not
     await audit(ctx.db, { actorId: actor.id, targetId, action: 'yaku.role_fix', detail: { note, roleOk }, via: actor.via });
     return { status: 'none', roleFixed: true, roleOk };
   }
-  const roleOk = await afterCleared(ctx, targetId, r.remaining, r.yakubarai ? '厄祓い（面接のあと）' : '神職による取り消し');
+  const roleOk = await afterCleared(ctx, targetId, r.remaining, r.yakubarai ? '免罪符（面接のあと）' : '神職による取り消し');
   await audit(ctx.db, { actorId: actor.id, targetId, action: 'yaku.clear', detail: { note, remaining: r.remaining, roleOk }, via: actor.via });
   return { status: 'cleared', remaining: r.remaining, roleOk };
 }
@@ -180,13 +180,13 @@ export async function clearYaku(ctx: ModCtx, actor: Actor, targetId: string, not
 /** 👹厄年ロールを外せなかったときの、運営への案内 */
 export const YAKU_ROLE_FAILED = '⚠️ 👹厄年ロールを外せませんでした。Discord のサーバー設定 → ロールで、BOT のロールを「厄年」より上に動かしてから、もう一度「取り消す」を押してください（手で外してもかまいません）。';
 
-/** 本人が厄祓いを買う（授与所・/厄祓い）。面接待ちになり、#記録 に運営への知らせ（祓うボタンつき）を出す */
-export async function purchaseMenzaifu(ctx: ModCtx, memberId: string, roleIds?: readonly string[]): Promise<MenzaifuResult> {
+/** 本人が免罪符を買う（授与所・/免罪符）。面接待ちになり、#記録 に運営への知らせ（祓うボタンつき）を出す */
+export async function purchaseMenzaifu(ctx: ModCtx, memberId: string, roleIds?: readonly string[], now = new Date()): Promise<MenzaifuResult> {
   // 👹厄年ロールを手で付けた人など、厄の記録がなくてもロールがあれば申し込める
   const yakudoshi = ctx.cfg.roles.yakudoshi;
   const roles = roleIds ?? (await getMember(ctx.db, memberId))?.roleIds ?? [];
   const hasRole = Boolean(yakudoshi && roles.includes(yakudoshi));
-  const r = await buyMenzaifu(ctx.db, ctx.cfg.economy, memberId, async (tx) => (await walletOf(tx, memberId)).balance, hasRole);
+  const r = await buyMenzaifu(ctx.db, ctx.cfg.economy, memberId, async (tx) => (await walletOf(tx, memberId)).balance, hasRole, now);
   if (r.status === 'ok') {
     await audit(ctx.db, { actorId: memberId, targetId: memberId, action: 'yaku.yakubarai', detail: { price: r.price }, via: 'discord' });
     await ctx.discord.sendDm(memberId, dm.yakubaraiWaiting()).catch(() => false);
@@ -194,7 +194,7 @@ export async function purchaseMenzaifu(ctx: ModCtx, memberId: string, roleIds?: 
     if (log) {
       await safely('yakubarai notice', () =>
         ctx.discord.sendMessage(log, {
-          content: `🙏 厄祓いの申し込み <@${memberId}>（${ctx.cfg.economy.currencyEmoji}${r.price}）。面接をして、よければ「面接して祓う」を押してください。`,
+          content: `🙏 免罪符の申し込み <@${memberId}>（${ctx.cfg.economy.currencyEmoji}${r.price}）。面接をして、よければ「面接して祓う」を押してください。`,
           allowed_mentions: { parse: [] },
           components: [{ type: 1, components: [{ type: 2, style: 1, custom_id: `${YAKUBARAI_DONE}${memberId}`, label: '🙏 面接して祓う' }] }],
         }),
@@ -207,12 +207,13 @@ export async function purchaseMenzaifu(ctx: ModCtx, memberId: string, roleIds?: 
 /** #記録 の「面接して祓う」ボタンの customId の頭 */
 export const YAKUBARAI_DONE = 'yakubarai:done:';
 
-/** 厄祓いを買ったときの返事（授与所・/厄祓い で同じ文） */
+/** 免罪符を買ったときの返事（授与所・/免罪符 で同じ文） */
 export function yakubaraiResultText(r: MenzaifuResult, e: Pick<GuildConfig['economy'], 'currencyEmoji' | 'currencyName'>): string {
-  if (r.status === 'ok') return `🙏 厄祓いを申し込みました（${e.currencyEmoji}-${r.price}）。運営との面接のあとに祓われます。運営から声がかかるまでお待ちください。`;
+  if (r.status === 'ok') return `🙏 免罪符を申し込みました（${e.currencyEmoji}-${r.price}）。運営との面接のあとに祓われます。運営から声がかかるまでお待ちください。`;
   if (r.status === 'no_yaku') return `祓う厄がありません（${e.currencyName}は減っていません）。`;
   if (r.status === 'waiting') return 'もう申し込んでいます。運営との面接をお待ちください。';
-  if (r.status === 'used_up') return `厄祓いは 1 人 ${r.max} 回までです。`;
+  if (r.status === 'too_early') return `免罪符は、厄が付いてから1週間たってから受けられます（${r.availableAt.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric' })} から）。`;
+  if (r.status === 'used_up') return `免罪符は 1 人 ${r.max} 回までです。`;
   return `${e.currencyName}が足りません（${r.price} 枚必要・いま ${r.balance} 枚）。`;
 }
 

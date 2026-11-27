@@ -30,7 +30,7 @@ export const EMA_TEMPLATES: readonly string[] = ['話し手', '聞き手', '回�
 export const EMA_EXPIRE_DAYS = 30;
 
 /**
- * 参拝者→氏子の必要数（毎週きまる）：直近7日に縁側で EMA_UJIKO_ACTIVE_MINUTES 分以上いた氏子以上の人数の
+ * 参拝者→氏子の必要数（2週間ごとにきまる）：直近7日に縁側で EMA_UJIKO_ACTIVE_MINUTES 分以上いた氏子以上の人数の
  * EMA_UJIKO_PERCENT%（切り上げ・最低 EMA_UJIKO_MIN）。お参り期間中にもらった氏子の票＋招待の補い（EMA_INVITE_SUBSTITUTE_MAX まで）で数える。
  */
 export const EMA_UJIKO_PERCENT = 60;
@@ -133,7 +133,7 @@ export const EMA_DEFAULT_THRESHOLDS: EmaThresholdCounts = {
 /** 枚数の設定から、絵馬の昇格の段を作る。 */
 export function emaSteps(th: EmaThresholdCounts = EMA_DEFAULT_THRESHOLDS): EmaStep[] {
   return [
-    // 参拝者→氏子の必要数は毎週きまる（ujikoRequirement）。ここの promote は最低の数（目安）
+    // 参拝者→氏子の必要数は2週間ごとにきまる（ujikoRequirement）。ここの promote は最低の数（目安）
     { from: 'sanpaisha', to: 'ujiko', tier: 'ujiko', promote: th.ujikoMin },
     // 氏子→世話役は候補ごとの選挙（sewayakuElection.ts）。絵馬の段はない
     { from: 'sewayaku', to: 'sodai', tier: 'sodai', promote: th.sodaiPromote },
@@ -179,6 +179,17 @@ export function jstWeekStart(at: Date): string {
   const d = new Date(new Date(at.getTime() + 9 * 3_600_000).toISOString().slice(0, 10) + 'T00:00:00Z');
   d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
   return d.toISOString().slice(0, 10);
+}
+
+/**
+ * 参拝者→氏子の必要数を見直す区切り（2週間ごと・月曜はじまり。本人の決定 2026-11-27）。
+ * その日が入る2週間の、はじめの月曜日（日本時間）を返す。区切りは 2026-01-05（月）から2週間ずつ。
+ */
+export function jstPeriodStart(at: Date): string {
+  const week = jstWeekStart(at);
+  const days = Math.round((Date.parse(week + 'T00:00:00Z') - Date.parse('2026-01-05T00:00:00Z')) / 86_400_000);
+  const weeks = Math.round(days / 7);
+  return weeks % 2 === 0 ? week : addDays(week, -7);
 }
 
 /** YYYY-MM-DD に日数を足す */

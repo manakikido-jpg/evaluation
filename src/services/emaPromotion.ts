@@ -11,7 +11,7 @@ import { staffAlts } from './staffAlts.js';
 /**
  * 🎐 絵馬での昇格（新制度③）の ON/OFF。宮司が社務所Webで切り替える。
  * 既定は OFF＝従来どおり（参拝者→氏子はご縁40＋縁側20時間）。
- * ON＝参拝者→氏子は「お参り期間中に、毎週きまる数の絵馬（招待で補える）」で決める（ご縁・縁側時間は使わない。ujikoRequirement.ts）。
+ * ON＝参拝者→氏子は「お参り期間中に、2週間ごとにきまる数の絵馬（招待で補える）」で決める（ご縁・縁側時間は使わない。ujikoRequirement.ts）。
  * どちらでも自動降格はしない。今いる氏子は据え置き。
  */
 const KEY = 'ema_promotion';
@@ -41,7 +41,7 @@ async function targetMembers(db: Db): Promise<{ id: string; roleIds: string[] }[
 
 /**
  * その段で「いま数えている枚数」と「必要な枚数」。
- * 参拝者→氏子はお参り期間中の氏子の票＋招待の補いと、毎週きまる必要数（ujikoProgress）。
+ * 参拝者→氏子はお参り期間中の氏子の票＋招待の補いと、2週間ごとにきまる必要数（ujikoProgress）。
  * 氏子→世話役・世話役→総代は、有効な票の枚数と設定の枚数。
  */
 export async function emaStepProgress(db: Db, cfg: GuildConfig, memberId: string, step: EmaStep, now = new Date()): Promise<{ count: number; need: number }> {
@@ -55,7 +55,7 @@ export async function emaStepProgress(db: Db, cfg: GuildConfig, memberId: string
 /**
  * 絵馬が必要枚数そろって、次の役職に昇格できる人の ID。
  * いまの役職の段（emaStepFrom）に応じて、数える票の種類と必要枚数が変わる：
- * 参拝者→氏子（お参り期間中・毎週きまる数・招待で補える）／世話役→総代（総代の票）。氏子→世話役は候補ごとの選挙（sewayakuElection.ts）。
+ * 参拝者→氏子（お参り期間中・2週間ごとにきまる数・招待で補える）／世話役→総代（総代の票）。氏子→世話役は候補ごとの選挙（sewayakuElection.ts）。
  * 運営（神職・宮司など自動役職でない位が最上位の人）は対象外。
  */
 export async function emaPromotable(db: Db, cfg: GuildConfig, now = new Date()): Promise<string[]> {

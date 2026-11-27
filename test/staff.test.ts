@@ -7,6 +7,7 @@ import { recentActivity } from '../src/services/activity.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
 import { recordJoin } from '../src/services/members.js';
 import { activeYakuCount } from '../src/services/yaku.js';
+import { yaku as yakuTable } from '../src/db/schema.js';
 import { cfg, makeDb, ROLE } from './helpers.js';
 
 const STAFF = '830000000000000001';
@@ -131,7 +132,7 @@ function button(userId: string, roleIds: string[], customId: string) {
     async deferReply() {
       i.deferred = true;
     },
-    message: { content: '🙏 厄祓いの申し込み', edit: async () => undefined },
+    message: { content: '🙏 免罪符の申し込み', edit: async () => undefined },
   };
   return { i, replies };
 }
@@ -196,11 +197,12 @@ describe('神職用コマンド', () => {
   });
 });
 
-describe('/厄祓い（menzaifu）', () => {
+describe('/免罪符（menzaifu）', () => {
   it('厄があって銭が足りれば申し込みボタン → 面接待ち → 運営が #記録 のボタンで祓う', async () => {
     const give = command(STAFF, [ROLE.shinshoku], 'yaku', { sub: 'add', user: USER, strings: { reason: '誹謗中傷' } });
     await staff.onInteraction(give.i as never);
     await addCoins(db, USER, cfg.economy.menzaifuPrice, 'adjust');
+    await db.update(yakuTable).set({ createdAt: new Date(Date.now() - 8 * 86_400_000) });
 
     const view = command(USER, [ROLE.ujiko, ROLE.yakudoshi], 'menzaifu');
     await staff.onInteraction(view.i as never);

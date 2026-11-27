@@ -40,7 +40,7 @@ export const SHOP_CATEGORIES: Record<ShopCategory, { title: string; note: string
   vip: { title: '💎 極（遊郭の VIP）', note: '宵参りの方だけ。遊郭の「💎 極の部屋」をひらける・入れる', color: 0xe6b422, pick: '💎 極の VIP を選ぶ' },
   gift: { title: '🎁 贈る', note: 'ほかの人に贈ります', color: 0xf4a7b9, pick: '🎁 贈るものを選ぶ' },
   fun: { title: '🎐 札・おみくじ・絵馬', note: '名前変更の札・大勝負の札・おみくじをもう 1 回・自己紹介のピン留め', color: 0x5b8def, pick: '🎐 札・おみくじ・絵馬を選ぶ' },
-  menzaifu: { title: '🙏 厄祓い', note: '面接のあとに厄を 1 つ祓います', color: 0x7a6d71, pick: '🙏 厄祓いを選ぶ' },
+  menzaifu: { title: '🙏 免罪符', note: '面接のあとに厄を 1 つ祓います', color: 0x7a6d71, pick: '🙏 免罪符を選ぶ' },
   other: { title: '✨ そのほか', note: '', color: SHU, pick: '✨ そのほかを選ぶ' },
 };
 const ORDER: ShopCategory[] = ['color', 'title', 'vip', 'gift', 'fun', 'menzaifu', 'other'];
@@ -73,8 +73,8 @@ export function shopList(
   const pages = Math.max(1, Math.ceil(ordered.length / 25));
   const page = Number.isFinite(requestedPage) ? Math.max(0, Math.min(pages - 1, Math.trunc(requestedPage))) : 0;
   const visible = ordered.slice(page * 25, (page + 1) * 25);
-  const thanks = booster && e.boostDiscountPercent > 0 ? [`🏮 奉納ありがとうございます。授与品が **${e.boostDiscountPercent}% 引き** です（厄祓い・贈り物・小判をのぞく）`] : [];
-  const sale = e.shopSalePercent > 0 ? [`🎉 **期間限定セール中！** 授与品が **${e.shopSalePercent}% 引き** です（厄祓い・贈り物・小判をのぞく）`] : [];
+  const thanks = booster && e.boostDiscountPercent > 0 ? [`🏮 奉納ありがとうございます。授与品が **${e.boostDiscountPercent}% 引き** です（免罪符・贈り物・小判をのぞく）`] : [];
+  const sale = e.shopSalePercent > 0 ? [`🎉 **期間限定セール中！** 授与品が **${e.shopSalePercent}% 引き** です（免罪符・贈り物・小判をのぞく）`] : [];
   const mine = visible
     .filter((i) => owned.has(i.id))
     .map((i) => {
@@ -154,7 +154,7 @@ export function shopList(
 }
 
 /** 選んだ品物の確認（買う・やめる） */
-/** 割引券が使える品（ロール・おみくじもう 1 回・絵馬の奉納。厄祓い・贈り物・花吹雪はのぞく） */
+/** 割引券が使える品（ロール・おみくじもう 1 回・絵馬の奉納。免罪符・贈り物・花吹雪はのぞく） */
 export const discountableKinds = ['role', 'omikuji_extra', 'ema_pin', 'casino_boost', 'casino_boost_ex', 'name_change'];
 
 export function shopConfirm(

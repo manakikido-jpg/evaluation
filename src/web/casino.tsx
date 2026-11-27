@@ -70,7 +70,6 @@ import { members } from '../db/schema.js';
 import type { DiscordApi } from './discordApi.js';
 import { createMemberSession, deleteMemberSession, findMemberSession, markMemberChecked, MEMBER_RECHECK_MS, MEMBER_SESSION_DAYS } from './memberSessions.js';
 import { meetsUjiko, perkUjikoEnabled } from '../services/perkGate.js';
-import { isYakudoshi } from '../services/yakuGate.js';
 import { randomToken, safeEqual } from './sessions.js';
 import {
   BaccaratPage,
@@ -147,8 +146,8 @@ type Me = CasinoMe;
 
 /** 位のロールがあるか（requireRank を止めていれば、サーバーにいればよい）。ujikoOnly なら氏子以上だけ（新制度⑤） */
 export const casinoAllowed = (cfg: GuildConfig, roles: string[], ujikoOnly = false) =>
-  // 👹 厄のあいだはカジノに入れない
-  isYakudoshi(cfg, roles) ? false : cfg.casino.accessRoleId
+  // 👹 厄のあいだも入れる（1日の合計は yakuDailyBetLimit まで：casinoCfgFor）
+  cfg.casino.accessRoleId
     ? roles.includes(cfg.casino.accessRoleId)
     : !cfg.casino.requireRank
       ? true
@@ -156,7 +155,7 @@ export const casinoAllowed = (cfg: GuildConfig, roles: string[], ujikoOnly = fal
         ? meetsUjiko(cfg, roles)
         : cfg.ranks.some((r) => roles.includes(r.roleId));
 /** 入れなかったときの案内（カジノのロールか、位のロールか、氏子以上か） */
-const deniedCode = (cfg: GuildConfig, ujikoOnly = false, roles: string[] = []) => (isYakudoshi(cfg, roles) ? 'yaku' : cfg.casino.accessRoleId ? 'no_role' : ujikoOnly ? 'no_ujiko' : 'no_rank');
+const deniedCode = (cfg: GuildConfig, ujikoOnly = false, _roles: string[] = []) => (cfg.casino.accessRoleId ? 'no_role' : ujikoOnly ? 'no_ujiko' : 'no_rank');
 
 const SOLO: CasinoGame[] = ['blackjack', 'highlow', 'baccarat', 'slots', 'roulette', 'chinchiro', 'othello'];
 

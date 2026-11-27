@@ -7,7 +7,7 @@ import { spendWithin } from './economy.js';
 /**
  * 厄（警告）のデータ操作。Discord への反映（ロール・DM・BAN）は moderation.ts が行う。
  * ルール: 1 つ目は注意（厄年）、2 つ目で BAN。重大な違反は一発 BAN。
- * 厄祓い（授与所で買う）: 買うと面接待ちになり、運営が面接して祓う（1 人 menzaifuMaxUses 回まで）。
+ * 免罪符（授与所で買う）: 買うと面接待ちになり、運営が面接して祓う（1 人 menzaifuMaxUses 回まで）。
  */
 
 /** この人の処理を 1 つずつにする（2 人の神職が同時に厄を付けても数え間違えない） */
@@ -81,10 +81,10 @@ export async function clearYakuByStaff(
 ): Promise<{ cleared: boolean; remaining: number; yakubarai?: true }> {
   return db.transaction(async (tx) => {
     await lockMember(tx, input.memberId);
-    // 厄祓いの面接待ちなら、運営の取り消しで厄祓いが終わったことにする
+    // 免罪符の面接待ちなら、運営の取り消しで免罪符が終わったことにする
     const waiting = await waitingOf(tx, input.memberId);
     const cleared = await clearLatest(tx, input.memberId, input.by, waiting ? 'menzaifu' : 'staff', input.note);
-    // 記録がなくても（ロールだけの厄）、面接待ちの人を運営が取り消したら厄祓いは終わり
+    // 記録がなくても（ロールだけの厄）、面接待ちの人を運営が取り消したら免罪符は終わり
     if (waiting) await finishRequest(tx, waiting.id, input.by, 'done');
     const remaining = await countActive(tx, input.memberId);
     if (remaining === 0) await closeWaiting(tx, input.memberId, input.by);
@@ -140,7 +140,7 @@ export async function clearYakuForUnban(
 }
 
 /**
- * 厄祓いを使った回数 = 申し込み（面接待ち＋祓い終わった分）＋ 前の免罪符で祓った分。
+ * 免罪符を使った回数 = 申し込み（面接待ち＋祓い終わった分）＋ 前の免罪符で祓った分。
  * 前の免罪符は本人が自分で祓った記録（cleared_by が本人）なので、運営が面接のあとに祓った分と二重に数えない。
  */
 export async function menzaifuUsed(db: Db, memberId: string): Promise<number> {
@@ -154,7 +154,7 @@ export async function menzaifuUsed(db: Db, memberId: string): Promise<number> {
   return Number(r?.n ?? 0) + Number(w?.n ?? 0);
 }
 
-/** 厄祓いの面接待ちか */
+/** 免罪符の面接待ちか */
 export async function yakubaraiWaiting(db: Db, memberId: string): Promise<{ id: number; createdAt: Date; price: number } | undefined> {
   const w = await waitingOf(db, memberId);
   return w ? { id: w.id, createdAt: w.createdAt, price: w.price } : undefined;
@@ -169,16 +169,21 @@ export async function yakubaraiWaitingList(db: Db) {
     .orderBy(yakubaraiRequests.createdAt);
 }
 
+/** 免罪符は、厄が付いてからこの時間たってから買える（本人の決定 2026-11-27：1週間） */
+export const MENZAIFU_WAIT_MS = 7 * 86_400_000;
+
 export type MenzaifuResult =
   /** 支払って面接待ちになった（厄はまだ祓われていない） */
   | { status: 'ok'; price: number }
   | { status: 'no_yaku' }
   | { status: 'waiting' }
+  /** 厄が付いてから1週間たっていない（availableAt から買える） */
+  | { status: 'too_early'; availableAt: Date }
   | { status: 'used_up'; max: number }
   | { status: 'insufficient'; price: number; balance: number };
 
 /**
- * 厄祓いを買う。支払いと面接待ちの記録は同じトランザクション（どちらか片方だけにはならない）。
+ * 免罪符を買う。支払いと面接待ちの記録は同じトランザクション（どちらか片方だけにはならない）。
  * 厄はまだ祓わない（運営が面接して、取り消しで祓う）。面接待ちは 1 人 1 つだけ。
  */
 export async function buyMenzaifu(
@@ -188,11 +193,18 @@ export async function buyMenzaifu(
   balanceOf: (tx: Db) => Promise<number>,
   /** 👹厄年ロールが付いているか（厄の記録がなくても、ロールがあれば申し込める） */
   hasRole = false,
+  now = new Date(),
 ): Promise<MenzaifuResult> {
   return db.transaction(async (tx) => {
     await lockMember(tx, memberId);
     if ((await countActive(tx, memberId)) === 0 && !hasRole) return { status: 'no_yaku' };
     if (await waitingOf(tx, memberId)) return { status: 'waiting' };
+    // 免罪符は、厄が付いてから1週間たってから買える（厄年ロールだけで記録がない人は待たない）
+    const [latest] = await tx.select({ createdAt: yaku.createdAt }).from(yaku).where(activeWhere(memberId)).orderBy(desc(yaku.createdAt)).limit(1);
+    if (latest) {
+      const availableAt = new Date(latest.createdAt.getTime() + MENZAIFU_WAIT_MS);
+      if (now < availableAt) return { status: 'too_early', availableAt };
+    }
     if ((await menzaifuUsed(tx, memberId)) >= economy.menzaifuMaxUses) return { status: 'used_up', max: economy.menzaifuMaxUses };
     const paid = await spendWithin(tx, memberId, economy.menzaifuPrice, 'menzaifu');
     if (!paid) return { status: 'insufficient', price: economy.menzaifuPrice, balance: await balanceOf(tx) };

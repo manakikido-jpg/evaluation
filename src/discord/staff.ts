@@ -213,10 +213,10 @@ export class StaffApp {
   private async yakuList(): Promise<string> {
     const [rows, waiting] = await Promise.all([membersWithYaku(this.db), yakubaraiWaitingList(this.db)]);
     const wait = new Set(waiting.map((w) => w.memberId));
-    // 厄の記録はないが 👹厄年ロールで厄祓いを申し込んだ人
-    const roleOnly = waiting.filter((w) => !rows.some((r) => r.memberId === w.memberId)).map((w) => `🙏 ${mention(w.memberId)} 厄祓いの面接待ち（厄年ロールだけ）`);
-    if (!rows.length) return roleOnly.length ? `**厄祓いの面接待ち**\n${roleOnly.join('\n')}` : '厄が付いている方はいません。';
-    const lines = [...rows.slice(0, 25).map((r) => `👹 ${mention(r.memberId)}（${r.displayName ?? '?'}）厄 ${r.active}${wait.has(r.memberId) ? ' 🙏 厄祓いの面接待ち' : ''}`), ...roleOnly];
+    // 厄の記録はないが 👹厄年ロールで免罪符を申し込んだ人
+    const roleOnly = waiting.filter((w) => !rows.some((r) => r.memberId === w.memberId)).map((w) => `🙏 ${mention(w.memberId)} 免罪符の面接待ち（厄年ロールだけ）`);
+    if (!rows.length) return roleOnly.length ? `**免罪符の面接待ち**\n${roleOnly.join('\n')}` : '厄が付いている方はいません。';
+    const lines = [...rows.slice(0, 25).map((r) => `👹 ${mention(r.memberId)}（${r.displayName ?? '?'}）厄 ${r.active}${wait.has(r.memberId) ? ' 🙏 免罪符の面接待ち' : ''}`), ...roleOnly];
     return `**厄が付いている方（${rows.length} 人）**\n${lines.join('\n')}${rows.length > 25 ? `\nほか ${rows.length - 25} 人は管理画面で確認してください。` : ''}`;
   }
 
@@ -251,7 +251,7 @@ export class StaffApp {
     return embed.toJSON();
   }
 
-  // ───────── 全員用: 厄祓い（/厄祓い） ─────────
+  // ───────── 全員用: 免罪符（/免罪符） ─────────
 
   private async menzaifu(i: ChatInputCommandInteraction<'cached'>): Promise<void> {
     await i.deferReply(EPHEMERAL);
@@ -268,21 +268,21 @@ export class StaffApp {
     const hasYaku = yakuCount > 0 || roleOnly;
     const lines = [
       `今の厄: ${roleOnly ? '👹 厄年' : `${yakuCount}${yakuCount ? ' 👹' : ''}`}`,
-      `厄祓いの値段: ${e.currencyEmoji}${e.currencyName} ${e.menzaifuPrice}`,
+      `免罪符の値段: ${e.currencyEmoji}${e.currencyName} ${e.menzaifuPrice}`,
       `持っている${e.currencyName}: ${e.currencyEmoji} ${wallet.balance}`,
       waiting ? '🙏 面接待ちです（運営から声がかかるまでお待ちください）' : `あと受けられる回数: ${left} 回`,
-      '-# 厄祓いを受けると面接待ちになり、運営との面接のあとに厄が祓われます。',
+      '-# 免罪符を受けると面接待ちになり、運営との面接のあとに厄が祓われます。',
     ];
     const canBuy = hasYaku && !waiting && left > 0 && wallet.balance >= e.menzaifuPrice;
-    const embed = new EmbedBuilder().setColor(SHU).setTitle('🙏 厄祓い').setDescription(lines.join('\n'));
+    const embed = new EmbedBuilder().setColor(SHU).setTitle('🙏 免罪符').setDescription(lines.join('\n'));
     const components = canBuy
       ? [
           new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-            new ButtonBuilder().setCustomId('menzaifu:buy').setLabel('厄祓いを申し込む（面接待ちになる）').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('menzaifu:buy').setLabel('免罪符を申し込む（面接待ちになる）').setStyle(ButtonStyle.Primary),
           ),
         ]
       : [];
-    const note = !hasYaku ? '厄は付いていません。' : waiting ? '' : left === 0 ? '厄祓いはもう受けられません。' : wallet.balance < e.menzaifuPrice ? `${e.currencyName}が足りません。通話で貯まります。` : '';
+    const note = !hasYaku ? '厄は付いていません。' : waiting ? '' : left === 0 ? '免罪符はもう受けられません。' : wallet.balance < e.menzaifuPrice ? `${e.currencyName}が足りません。通話で貯まります。` : '';
     await i.editReply({ content: note || null, embeds: [embed.toJSON()], components });
   }
 
@@ -292,7 +292,7 @@ export class StaffApp {
     await i.editReply({ content: yakubaraiResultText(r, this.cfg.economy), embeds: [], components: [] });
   }
 
-  /** #記録 の「面接して祓う」（神職・宮司）。いちばん新しい厄を祓い、厄祓いを終わりにする */
+  /** #記録 の「面接して祓う」（神職・宮司）。いちばん新しい厄を祓い、免罪符を終わりにする */
   private async yakubaraiDone(i: ButtonInteraction<'cached'>): Promise<void> {
     const actor = this.actorOf(i);
     if (!actor) return void (await i.reply({ content: '神職・宮司のみ使えます。', ...EPHEMERAL }));
@@ -300,9 +300,9 @@ export class StaffApp {
     await i.deferReply(EPHEMERAL);
     if (!(await yakubaraiWaiting(this.db, targetId))) {
       await i.message.edit({ components: [] }).catch(() => undefined);
-      return void (await i.editReply({ content: 'この方の厄祓いは、もう終わっています（面接待ちではありません）。', allowedMentions: NO_MENTIONS }));
+      return void (await i.editReply({ content: 'この方の免罪符は、もう終わっています（面接待ちではありません）。', allowedMentions: NO_MENTIONS }));
     }
-    const r = await clearYaku(this.ctx, actor, targetId, '厄祓い（面接のあと）');
+    const r = await clearYaku(this.ctx, actor, targetId, '免罪符（面接のあと）');
     if (r.status === 'denied') return void (await i.editReply({ content: DENIED[r.reason], allowedMentions: NO_MENTIONS }));
     if (r.status === 'none') return void (await i.editReply({ content: r.roleFixed ? (r.roleOk ? '厄の記録はありませんでしたが、残っていた 👹厄年ロールを外しました。' : YAKU_ROLE_FAILED) : '祓う厄がありませんでした。', allowedMentions: NO_MENTIONS }));
     await i.message.edit({ content: `${i.message.content}\n✅ ${mention(actor.id)} が面接して祓いました（残りの厄: ${r.remaining}）`, components: [], allowedMentions: NO_MENTIONS }).catch(() => undefined);

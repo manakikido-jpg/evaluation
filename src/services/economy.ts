@@ -354,7 +354,7 @@ export const COIN_REASON_LABEL: Record<string, string> = {
   admin_take: '運営が減らした',
   saisen: 'お賽銭（持ちすぎた分）',
   get shuin_revoke() { return w('朱印の取り消し', '結びの取り消し'); },
-  menzaifu: '厄祓い',
+  menzaifu: '免罪符',
   casino_bet: 'カジノで賭けた',
   casino_win: 'カジノの払い戻し（勝ち）',
   casino_refund: 'カジノの返金',

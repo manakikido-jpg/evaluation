@@ -31,8 +31,8 @@ export function EvaluationPage({ session, data, filter, page, emaPromotion = fal
   const pageSize = 100, pages = Math.max(1, Math.ceil(data.rows.length / pageSize));
   const current = Math.min(page, pages), rows = data.rows.slice((current - 1) * pageSize, current * pageSize);
   const nameOf = (id: string) => names?.get(id) ?? id;
-  // 参拝者→氏子の決まり（毎週きまる数）
-  const ujikoRule = `お参り期間中に氏子の票を毎週きまる数（${ujikoRuleText(emaThresholds)}）・招待で${emaThresholds.inviteSubstituteMax}つまで補える`;
+  // 参拝者→氏子の決まり（2週間ごとにきまる数）
+  const ujikoRule = `お参り期間中に氏子の票を2週間ごとにきまる数（${ujikoRuleText(emaThresholds)}）・招待で${emaThresholds.inviteSubstituteMax}つまで補える`;
   return <Layout title="評価" nav="evaluation" session={session} wide>
     <div class="evaluation-page"><h1>氏子への評価</h1>
     {saved === 'on' && <p class="flash ok" role="status">🎐 絵馬での昇格に切り替えました。これからは参拝者は{ujikoRule}で氏子になります。</p>}
@@ -47,7 +47,7 @@ export function EvaluationPage({ session, data, filter, page, emaPromotion = fal
         <li><a href="#ns-perk">⑤ カジノ・宿を氏子から</a> {perkUjiko ? <span class="tag green">ON</span> : <span class="tag gray">OFF</span>}<small>参拝者はカジノ・宿を使えない</small></li>
       </ol>
       <p class="ns-summary">
-        {ujikoWeek && <span>🎐 今週の参拝者→氏子：<strong>絵馬 {ujikoWeek.required} 枚</strong></span>}
+        {ujikoWeek && <span>🎐 いまの参拝者→氏子：<strong>絵馬 {ujikoWeek.required} 枚</strong></span>}
         {sewayaku && <span>🗳 世話役の選挙：<strong>{sewayaku.active.filter((e) => e.status === 'open').length} 件 投票中</strong>・{sewayaku.active.filter((e) => e.status === 'scheduled').length} 件 これから（<a href="#ns-election">一覧</a>）</span>}
         <span>⚠️ 維持の注意：<strong>{keepWarnings.length} 人</strong></span>
       </p>
@@ -128,7 +128,7 @@ export function EvaluationPage({ session, data, filter, page, emaPromotion = fal
       {emaThresholdsFlash === 'saved' && <p class="flash ok" role="status">絵馬の枚数を保存しました。</p>}
       {emaThresholdsFlash === 'invalid' && <p class="flash warn" role="alert">決められた範囲の数で入れてください（割合は1〜100%、時間は1〜168時間、最低は1〜100枚、招待の補いは0〜20、維持は0〜100、総代は1〜1000）。</p>}
       <p class="note">③が ON のときに効きます。変えると1分ほどで反映。</p>
-      {ujikoWeek && <p class="ujiko-week">🎐 今週の参拝者→氏子：<strong>絵馬 {ujikoWeek.required} 枚</strong> <small>（縁側にいた氏子以上 {ujikoWeek.active} 人 × {emaThresholds.ujikoPercent}%）</small></p>}
+      {ujikoWeek && <p class="ujiko-week">🎐 いまの参拝者→氏子：<strong>絵馬 {ujikoWeek.required} 枚</strong> <small>（縁側にいた氏子以上 {ujikoWeek.active} 人 × {emaThresholds.ujikoPercent}%）</small></p>}
       <form method="post" action="/evaluation/ema-thresholds" class="ema-thresholds-form">
         <input type="hidden" name="_csrf" value={session.csrfToken}/>
         <fieldset><legend>🔰 参拝者 → 🍃 氏子（絵馬）</legend>

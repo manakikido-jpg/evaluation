@@ -31,7 +31,7 @@ const KIND_LABEL: Record<ShopItem['kind'], string> = {
   gift: '旧・自由額送金（/送金へ）',
   ema_pin: '絵馬の奉納',
   omikuji_extra: 'おみくじもう 1 回',
-  menzaifu: '厄祓い',
+  menzaifu: '免罪符',
   otoshidama: 'お年玉袋',
   mycolor: '自分だけの色',
   casino_boost: '🎰 大勝負の札（持ち物に 1 枚）',
@@ -88,7 +88,7 @@ export function ShopPage(props: {
         </tbody></table></div></section>}
 
       <p class="note">
-        #授与所 の「授与品を見る」に並ぶ品物です。行を押すと、値段・名前・説明・日数・販売のオン／オフを変えられます。厄祓いの値段と、贈り物の量の上限は
+        #授与所 の「授与品を見る」に並ぶ品物です。行を押すと、値段・名前・説明・日数・販売のオン／オフを変えられます。免罪符の値段と、贈り物の量の上限は
         <a href="/settings#sec-coins">設定</a>で変えます。
       </p>
 

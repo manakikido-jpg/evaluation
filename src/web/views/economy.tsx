@@ -227,7 +227,7 @@ export function EconomyPage(props: {
               <Row k="初期配布" v={`${fmt(e.joinBonus)} 枚`} />
               <Row k="招待のお礼・参拝者" v={`${fmt(e.inviteSanpaishaReward)} 枚`} />
               <Row k="招待のお礼・氏子" v={`${fmt(e.inviteUjikoReward)} 枚（追加）`} />
-              <Row k="厄祓い" v={`${fmt(e.menzaifuPrice)} 枚`} />
+              <Row k="免罪符" v={`${fmt(e.menzaifuPrice)} 枚`} />
               <Row k="物御籤" v={cfg.gacha.enabled ? `1 回 ${fmt(cfg.gacha.price)} 枚` : '止めている'} />
               <Row k="市場の手数料" v={`${cfg.market.feePercent}%`} />
               <Row k="贈り物" v={`1 回 ${fmt(e.giftMin)}〜${fmt(e.giftMax)} 枚・1 日 ${fmt(e.giftDailyLimit)} 枚まで・手数料20%は送り手が追加で払う`} />

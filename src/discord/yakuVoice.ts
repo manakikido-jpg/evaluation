@@ -40,7 +40,7 @@ export class YakuVoiceApp {
     const last = this.notified.get(m.id);
     if (last === undefined || now - last >= 10 * 60_000) {
       this.notified.set(m.id, now);
-      await m.send('👹 厄のあいだは、通話は縁側だけに入れます。厄祓いは授与所から（運営との面接のあとに祓われます）。').catch(() => undefined);
+      await m.send('👹 厄のあいだは、通話は縁側だけに入れます。免罪符は授与所から（運営との面接のあとに祓われます）。').catch(() => undefined);
     }
     return true;
   }

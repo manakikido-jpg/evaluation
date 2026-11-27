@@ -6,6 +6,7 @@ import { addCoins, walletOf } from '../src/services/economy.js';
 import { eventsOf, recordJoin } from '../src/services/members.js';
 import { clearYaku, giveYaku, instantBan, isBannedByEvents, kickMember, purchaseMenzaifu, unbanMember, writeMemo, type Actor, type ModCtx } from '../src/services/moderation.js';
 import { activeYakuCount, clearYakuForUnban, memosOf, membersWithYaku, menzaifuUsed, yakubaraiWaiting, yakuHistory } from '../src/services/yaku.js';
+import { yaku as yakuTable } from '../src/db/schema.js';
 import { cfg, makeDb, ROLE } from './helpers.js';
 
 const STAFF = '820000000000000001';
@@ -88,7 +89,7 @@ describe('厄', () => {
     const dm = calls.find((c) => c[0] === 'dm')![2]!;
     expect(dm).toContain('誹謗中傷');
     expect(dm).toContain('もう 1 つ厄が付くと BAN');
-    expect(dm).toContain('厄祓い');
+    expect(dm).toContain('免罪符');
     expect(dm).toContain('縁側だけ');
     expect(dm).not.toContain(STAFF);
     expect(await activeYakuCount(db, U)).toBe(1);
@@ -209,10 +210,21 @@ describe('一発 BAN', () => {
   });
 });
 
-describe('厄祓い（買うと面接待ち → 運営が祓う）', () => {
+describe('免罪符（買うと面接待ち → 運営が祓う）', () => {
   beforeEach(async () => {
     await giveYaku(ctx, shinshoku, U, '誹謗中傷', false);
+    // 免罪符は厄が付いて1週間たってから買える → 8日前に付いたことにする
+    await db.update(yakuTable).set({ createdAt: new Date(Date.now() - 8 * 86_400_000) });
     calls = [];
+  });
+
+  it('厄が付いて1週間たつまでは買えない（銭は減らない）', async () => {
+    await db.update(yakuTable).set({ createdAt: new Date() });
+    await addCoins(db, U, cfg.economy.menzaifuPrice, 'adjust');
+    expect(await purchaseMenzaifu(ctx, U)).toMatchObject({ status: 'too_early' });
+    expect((await walletOf(db, U)).balance).toBe(cfg.economy.menzaifuPrice);
+    // 1週間たてば買える
+    expect(await purchaseMenzaifu(ctx, U, undefined, new Date(Date.now() + 7 * 86_400_000 + 60_000))).toMatchObject({ status: 'ok' });
   });
 
   it('花びらが足りないと買えない', async () => {
@@ -240,7 +252,7 @@ describe('厄祓い（買うと面接待ち → 運営が祓う）', () => {
     expect(notice?.[2]).toContain(`yakubarai:done:${U}`);
     // 面接待ちのあいだは、もう一度は買えない
     expect(await purchaseMenzaifu(ctx, U)).toEqual({ status: 'waiting' });
-    // 運営が取り消すと、厄祓いが終わる
+    // 運営が取り消すと、免罪符が終わる
     expect(await clearYaku(ctx, shinshoku, U, '面接した')).toEqual({ status: 'cleared', remaining: 0, roleOk: true });
     expect(calls).toContainEqual(['removeRole', U, ROLE.yakudoshi]);
     expect(await yakubaraiWaiting(db, U)).toBeUndefined();
@@ -253,10 +265,11 @@ describe('厄祓い（買うと面接待ち → 運営が祓う）', () => {
     await purchaseMenzaifu(ctx, U);
     await clearYaku(ctx, shinshoku, U, '面接した');
     await giveYaku(ctx, shinshoku, U, 'スパム・宣伝', false);
+    await db.update(yakuTable).set({ createdAt: new Date(Date.now() - 8 * 86_400_000) });
     expect(await purchaseMenzaifu(ctx, U)).toEqual({ status: 'used_up', max: 1 });
   });
 
-  it('厄の記録がなくても 👹厄年ロールがあれば申し込める。運営が取り消すとロールが外れて厄祓いが終わる', async () => {
+  it('厄の記録がなくても 👹厄年ロールがあれば申し込める。運営が取り消すとロールが外れて免罪符が終わる', async () => {
     await clearYaku(ctx, shinshoku, U, 'x');
     await recordJoin(db, { id: U, username: U, displayName: U, avatarUrl: null, roleIds: [ROLE.ujiko, ROLE.yakudoshi], isBot: false, joinedAt: null });
     await addCoins(db, U, cfg.economy.menzaifuPrice, 'adjust');
