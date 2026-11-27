@@ -340,5 +340,6 @@
   "selection": true,
   "keyboardFocus": true,
   "detailsHp": 25,
+  "largeDetailsFit": true,
   "errors": []
 }
