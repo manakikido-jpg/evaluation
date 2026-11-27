@@ -44,7 +44,7 @@ export async function getItem(db: Db, id: number): Promise<ShopItem | undefined>
 }
 
 /** 奉納（ブースト）割引が効く品物（免罪符・贈り物・お年玉袋の手数料はのぞく） */
-export const discountable = (item: ShopItem) => kobanValue(item.kind) === undefined && item.kind !== 'menzaifu' && item.kind !== 'omamori' && item.kind !== 'gift' && item.kind !== 'otoshidama';
+export const discountable = (item: ShopItem) => kobanValue(item.kind) === undefined && item.kind !== 'menzaifu' && item.kind !== 'omamori' && item.kind !== 'casino_boost_sanpai' && item.kind !== 'gift' && item.kind !== 'otoshidama';
 
 /** 払う値段（免罪符は設定の値段。奉納している人は割引、絵馬の奉納は無料。1 枚未満は切り上げ） */
 export const priceOf = (item: ShopItem, economy: EconomyConfig, booster = false) => {
@@ -53,7 +53,7 @@ export const priceOf = (item: ShopItem, economy: EconomyConfig, booster = false)
   const base = item.kind === 'menzaifu' ? economy.menzaifuPrice : item.price;
   if (booster && item.kind === 'ema_pin') return 0;
   // 期間限定の授与品セール（免罪符・贈り物はのぞく）
-  const onSale = item.kind === 'menzaifu' || item.kind === 'omamori' || item.kind === 'gift' || item.kind === 'otoshidama' ? base : salePrice(base, economy.shopSalePercent);
+  const onSale = item.kind === 'menzaifu' || item.kind === 'omamori' || item.kind === 'casino_boost_sanpai' || item.kind === 'gift' || item.kind === 'otoshidama' ? base : salePrice(base, economy.shopSalePercent);
   if (!booster || !discountable(item) || economy.boostDiscountPercent <= 0) return onSale;
   return Math.ceil((onSale * (100 - economy.boostDiscountPercent)) / 100);
 };
@@ -120,6 +120,7 @@ export async function seedDefaultItems(
     { kind: 'gift', name: '旧・自由額送金', emoji: '🎁', description: '銭は /送金 から直接送れます', price: 0, enabled: false },
     { kind: 'ema_pin', name: '絵馬の奉納', emoji: '📌', description: '自分の自己紹介（#絵馬-男性・#絵馬-女性）を 7 日間ピン留め', price: 800, durationDays: 7 },
     { kind: 'omikuji_extra', name: 'おみくじ もう 1 回', emoji: '🎟', description: 'その日のおみくじを、もう 1 回引ける（1 日 1 回まで）', price: 100 },
+    { kind: 'casino_boost_sanpai', name: '参拝者の大勝負の札', emoji: '🎰', description: '参拝者・元氏子の方だけ。受けたその日（日本時間の 0 時まで）だけ、カジノで1日に賭けられる合計が上がる（1日1枚）', price: 1000 },
     { kind: 'omamori', name: 'お守り', emoji: '🧿', description: '氏子のキープの判定で、降格を1回防ぐ（1週間に縁側で40時間すごした週に1個・3個まで・自動で使う）', price: 30000 },
     { kind: 'menzaifu', name: '免罪符', emoji: '🙏', description: '厄を祓う申し込み（買うと面接待ちになり、運営との面接のあとに祓われます）', price: 0 },
   ];

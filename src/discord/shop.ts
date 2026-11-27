@@ -1,3 +1,5 @@
+import { buySanpaiBoost } from '../services/casino/boost.js';
+import { casinoRoleLimit } from '../services/perkGate.js';
 import { isNewSystemVisible } from '../domain/terms.js';
 import { highestRank } from '../domain/ranks.js';
 import { buyOmamori } from '../services/omamori.js';
@@ -177,7 +179,7 @@ export class ShopApp {
     else await i.deferUpdate();
     const [all, purchases, mine] = await Promise.all([listItems(this.db, { enabledOnly: true }), activeRolePurchases(this.db, i.user.id), activeMyColor(this.db, i.user.id)]);
     // 🧿 お守りは、新制度が始まるまで出さない
-    const items = isNewSystemVisible() ? all : all.filter((x) => x.kind !== 'omamori');
+    const items = isNewSystemVisible() ? all : all.filter((x) => x.kind !== 'omamori' && x.kind !== 'casino_boost_sanpai');
     // 受けている授与品（ロールをまだ持っているものだけ）
     const owned = new Map<number, Date | null>();
     for (const p of purchases) {
@@ -343,6 +345,17 @@ export class ShopApp {
       case 'menzaifu': {
         const r = await purchaseMenzaifu({ db: this.db, cfg, discord: this.discord }, userId, roleIdsOf(i.member));
         return yakubaraiResultText(r, cfg.economy);
+      }
+      case 'casino_boost_sanpai': {
+        // 🎰 参拝者専用の大勝負の札（新制度）：参拝者・元氏子だけ・受けたその日だけ・1日1枚。割引は使わない
+        if (!isNewSystemVisible()) return 'この授与品は、今は受けられません。';
+        const lim = await casinoRoleLimit(this.db, cfg, [...i.member.roles.cache.keys()]);
+        if (lim?.who !== 'sanpaisha') return '🎰 この札は、参拝者・元氏子の方だけが受けられます。';
+        const r = await buySanpaiBoost(this.db, item, userId);
+        const t = (d: Date) => `<t:${Math.floor(d.getTime() / 1000)}:t>`;
+        if (r.status === 'insufficient') return `${cfg.economy.currencyName}が足りません（${r.price} 枚・いま ${r.balance} 枚）。`;
+        if (r.status === 'active') return `🎰 今日はもう札が効いています（${t(r.until)} まで）。1日1枚です。`;
+        return `🎰 参拝者の大勝負の札を受けました。${t(r.until)} まで、カジノで1日に賭けられる合計が **${cfg.casino.sanpaishaBoostDailyBetLimit}** ${cfg.economy.currencyName}になります（ふだんは ${lim.limit}）。残り ${r.balance} 枚。`;
       }
       case 'omamori': {
         // 🧿 お守り（新制度）：氏子だけ・1週間に縁側40時間の週に1個・3個まで。割引は使わない

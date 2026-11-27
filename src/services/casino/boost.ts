@@ -2,7 +2,8 @@ import { casinoRoleLimit } from '../perkGate.js';
 import { and, eq, gt, sql } from 'drizzle-orm';
 import type { CasinoConfig, GuildConfig } from '../../config.js';
 import type { Db } from '../../db/client.js';
-import { memberBuffs, members } from '../../db/schema.js';
+import { memberBuffs, members, shopPurchases } from '../../db/schema.js';
+import { spendWithin, walletOf } from '../economy.js';
 import { isYakudoshi } from '../yakuGate.js';
 import { jstDate } from '../activity.js';
 import { useTicket } from '../tickets.js';
@@ -77,7 +78,11 @@ export async function casinoCfgFor(db: Db, cfg: GuildConfig, memberId: string, n
   {
     const [m] = await db.select({ roleIds: members.roleIds }).from(members).where(eq(members.id, memberId));
     const r = m ? await casinoRoleLimit(db, cfg, m.roleIds) : null;
-    if (r) return { ...base, casino: { ...base.casino, dailyBetLimit: r.limit, maxBet: Math.max(base.casino.minBet, Math.min(base.casino.maxBet, r.limit)) } };
+    if (r) {
+      // ⛩ 参拝者専用の大勝負の札が効いていれば、1日の合計を上げる（参拝者・元氏子だけ。荒魂は上がらない）
+      const limit = r.who === 'sanpaisha' && (await sanpaiBoostUntil(db, memberId, now)) ? Math.max(r.limit, base.casino.sanpaishaBoostDailyBetLimit) : r.limit;
+      return { ...base, casino: { ...base.casino, dailyBetLimit: limit, maxBet: Math.max(base.casino.minBet, Math.min(base.casino.maxBet, limit)) } };
+    }
   }
   const b = await casinoBoostOf(db, memberId, now);
   return b ? { ...base, casino: boostCasino(base.casino, b.level, b.ex) } : base;
@@ -127,5 +132,39 @@ export async function useCasinoBoost(db: Db, memberId: string, now = new Date(),
       .values({ memberId, kind: 'casino', ...next })
       .onConflictDoUpdate({ target: [memberBuffs.memberId, memberBuffs.kind], set: next });
     return { status: 'ok' as const, until, level: level + 1, ...(ex ? { ex: true } : {}) };
+  });
+}
+
+// ───────── ⛩ 参拝者専用の大勝負の札（新制度） ─────────
+
+/** 参拝者専用の札が効いていれば、終わる時（効いていなければ undefined） */
+export async function sanpaiBoostUntil(db: Db, memberId: string, now = new Date()): Promise<Date | undefined> {
+  const [row] = await db.select({ until: memberBuffs.until }).from(memberBuffs)
+    .where(and(eq(memberBuffs.memberId, memberId), eq(memberBuffs.kind, 'casino_sanpai'), gt(memberBuffs.until, now)));
+  return row?.until ?? undefined;
+}
+
+export type SanpaiBoostBuy =
+  | { status: 'ok'; until: Date; balance: number; price: number }
+  | { status: 'active'; until: Date }
+  | { status: 'insufficient'; price: number; balance: number };
+
+/**
+ * 参拝者専用の大勝負の札を買う。買ったその場で効きはじめ、日本時間の 0 時まで（1日1枚・持ち物には入らない）。
+ * 払うのと効かせるのを同じトランザクションで行う。買える人（参拝者・元氏子）かどうかは呼ぶ側で確かめる。
+ */
+export async function buySanpaiBoost(db: Db, item: { id: number; name: string; kind: string; price: number }, memberId: string, now = new Date()): Promise<SanpaiBoostBuy> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`casino_boost:${memberId}`}))`);
+    const active = await sanpaiBoostUntil(tx as Db, memberId, now);
+    if (active) return { status: 'active', until: active } as const;
+    if (item.price > 0 && !(await spendWithin(tx as Db, memberId, item.price, 'shop', { itemId: item.id, name: item.name }))) {
+      return { status: 'insufficient', price: item.price, balance: (await walletOf(tx as Db, memberId)).balance } as const;
+    }
+    const until = nextJstMidnight(now);
+    const next = { until, remaining: 1, day: jstDate(now), uses: 1, ex: false };
+    await tx.insert(memberBuffs).values({ memberId, kind: 'casino_sanpai', ...next }).onConflictDoUpdate({ target: [memberBuffs.memberId, memberBuffs.kind], set: next });
+    await tx.insert(shopPurchases).values({ memberId, itemId: item.id, kind: item.kind, price: item.price, expiresAt: until });
+    return { status: 'ok', until, balance: (await walletOf(tx as Db, memberId)).balance, price: item.price } as const;
   });
 }

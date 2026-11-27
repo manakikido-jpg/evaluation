@@ -63,6 +63,31 @@ describe('🎰 ロールごとのカジノの上限（新制度）', () => {
     expect((await casinoCfgFor(db, cfg, U, T0)).casino.dailyBetLimit).toBeGreaterThan(cfg.casino.dailyBetLimit);
   });
 
+  it('⛩ 参拝者専用の大勝負の札：買ったその日だけ2万まで・1日1枚・荒魂は上がらない', async () => {
+    const { buySanpaiBoost, sanpaiBoostUntil, nextJstMidnight } = await import('../src/services/casino/boost.js');
+    const { addCoins, walletOf } = await import('../src/services/economy.js');
+    await start();
+    const item = { id: 1, name: '参拝者の大勝負の札', kind: 'casino_boost_sanpai', price: 1000 };
+    expect(await buySanpaiBoost(db, item, S, T0)).toMatchObject({ status: 'insufficient', price: 1000 });
+    expect(await sanpaiBoostUntil(db, S, T0)).toBeUndefined();
+    await addCoins(db, S, 3000, 'admin_grant', {});
+    const r = await buySanpaiBoost(db, item, S, T0);
+    expect(r).toMatchObject({ status: 'ok', balance: 2000 });
+    expect((r as { until: Date }).until.getTime()).toBe(nextJstMidnight(T0).getTime());
+    expect((await casinoCfgFor(db, cfg, S, T0)).casino.dailyBetLimit).toBe(20000);
+    // 同じ日は2枚目を買えない（銭も減らない）
+    expect(await buySanpaiBoost(db, item, S, new Date(T0.getTime() + 3_600_000))).toMatchObject({ status: 'active' });
+    expect((await walletOf(db, S)).balance).toBe(2000);
+    // 日本時間の0時をすぎたら、5,000に戻る
+    const next = new Date(nextJstMidnight(T0).getTime() + 1000);
+    expect((await casinoCfgFor(db, cfg, S, next)).casino.dailyBetLimit).toBe(5000);
+    expect(await buySanpaiBoost(db, item, S, next)).toMatchObject({ status: 'ok' });
+    // 荒魂は、札が効いていても500のまま
+    await addCoins(db, A, 1000, 'admin_grant', {});
+    await buySanpaiBoost(db, item, A, T0);
+    expect((await casinoCfgFor(db, cfg, A, T0)).casino.dailyBetLimit).toBe(500);
+  });
+
   it('荒魂（位のロールなし）も、新制度ではカジノに入れる', async () => {
     await start();
     expect(casinoAllowed({ ...cfg, casino: { ...cfg.casino, accessRoleId: undefined, requireRank: true } } as typeof cfg, [ARA], false, await aramitamaAccessRole(db))).toBe(true);

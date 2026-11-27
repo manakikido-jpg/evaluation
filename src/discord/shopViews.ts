@@ -49,7 +49,7 @@ export function categoryOf(i: Pick<ShopItem, 'kind' | 'roleGroup'>): ShopCategor
   if (i.kind === 'role') return i.roleGroup === 'color' ? 'color' : i.roleGroup === 'title' ? 'title' : i.roleGroup === 'vip' ? 'vip' : 'other';
   if (i.kind === 'mycolor') return 'color';
   if (kobanValue(i.kind) !== undefined || i.kind === 'gift' || i.kind === 'hanafubuki' || i.kind === 'otoshidama') return 'gift';
-  if (i.kind === 'omikuji_extra' || i.kind === 'omamori' || i.kind === 'ema_pin' || i.kind === 'casino_boost' || i.kind === 'casino_boost_ex' || i.kind === 'casino_style' || i.kind === 'name_change') return 'fun';
+  if (i.kind === 'omikuji_extra' || i.kind === 'omamori' || i.kind === 'casino_boost_sanpai' || i.kind === 'ema_pin' || i.kind === 'casino_boost' || i.kind === 'casino_boost_ex' || i.kind === 'casino_style' || i.kind === 'name_change') return 'fun';
   if (i.kind === 'menzaifu') return 'menzaifu';
   return 'other';
 }

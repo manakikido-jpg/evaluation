@@ -692,7 +692,7 @@ export class GachaApp {
       case 'casino_boost_ex': {
         // 🎰 新制度：参拝者・元氏子・荒魂は大勝負の札を使えない（札を減らす前に断る）
         const lim = await casinoRoleLimit(this.db, cfg, [...i.member.roles.cache.keys()]);
-        if (lim) return void (await i.update({ content: `🎰 大勝負の札は、氏子以上の方が使えます（いまのカジノの1日の上限は ${lim.limit} ${coin}）。札は減っていません。`, components: [] }));
+        if (lim) return void (await i.update({ content: `🎰 大勝負の札は、氏子以上の方が使えます（いまのカジノの1日の上限は ${lim.limit} ${coin}）。札は減っていません。${lim.who === 'sanpaisha' ? '参拝者・元氏子の方は、授与所の「参拝者の大勝負の札」を使えます。' : ''}`, components: [] }));
         if (kind === 'casino_boost_ex') {
           const r = await useCasinoBoost(this.db, i.user.id, new Date(), cfg.casino, true);
           return void (await i.update({ content: casinoBoostText(cfg.casino, coin, r, true), components: [] }));
