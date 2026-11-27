@@ -22,7 +22,7 @@ const C = '200000000000000003';
 describe('🧵 結びのコレクション', () => {
   it('通話でいっしょになった人のうち、まだ結んでいない人を、最近きた順に出す（いっしょになっていない人・自分・結んだ相手はのぞく）', async () => {
     const { metCollection } = await import('../src/services/shuin.js');
-    const { members, voicePairs } = await import('../src/db/schema.js');
+    const { members, engawaPairs } = await import('../src/db/schema.js');
     const D = '200000000000000004';
     await db.insert(members).values([
       { id: A, username: 'a', displayName: 'エー', roleIds: [] },
@@ -30,7 +30,7 @@ describe('🧵 結びのコレクション', () => {
       { id: C, username: 'c', displayName: 'シー', roleIds: [], lastActiveAt: new Date('2026-11-23') },
       { id: D, username: 'd', displayName: 'ディー', roleIds: [], lastActiveAt: new Date('2026-11-25') }, // 通話でいっしょになっていない
     ]);
-    await db.insert(voicePairs).values([{ memberA: A, memberB: B, date: '2026-11-20', minutes: 30 }, { memberA: A, memberB: C, date: '2026-11-21', minutes: 10 }]);
+    await db.insert(engawaPairs).values([{ memberA: A, memberB: B, date: '2026-11-20', minutes: 30 }, { memberA: A, memberB: C, date: '2026-11-21', minutes: 10 }]);
     await giveShuin(db, { giverId: A, receiverId: B, weight: 1, giverRank: 'sanpaisha' });
     const col = await metCollection(db, A);
     expect(col.total).toBe(2); // B・C（いっしょになっていないDと自分Aはのぞく）
@@ -75,8 +75,8 @@ describe('🔄 新制度の切替：全員のご縁リセット', () => {
 describe('🧵 新制度の結び（④リセットのあと）', () => {
   /** 2人が通話でいっしょになった記録（結べるのは、いっしょになったことのある人だけ） */
   const together = async (...pairs: [string, string][]) => {
-    const { voicePairs } = await import('../src/db/schema.js');
-    await db.insert(voicePairs).values(pairs.map(([x, y]) => ({ memberA: x < y ? x : y, memberB: x < y ? y : x, date: '2026-11-20', minutes: 10 })));
+    const { engawaPairs } = await import('../src/db/schema.js');
+    await db.insert(engawaPairs).values(pairs.map(([x, y]) => ({ memberA: x < y ? x : y, memberB: x < y ? y : x, date: '2026-11-20', minutes: 10 })));
   };
 
   it('結べるのは通話でいっしょになったことのある人だけ（④の前の朱印は今までどおり）', async () => {
@@ -311,5 +311,18 @@ describe('🔄 出戻りの人の御朱印をリセット', () => {
     expect(await goenOf(db, A)).toBe(0);
     expect(await undoMemberShuinReset(db, A, 'g')).toMatchObject({ status: 'ok', count: 2, special: 1 });
     expect(await goenOf(db, A)).toBe(17);
+  });
+});
+
+describe('🧵 結びは縁側でいっしょになった人だけ（2026-11-27）', () => {
+  it('縁側でない通話でだけいっしょになった人とは、いっしょになったことにしない', async () => {
+    const { db } = await makeDb();
+    const { engawaPairs, voicePairs } = await import('../src/db/schema.js');
+    const { beenTogether } = await import('../src/services/shuin.js');
+    const [x, y] = ['830000000000000001', '830000000000000002'];
+    await db.insert(voicePairs).values({ memberA: x, memberB: y, date: '2026-11-20', minutes: 60 });
+    expect(await beenTogether(db, x, y)).toBe(false);
+    await db.insert(engawaPairs).values({ memberA: x, memberB: y, date: '2026-11-21', minutes: 1 });
+    expect(await beenTogether(db, y, x)).toBe(true);
   });
 });

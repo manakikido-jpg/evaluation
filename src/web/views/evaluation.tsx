@@ -126,7 +126,7 @@ export function EvaluationPage({ session, data, filter, page, emaPromotion = fal
     {session.level === 'guji' && <section class="card">
       <h2 id="ns-numbers">🔢 昇格の数（絵馬・選挙）</h2>
       {emaThresholdsFlash === 'saved' && <p class="flash ok" role="status">絵馬の枚数を保存しました。</p>}
-      {emaThresholdsFlash === 'invalid' && <p class="flash warn" role="alert">決められた範囲の数で入れてください（割合は1〜100%、時間は1〜168時間、最低は1〜100枚、招待の補いは0〜20、維持は0〜100、世話役・総代は1〜100）。</p>}
+      {emaThresholdsFlash === 'invalid' && <p class="flash warn" role="alert">決められた範囲の数で入れてください（割合は1〜100%、時間は1〜168時間、最低は1〜100枚、招待の補いは0〜20、維持は0〜100、総代は1〜1000）。</p>}
       <p class="note">③が ON のときに効きます。変えると1分ほどで反映。</p>
       {ujikoWeek && <p class="ujiko-week">🎐 今週の参拝者→氏子：<strong>絵馬 {ujikoWeek.required} 枚</strong> <small>（縁側にいた氏子以上 {ujikoWeek.active} 人 × {emaThresholds.ujikoPercent}%）</small></p>}
       <form method="post" action="/evaluation/ema-thresholds" class="ema-thresholds-form">
@@ -149,7 +149,7 @@ export function EvaluationPage({ session, data, filter, page, emaPromotion = fal
           <label>投票できる人がこれより少ない選挙は不成立（人）<input type="number" name="sewayakuMinVoters" min={1} max={1000} value={emaThresholds.sewayakuMinVoters}/></label>
         </fieldset>
         <fieldset><legend>🎋 世話役 → 🏮 総代（絵馬）</legend>
-          <label>総代の票の枚数<input type="number" name="sodaiPromote" min={1} max={100} value={emaThresholds.sodaiPromote}/></label>
+          <label>総代の票の枚数<input type="number" name="sodaiPromote" min={1} max={1000} value={emaThresholds.sodaiPromote}/></label>
         </fieldset>
         <button type="submit">昇格の数を保存</button>
       </form>

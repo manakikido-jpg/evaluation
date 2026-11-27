@@ -19,7 +19,7 @@ export type GiveDenied =
   | 'giver_no_rank' // 押す人がまだ参拝者になっていない
   | 'yakudoshi' // 押す人が厄年
   | 'receiver_no_rank' // 相手がまだ参拝者になっていない
-  | 'not_together'; // 結び（④のあと）：通話でいっしょになったことがない
+  | 'not_together'; // 結び（④のあと）：縁側でいっしょになったことがない
 
 export type GiveOutcome =
   | { kind: 'denied'; reason: GiveDenied }
@@ -46,7 +46,7 @@ export async function giveFlow(
   // 🧵 新制度のご縁の時代（④リセットのあと）は「結び」：重みはだれでも等しく1・同じ相手には1回きり。
   // それまでは旧御朱印のまま（格の重み・昇格後の押し直しで差額）。
   const musubi = Boolean(await newSystemStartedAt(db));
-  // 結べるのは、通話でいっしょになったことのある人だけ（本人の決定 2026-11-26）
+  // 結べるのは、縁側でいっしょになったことのある人だけ（本人の決定 2026-11-26・11-27 に縁側にしぼる）
   if (musubi && !(await beenTogether(db, giver.id, receiver.id))) return { kind: 'denied', reason: 'not_together' };
   // 朱印と通貨を一緒に記録する（途中で失敗したら、どちらも残さない）
   const res = await db.transaction(async (tx) => {

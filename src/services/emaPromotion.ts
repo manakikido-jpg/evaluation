@@ -1,9 +1,9 @@
-import { and, count, eq, gte, inArray, isNotNull, isNull } from 'drizzle-orm';
+import { and, count, eq, gte, inArray, isNotNull, isNull, or } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { ema, emaKeepWarn, invites, memberAlts, members, settings } from '../db/schema.js';
 import { highestRank } from '../domain/ranks.js';
-import { emaStepFrom, emaFreshSince, type EmaStep } from '../domain/ema.js';
+import { emaStepFrom, emaTiersShown, emaFreshSince, type EmaStep } from '../domain/ema.js';
 import { ujikoProgress } from './ujikoRequirement.js';
 import { validEmaCountOf } from './ema.js';
 import { staffAlts } from './staffAlts.js';
@@ -90,7 +90,8 @@ export async function ujikoBelowKeep(db: Db, cfg: GuildConfig, now = new Date())
   const out: { id: string; count: number }[] = [];
   for (const p of await targetMembers(db)) {
     if (highestRank(cfg.ranks, p.roleIds)?.key !== 'ujiko') continue;
-    const count = await validEmaCountOf(db, p.id, now);
+    // 氏子の維持は「氏子の票＋参拝者の票（30日以内）」で数える
+    const count = await validEmaCountOf(db, p.id, now, emaTiersShown('ujiko'));
     if (count < keep) out.push({ id: p.id, count });
   }
   return out.sort((a, b) => a.count - b.count || a.id.localeCompare(b.id));
@@ -109,11 +110,11 @@ export async function collectEmaKeepWarnings(db: Db, cfg: GuildConfig, now = new
   const ujiko = (await targetMembers(db)).filter((p) => highestRank(cfg.ranks, p.roleIds)?.key === 'ujiko');
   if (!ujiko.length) return [];
   const ids = ujiko.map((p) => p.id);
-  // 氏子の有効な票（氏子の票・未取消・失効していない）を一括で数える
+  // 氏子の有効な票（氏子の票＋30日以内の参拝者の票・未取消）を一括で数える
   const countRows = await db
     .select({ id: ema.receiverId, n: count() })
     .from(ema)
-    .where(and(inArray(ema.receiverId, ids), eq(ema.tier, 'ujiko'), isNull(ema.revokedAt), gte(ema.createdAt, emaFreshSince(now))))
+    .where(and(inArray(ema.receiverId, ids), isNull(ema.revokedAt), or(eq(ema.tier, 'ujiko'), and(eq(ema.tier, 'sanpai'), gte(ema.createdAt, emaFreshSince(now))))))
     .groupBy(ema.receiverId);
   const countOf = new Map(countRows.map((r) => [r.id, Number(r.n)]));
   const stateRows = await db.select().from(emaKeepWarn).where(inArray(emaKeepWarn.memberId, ids));

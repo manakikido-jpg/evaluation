@@ -35,6 +35,8 @@ export const YAKU_BLOCKED_PREFIXES: readonly string[] = [
   'lottery:',
   'ema:give:',
   'ema:modal:',
+  'ema:pick:',
+  'ema:edit:',
   'ema:vote:',
 ];
 

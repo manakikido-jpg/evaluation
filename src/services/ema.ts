@@ -1,9 +1,9 @@
-import { and, count, desc, eq, gte, isNull, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
-import { ema, members, voicePairs } from '../db/schema.js';
+import { ema, engawaPairs, members } from '../db/schema.js';
 import { highestRank } from '../domain/ranks.js';
-import { EMA_DAYS_TOGETHER, EMA_MESSAGE_MAX, EMA_MINUTES_TOGETHER, emaFreshSince, emaTierExpires, emaTierFor, type EmaTier } from '../domain/ema.js';
+import { EMA_DAYS_TOGETHER, EMA_MESSAGE_MAX, EMA_MINUTES_PER_DAY, emaFreshSince, emaTierExpires, emaTierFor, type EmaTier } from '../domain/ema.js';
 import { staffAlts } from './staffAlts.js';
 
 /**
@@ -15,37 +15,45 @@ import { staffAlts } from './staffAlts.js';
 export async function togetherStats(db: Db, a: string, b: string): Promise<{ days: number; minutes: number }> {
   if (a === b) return { days: 0, minutes: 0 };
   const [x, y] = a < b ? [a, b] : [b, a];
+  // 縁側で（2人ともミュートでない）いっしょにいた時間。days＝その日に EMA_MINUTES_PER_DAY 分以上いた日の数
   const [row] = await db
     .select({
-      days: sql<number>`count(distinct ${voicePairs.date})::int`,
-      minutes: sql<number>`coalesce(sum(${voicePairs.minutes}), 0)::int`,
+      days: sql<number>`count(*) filter (where ${engawaPairs.minutes} >= ${EMA_MINUTES_PER_DAY})::int`,
+      minutes: sql<number>`coalesce(sum(${engawaPairs.minutes}), 0)::int`,
     })
-    .from(voicePairs)
-    .where(and(eq(voicePairs.memberA, x), eq(voicePairs.memberB, y)));
+    .from(engawaPairs)
+    .where(and(eq(engawaPairs.memberA, x), eq(engawaPairs.memberB, y)));
   return { days: row?.days ?? 0, minutes: row?.minutes ?? 0 };
 }
 
+/** 票の種類（1つか、いくつか）の条件。失効する種類（参拝者の票）は30日以内のものだけ */
+function tierWhere(tiers: EmaTier | readonly EmaTier[], now: Date) {
+  const list = Array.isArray(tiers) ? [...tiers] : [tiers as EmaTier];
+  const keep = list.filter((t) => !emaTierExpires(t));
+  const expiring = list.filter((t) => emaTierExpires(t));
+  const parts = [
+    ...(keep.length ? [inArray(ema.tier, keep)] : []),
+    ...(expiring.length ? [and(inArray(ema.tier, expiring), gte(ema.createdAt, emaFreshSince(now)))!] : []),
+  ];
+  return parts.length === 1 ? parts[0]! : or(...parts)!;
+}
+
 /** 有効な絵馬の枚数（取り消しを除く。氏子の票は失効していないものだけ） */
-export async function validEmaCountOf(db: Db, receiverId: string, now = new Date(), tier: EmaTier = 'ujiko'): Promise<number> {
-  const conds = [eq(ema.receiverId, receiverId), eq(ema.tier, tier), isNull(ema.revokedAt)];
-  if (emaTierExpires(tier)) conds.push(gte(ema.createdAt, emaFreshSince(now)));
-  const [row] = await db.select({ n: count() }).from(ema).where(and(...conds));
+export async function validEmaCountOf(db: Db, receiverId: string, now = new Date(), tier: EmaTier | readonly EmaTier[] = 'ujiko'): Promise<number> {
+  const [row] = await db.select({ n: count() }).from(ema).where(and(eq(ema.receiverId, receiverId), isNull(ema.revokedAt), tierWhere(tier, now)));
   return row?.n ?? 0;
 }
 
 /** プロフィールに飾る絵馬の一言（匿名・新しい順）。誰が贈ったかは返さない。 */
-export async function emaMessagesOf(db: Db, receiverId: string, now = new Date(), tier: EmaTier = 'ujiko'): Promise<{ message: string; createdAt: Date }[]> {
-  const conds = [eq(ema.receiverId, receiverId), eq(ema.tier, tier), isNull(ema.revokedAt)];
-  if (emaTierExpires(tier)) conds.push(gte(ema.createdAt, emaFreshSince(now)));
-  const rows = await db
+export async function emaMessagesOf(db: Db, receiverId: string, now = new Date(), tier: EmaTier | readonly EmaTier[] = 'ujiko'): Promise<{ message: string; createdAt: Date }[]> {
+  return db
     .select({ message: ema.message, createdAt: ema.createdAt })
     .from(ema)
-    .where(and(...conds))
+    .where(and(eq(ema.receiverId, receiverId), isNull(ema.revokedAt), tierWhere(tier, now)))
     .orderBy(desc(ema.createdAt));
-  return rows;
 }
 
-export type EmaDenyReason = 'self' | 'no_member' | 'bot' | 'left' | 'staff_alt' | 'giver_not_ujiko' | 'giver_not_sodai' | 'receiver_rank' | 'not_together';
+export type EmaDenyReason = 'self' | 'no_member' | 'bot' | 'left' | 'staff_alt' | 'giver_not_ujiko' | 'giver_not_sodai' | 'giver_no_rank' | 'sanpai_to_sanpai' | 'receiver_rank' | 'not_together';
 
 export type EmaCheck =
   | { ok: true; days: number; minutes: number; tier: EmaTier }
@@ -93,12 +101,13 @@ export async function checkGiveEma(
     ujikoWeight: weightOf('ujiko'),
     sewayakuWeight: weightOf('sewayaku'),
     sodaiWeight: weightOf('sodai'),
+    sanpaishaWeight: weightOf('sanpaisha'),
   });
-  // 贈る側の位が足りない：世話役へは総代・運営だけ、それ以外は氏子以上
-  if (!tier) return { ok: false, reason: receiverKey === 'sewayaku' ? 'giver_not_sodai' : 'giver_not_ujiko' };
+  // 贈れない：参拝者より前の人は贈れない・参拝者どうしは贈れない
+  if (!tier) return { ok: false, reason: giverRank && receiverKey === 'sanpaisha' ? 'sanpai_to_sanpai' : 'giver_no_rank' };
 
   const { days, minutes } = await togetherStats(db, giverId, receiverId);
-  if (days < EMA_DAYS_TOGETHER || minutes < EMA_MINUTES_TOGETHER) return { ok: false, reason: 'not_together', days, minutes };
+  if (days < EMA_DAYS_TOGETHER) return { ok: false, reason: 'not_together', days, minutes };
   return { ok: true, days, minutes, tier };
 }
 
@@ -106,7 +115,7 @@ export async function checkGiveEma(
  * 絵馬を贈る。贈れたら created（新規か贈り直しか）・今の有効枚数・票の種類（tier）を返す。
  * - 票の種類は贈る人と相手の役職で自動で決まる（参拝者・氏子→氏子の票／世話役→総代の票）。
  * - 自分・BOT・退出者・運営サブには贈れない。
- * - 相手と違う日に EMA_DAYS_TOGETHER 日以上・合計 EMA_MINUTES_TOGETHER 分以上いっしょにいたこと。
+ * - 縁側で1日 EMA_MINUTES_PER_DAY 分以上いっしょにいた日が EMA_DAYS_TOGETHER 日以上あること。
  * - 同じ相手・同じ種類への票は 1 枚。贈り直すと一言と期限（created_at）を新しくする。
  */
 export async function giveEma(
@@ -133,6 +142,17 @@ export async function giveEma(
     .onConflictDoUpdate({ target: [ema.giverId, ema.receiverId, ema.tier], set: { message: text, createdAt: now, revokedAt: null } });
   const total = await validEmaCountOf(db, receiverId, now, tier);
   return { ok: true, created, count: total, days, minutes, tier };
+}
+
+/** その人がその相手に贈っている絵馬（取り消し・失効していないもの）。書き直し・取り消しの案内に使う */
+export async function myEmaTo(db: Db, giverId: string, receiverId: string, now = new Date()): Promise<{ tier: EmaTier; message: string } | undefined> {
+  const rows = await db
+    .select({ tier: ema.tier, message: ema.message, createdAt: ema.createdAt })
+    .from(ema)
+    .where(and(eq(ema.giverId, giverId), eq(ema.receiverId, receiverId), isNull(ema.revokedAt)));
+  const fresh = emaFreshSince(now);
+  const r = rows.find((x) => !emaTierExpires(x.tier as EmaTier) || x.createdAt >= fresh);
+  return r ? { tier: r.tier as EmaTier, message: r.message } : undefined;
 }
 
 /**

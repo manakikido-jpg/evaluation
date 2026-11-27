@@ -389,7 +389,7 @@ export const emaThresholdsSchema = z
     /** 投票できる人がこの人数より少ない選挙は、不成立（昇格しない） */
     sewayakuMinVoters: z.number().int().min(1).max(1000).default(5),
     /** 世話役→総代に要る「総代の票」 */
-    sodaiPromote: z.number().int().min(1).max(100).default(3),
+    sodaiPromote: z.number().int().min(1).max(1000).default(200),
   });
 export type EmaThresholds = z.infer<typeof emaThresholdsSchema>;
 

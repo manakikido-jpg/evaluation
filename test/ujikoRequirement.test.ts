@@ -45,8 +45,9 @@ async function vote(receiverId: string, at: Date, revoked = false) {
 }
 
 let invitee = 4950000000000000000n;
-async function invited(inviterId: string, rewardedAt: Date | null) {
-  await db.insert(invites).values({ memberId: String(invitee++), inviterId, rewardedAt, reward: 0 });
+/** 招待（qualifiedAt＝招待された人が通話に4時間いて「1人」と数えた時刻。null はまだ） */
+async function invited(inviterId: string, qualifiedAt: Date | null) {
+  await db.insert(invites).values({ memberId: String(invitee++), inviterId, rewardedAt: qualifiedAt, qualifiedAt, reward: 0 });
 }
 
 async function omairiOf(memberId: string, startedAt: Date, days = 14, status = 'ongoing') {
@@ -112,12 +113,12 @@ describe('🎐 参拝者→氏子の進み具合（お参り期間中の票＋�
     expect(await ujikoProgress(db, cfg, SA2, now)).toMatchObject({ week: '2026-11-23', required: 1, total: 0, met: false });
   });
 
-  it('招待した人が参拝者になったら1つ分（3つまで）。期間の前・まだ参拝者でない招待は数えない', async () => {
+  it('招待した人が通話に4時間いたら1つ分（3つまで）。期間の前・まだ4時間に届いていない招待は数えない', async () => {
     await seedWeeks();
     await omairiOf(SA, new Date('2026-11-17T03:00:00Z'));
     await vote(SA, new Date('2026-11-18T03:00:00Z'));
     await invited(SA, new Date('2026-11-16T03:00:00Z')); // 期間の前
-    await invited(SA, null); // まだ参拝者になっていない
+    await invited(SA, null); // まだ4時間に届いていない
     for (let i = 0; i < 4; i++) await invited(SA, new Date('2026-11-20T03:00:00Z'));
     const p = await ujikoProgress(db, cfg, SA, now);
     expect(p).toMatchObject({ required: 3, votes: 1, invites: 4, inviteUsed: 3, total: 4, met: true });

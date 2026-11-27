@@ -6,6 +6,7 @@ import {
   ButtonStyle,
   EmbedBuilder,
   ModalBuilder,
+  StringSelectMenuBuilder,
   TextInputBuilder,
   TextInputStyle,
   type APIEmbed,
@@ -18,8 +19,8 @@ import { currentAutoRank, highestRank, nextAutoRank, rankLabel, type Promotion }
 import type { GiveDenied, GiveOutcome } from '../services/flows.js';
 import type { RevokeResult, GoshuinchoData } from '../services/shuin.js';
 import type { GiveEmaResult } from '../services/ema.js';
-import { EMA_DAYS_TOGETHER, EMA_MESSAGE_MAX, EMA_MINUTES_TOGETHER, EMA_TIER_LABEL } from '../domain/ema.js';
-import { emaCardId, emaGiveId, emaModalId, sewayakuVoteId, shuinId } from './ids.js';
+import { EMA_DAYS_TOGETHER, EMA_MESSAGE_MAX, EMA_MINUTES_PER_DAY, EMA_TEMPLATES, EMA_TIER_LABEL } from '../domain/ema.js';
+import { emaCardId, emaEditId, emaGiveId, emaModalId, emaPickId, emaUndoId, sewayakuVoteId, shuinId } from './ids.js';
 import type { CandidateStatus, VoterStatus, VoteResult } from '../services/sewayakuElection.js';
 import type { UjikoProgress } from '../services/ujikoRequirement.js';
 import type { EmaThresholdCounts } from '../domain/ema.js';
@@ -48,7 +49,7 @@ const cardButton = (userId: string) =>
   new ButtonBuilder().setCustomId(shuinId('card', userId)).setLabel('プロフィールを見る').setEmoji('📕').setStyle(ButtonStyle.Secondary);
 const listButton = (userId: string) =>
   new ButtonBuilder().setCustomId(shuinId('list', userId)).setLabel(w('朱印をくれた人', '結んでくれた人')).setStyle(ButtonStyle.Secondary);
-/** 🎐 絵馬（評価の票）を贈るボタン。氏子以上だけが贈れる（押したときに確かめる） */
+/** 🎐 絵馬（評価の票）を贈るボタン。参拝者以上が贈れる（参拝者どうしは不可・押したときに確かめる） */
 const emaGiveButton = (userId: string) =>
   new ButtonBuilder().setCustomId(emaGiveId(userId)).setLabel('絵馬を贈る').setEmoji('🎐').setStyle(ButtonStyle.Secondary);
 /** 🗳 世話役の選挙の投票ボタン（#世話役選挙 の投稿に。押すと投票・もう一度で取り消し） */
@@ -74,7 +75,7 @@ const denied = (reason: GiveDenied): string =>
     giver_no_rank: w('まだ参拝者になっていないため、朱印を押せません。', 'まだ参拝者になっていないため、結べません。'),
     yakudoshi: w('👹 厄年のあいだは朱印を押せません。お祓いが済むまでお待ちください。', '👹 厄年のあいだは結べません。お祓いが済むまでお待ちください。'),
     receiver_no_rank: w('その方はまだ参拝者になっていないため、朱印を押せません。', 'その方はまだ参拝者になっていないため、結べません。'),
-    not_together: '🧵 結べるのは、通話でいっしょに過ごしたことのある方だけです（いっしょになってから1分ほどで結べます）。',
+    not_together: '🧵 結べるのは、縁側でいっしょに過ごしたことのある方だけです（縁側でいっしょになってから1分ほどで結べます）。',
   })[reason];
 
 /** 朱印を押した（結んだ）結果（本人だけに表示） */
@@ -132,13 +133,39 @@ export function emaModal(receiverId: string, receiverName: string): ModalBuilder
     );
 }
 
-const EMA_HOURS = Math.round((EMA_MINUTES_TOGETHER / 60) * 10) / 10;
+
+/** 贈ったあとの「書き直す・取り消す」 */
+const emaAfterRow = (receiverId: string) =>
+  row(
+    new ButtonBuilder().setCustomId(emaEditId(receiverId)).setLabel('書き直す').setEmoji('✏️').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(emaUndoId(receiverId)).setLabel('取り消す').setEmoji('↩️').setStyle(ButtonStyle.Secondary),
+  );
+
+/** 参拝者が絵馬を贈るとき：定型文から選ぶ（自分で書いてもよい） */
+export const EMA_FREE = '__free';
+export function emaPickReply(receiverId: string): Reply {
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(emaPickId(receiverId))
+    .setPlaceholder('ひとことを選ぶ')
+    .addOptions([...EMA_TEMPLATES.map((t) => ({ label: t, value: t })), { label: '自分で書く', value: EMA_FREE, emoji: '✍️' }]);
+  return { content: `🎐 ${mention(receiverId)} さまへ絵馬を贈る（🔒匿名）\n-# ひとことを選んでください`, components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu)] };
+}
+
+/** もう贈っている相手：今のひとことと「書き直す・取り消す」 */
+export function emaAlreadyReply(receiverId: string, message: string): Reply {
+  return { content: `🎐 ${mention(receiverId)} さまには、もう絵馬を贈っています\n> ${message.trim() || '（ひとことなし）'}`, components: [emaAfterRow(receiverId)] };
+}
+
+/** 取り消した結果 */
+export function emaUndoReply(receiverId: string, ok: boolean): Reply {
+  return { content: ok ? `↩️ ${mention(receiverId)} さまへの絵馬を取り消しました` : `${mention(receiverId)} さまへの絵馬は、もうありません` };
+}
 
 /** 絵馬を贈った結果（本人だけに表示） */
 export function emaGiveReply(receiverId: string, result: GiveEmaResult): Reply {
   if (result.ok) {
     const verb = result.created ? '贈りました' : '贈り直しました（ひとことと日付を新しくしました）';
-    return { content: `🎐 ${mention(receiverId)} さまに絵馬を${verb}（🔒匿名）\n-# ${EMA_TIER_LABEL[result.tier]}・いま ${result.count} 枚` };
+    return { content: `🎐 ${mention(receiverId)} さまに絵馬を${verb}（🔒匿名）\n-# ${EMA_TIER_LABEL[result.tier]}・いま ${result.count} 枚`, components: [emaAfterRow(receiverId)] };
   }
   const reasons: Record<Exclude<GiveEmaResult, { ok: true }>['reason'], string> = {
     self: 'ご自身には絵馬を贈れません。',
@@ -148,11 +175,13 @@ export function emaGiveReply(receiverId: string, result: GiveEmaResult): Reply {
     staff_alt: '運営のサブのアカウントには贈れません。',
     giver_not_ujiko: '絵馬を贈れるのは氏子以上の方です。',
     giver_not_sodai: '世話役の方へ絵馬（総代の票）を贈れるのは、総代か運営だけです。',
+    giver_no_rank: '絵馬は、参拝者になってから贈れます。',
+    sanpai_to_sanpai: '参拝者どうしでは、絵馬を贈れません。',
     receiver_rank: '絵馬を贈れる相手は、参拝者・氏子・世話役の方だけです。',
     not_together: [
-      '🎐 まだ贈れません（同じ通話で過ごした時間）',
+      '🎐 まだ贈れません',
       `${check((result.days ?? 0) >= EMA_DAYS_TOGETHER)} ${progressBar(result.days ?? 0, EMA_DAYS_TOGETHER, 5)} ${result.days ?? 0} / ${EMA_DAYS_TOGETHER} 日`,
-      `${check((result.minutes ?? 0) >= EMA_MINUTES_TOGETHER)} ${progressBar(result.minutes ?? 0, EMA_MINUTES_TOGETHER, 5)} ${Math.floor((result.minutes ?? 0) / 60)}h${(result.minutes ?? 0) % 60}m / ${EMA_HOURS}h`,
+      `-# 縁側で1日${EMA_MINUTES_PER_DAY}分以上いっしょにいた日を数えます`,
     ].join('\n'),
   };
   return { content: reasons[result.reason] };

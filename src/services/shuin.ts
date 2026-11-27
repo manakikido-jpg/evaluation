@@ -1,7 +1,7 @@
 import { isRestrictedAccount as isStaffAlt } from './staffAlts.js';
 import { and, count, desc, eq, gte, inArray, isNotNull, isNull, sql, sum } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
-import { auditLogs as auditLog, members, settings, shuin, specialGoen, voicePairs } from '../db/schema.js';
+import { auditLogs as auditLog, members, settings, shuin, specialGoen, engawaPairs } from '../db/schema.js';
 import { audit } from './audit.js';
 import { specialGoenOf } from './specialGoen.js';
 
@@ -163,23 +163,23 @@ export async function resetReceivedShuin(db: Db, receiverId: string, by: string,
   });
 }
 
-/** 通話でいっしょになったことがあるか（voice_pairs に2人の記録がある） */
+/** 縁側でいっしょになったことがあるか（engawa_pairs に2人の記録がある。結べるのは縁側でいっしょになった人だけ：本人の決定 2026-11-27） */
 export async function beenTogether(db: Db, a: string, b: string): Promise<boolean> {
   const [x, y] = a < b ? [a, b] : [b, a];
-  const [row] = await db.select({ n: count() }).from(voicePairs).where(and(eq(voicePairs.memberA, x), eq(voicePairs.memberB, y)));
+  const [row] = await db.select({ n: count() }).from(engawaPairs).where(and(eq(engawaPairs.memberA, x), eq(engawaPairs.memberB, y)));
   return Number(row?.n ?? 0) > 0;
 }
 
 /**
  * 🧵 結びのコレクション：その人が「まだ結んでいない相手」の一覧（出会った人数のコンプリート用）。
- * total＝通話でいっしょになったことのある相手（在籍・BOT/退出/自分をのぞく）の数、met＝そのうちもう結んだ数、unmet＝まだの相手（最近来た順・limit まで）。
+ * total＝縁側でいっしょになったことのある相手（在籍・BOT/退出/自分をのぞく）の数、met＝そのうちもう結んだ数、unmet＝まだの相手（最近来た順・limit まで）。
  */
 export async function metCollection(db: Db, viewerId: string, limit = 24): Promise<{ total: number; met: number; unmet: { id: string; name: string }[] }> {
-  // 出会った人＝通話でいっしょになったことのある人だけを数える（いっしょに過ごしていない人は出さない）
+  // 出会った人＝縁側でいっしょになったことのある人だけを数える（いっしょに過ごしていない人は出さない）
   const [all, stampedRows, pairRows] = await Promise.all([
     db.select({ id: members.id, name: members.displayName, active: members.lastActiveAt }).from(members).where(and(eq(members.isBot, false), isNull(members.leftAt), sql`${members.id} <> ${viewerId}`)),
     db.select({ id: shuin.receiverId }).from(shuin).where(and(eq(shuin.giverId, viewerId), isNull(shuin.revokedAt))),
-    db.selectDistinct({ a: voicePairs.memberA, b: voicePairs.memberB }).from(voicePairs).where(sql`${voicePairs.memberA} = ${viewerId} or ${voicePairs.memberB} = ${viewerId}`),
+    db.selectDistinct({ a: engawaPairs.memberA, b: engawaPairs.memberB }).from(engawaPairs).where(sql`${engawaPairs.memberA} = ${viewerId} or ${engawaPairs.memberB} = ${viewerId}`),
   ]);
   const together = new Set(pairRows.map((r) => (r.a === viewerId ? r.b : r.a)));
   const people = all.filter((p) => together.has(p.id));

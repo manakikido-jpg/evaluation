@@ -3,7 +3,7 @@ import { and, count, desc, eq, gte, inArray, isNotNull, isNull, or, sql } from '
 import { autoRanks } from '../domain/ranks.js';
 import { adminLevelOf, type GuildConfig, type Rank } from '../config.js';
 import type { Db } from '../db/client.js';
-import { activityDaily, inviteActive, inviteLinks, invites, members, type Invite, type InviteLink } from '../db/schema.js';
+import { activityDaily, inviteActive, inviteLinks, invites, members, specialGoen, type Invite, type InviteLink } from '../db/schema.js';
 import type { DiscordActions } from '../lib/discordRest.js';
 import { logger } from '../lib/logger.js';
 import { jstDate } from './activity.js';
@@ -11,12 +11,14 @@ import { addCoins } from './economy.js';
 import { audit } from './audit.js';
 import { emaPromotionEnabled } from './emaPromotion.js';
 import { extendOmairiByInvite } from './applications.js';
-import { INVITE_OMAIRI_EXT_CAP_DAYS, INVITE_OMAIRI_EXT_DAYS } from '../domain/invitePerks.js';
+import { INVITE_OMAIRI_EXT_CAP_DAYS, INVITE_OMAIRI_EXT_DAYS, INVITE_QUALIFY_MINUTES, inviteGoenAmount } from '../domain/invitePerks.js';
+import { grantSpecialGoen } from './specialGoen.js';
+import { newSystemStartedAt } from './shuin.js';
 
 /**
  * 🤝 新制度⑥：招待した人が参拝者になったときの、お参り期間ののばし（招待1人で+1日・上限なし）。
  * 「絵馬での昇格」が ON のときだけ効く（新制度が始まってから）。
- * 招待主への結び補填（ご縁）は 2026-11-26 の本人の決定でなくした。
+ * 招待主へのご縁は qualifyInvites（招待された人が通話に4時間いたら）で渡す。
  */
 async function applyInvitePerks(ctx: RewardContext, inviterId: string, _inviteeId: string, now: Date): Promise<void> {
   if (!(await emaPromotionEnabled(ctx.db))) return;
@@ -24,6 +26,53 @@ async function applyInvitePerks(ctx: RewardContext, inviterId: string, _inviteeI
   if (!inviter || inviter.leftAt || inviter.isBot) return;
   // 評価期間の延長（お参り中の参拝者だけ・招待での合計は上限まで）
   await extendOmairiByInvite(ctx.db, inviterId, INVITE_OMAIRI_EXT_DAYS, INVITE_OMAIRI_EXT_CAP_DAYS, now).catch((err) => logger.warn({ err, inviterId }, 'invite omairi extend failed'));
+}
+
+/** 招待のご縁の理由（特別ご縁の記録） */
+export const INVITE_GOEN_REASON = '🤝 招待';
+/** 4時間を数える招待は、この日数より前に入った人までは見ない（昔の招待をいっぺんに数えないように） */
+const QUALIFY_LOOKBACK_DAYS = 60;
+
+/**
+ * 🤝 毎分：招待された人が通話に合計4時間いたら「1人」と数える（invites.qualified_at）。
+ * 新制度（③ON・④のあと）なら、招待主へご縁：1人につき+1、次の人数までは+2（参拝者5人目・氏子10人目まで、お世話役は上限なし）。
+ * 1人につき1回だけ（qualified_at と特別ご縁の nonce で重ならない）。抜けた人・BOT・運営のサブは数えない。
+ */
+export async function qualifyInvites(db: Db, cfg: GuildConfig, now = new Date()): Promise<{ memberId: string; inviterId: string; goen?: number }[]> {
+  const since = new Date(now.getTime() - QUALIFY_LOOKBACK_DAYS * 86_400_000);
+  const rows = await db
+    .select({ memberId: invites.memberId, inviterId: invites.inviterId, createdAt: invites.createdAt })
+    .from(invites)
+    .innerJoin(members, eq(members.id, invites.memberId))
+    .where(and(isNull(invites.qualifiedAt), gte(invites.createdAt, since), isNull(members.leftAt), eq(members.isBot, false)));
+  if (!rows.length) return [];
+  const goenOn = (await emaPromotionEnabled(db)) && Boolean(await newSystemStartedAt(db));
+  const out: { memberId: string; inviterId: string; goen?: number }[] = [];
+  for (const r of rows) {
+    if (!isSnowflake(r.inviterId) || r.inviterId === r.memberId || (await isStaffAlt(db, r.memberId))) continue;
+    const [m] = await db
+      .select({ n: sql<number>`coalesce(sum(${activityDaily.vcMinutes}), 0)::int` })
+      .from(activityDaily)
+      .where(and(eq(activityDaily.memberId, r.memberId), gte(activityDaily.date, jstDate(r.createdAt))));
+    if (Number(m?.n ?? 0) < INVITE_QUALIFY_MINUTES) continue;
+    const [marked] = await db.update(invites).set({ qualifiedAt: now }).where(and(eq(invites.memberId, r.memberId), isNull(invites.qualifiedAt))).returning({ id: invites.memberId });
+    if (!marked) continue;
+    const item: { memberId: string; inviterId: string; goen?: number } = { memberId: r.memberId, inviterId: r.inviterId };
+    if (goenOn) {
+      const [inviter] = await db.select({ roleIds: members.roleIds, leftAt: members.leftAt, isBot: members.isBot }).from(members).where(eq(members.id, r.inviterId));
+      if (inviter && !inviter.leftAt && !inviter.isBot) {
+        const [{ n } = { n: 0 }] = await db.select({ n: count() }).from(specialGoen).where(and(eq(specialGoen.memberId, r.inviterId), eq(specialGoen.reason, INVITE_GOEN_REASON), isNull(specialGoen.revokedAt)));
+        const amount = inviteGoenAmount(cfg.ranks, inviter.roleIds, Number(n));
+        const g = await grantSpecialGoen(db, { memberId: r.inviterId, amount, reason: INVITE_GOEN_REASON, by: 'system', nonce: `invite_goen:${r.inviterId}:${r.memberId}` }).catch((err) => {
+          logger.warn({ err, inviterId: r.inviterId }, 'invite goen grant failed');
+          return undefined;
+        });
+        if (g?.status === 'ok') item.goen = amount;
+      }
+    }
+    out.push(item);
+  }
+  return out;
 }
 
 /**

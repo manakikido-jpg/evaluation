@@ -539,7 +539,7 @@ export function MemberPage(props: {
   card: GoshuinchoData;
   ema?: { count: number; messages: { message: string; createdAt: Date }[] };
   /** 🎐 宮司だけ：受け取った絵馬の一覧（取り消し用）。贈った人の名前は出さない */
-  emaEntries?: { giverId: string; tier: 'ujiko' | 'sewayaku' | 'sodai'; message: string; createdAt: Date; valid: boolean }[];
+  emaEntries?: { giverId: string; tier: 'ujiko' | 'sanpai' | 'sewayaku' | 'sodai'; message: string; createdAt: Date; valid: boolean }[];
   history: { received: ShuinRow[]; given: ShuinRow[] };
   events: MemberEvent[];
   audits: AuditLog[];
@@ -647,7 +647,7 @@ export function MemberPage(props: {
               <li>
                 <span class="ema-msg">{x.message.trim() || '（一言なし）'}</span>{' '}
                 <small class="muted">
-                  {x.tier === 'ujiko' ? '氏子の票' : x.tier === 'sewayaku' ? '世話役の票' : '総代の票'}・{fmtDate(x.createdAt)}
+                  {x.tier === 'ujiko' ? '氏子の票' : x.tier === 'sanpai' ? '参拝者の票' : x.tier === 'sewayaku' ? '世話役の票' : '総代の票'}・{fmtDate(x.createdAt)}
                   {x.valid ? '' : '・失効ずみ'}
                 </small>
                 <form method="post" action={`/members/${m.id}/ema-revoke`} class="inline">
