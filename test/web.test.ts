@@ -466,8 +466,12 @@ describe('厄・BAN・キック・メモ（管理画面）', () => {
     expect((await post('/evaluation/ema-thresholds', g, { _csrf: gcsrf, ...ok, ujikoMin: 'x' })).headers.get('location')).toBe('/evaluation?th=invalid');
     // 宮司が保存（時間は分にして残す）
     expect((await post('/evaluation/ema-thresholds', g, { _csrf: gcsrf, ujikoPercent: '50', ujikoActiveHours: '8', ujikoMin: '2', inviteSubstituteMax: '0', ujikoKeep: '0', sewayakuVotePercent: '70', sewayakuVoterHours: '10', sewayakuCandidateHours: '200', sewayakuCandidateMonths: '2', sewayakuRetryHours: '30', sewayakuMinVoters: '8', sodaiPromote: '2' })).headers.get('location')).toBe('/evaluation?th=saved');
-    expect((await loadOverrides(db)).emaThresholds).toEqual({ ujikoPercent: 50, ujikoActiveMinutes: 480, ujikoMin: 2, inviteSubstituteMax: 0, ujikoKeep: 0, sewayakuVotePercent: 70, sewayakuVoterMinutes: 600, sewayakuCandidateMinutes: 12000, sewayakuCandidateMonths: 2, sewayakuRetryMinutes: 1800, sewayakuMinVoters: 8, sodaiPromote: 2 });
-    expect((await listAudit(db, { action: 'ema.thresholds_edit' })).length).toBe(1);
+    expect((await loadOverrides(db)).emaThresholds).toEqual({ ujikoPercent: 50, ujikoActiveMinutes: 480, ujikoMin: 2, inviteSubstituteMax: 0, ujikoKeep: 0, sewayakuVotePercent: 70, sewayakuVoterMinutes: 600, sewayakuCandidateMinutes: 12000, sewayakuCandidateMonths: 2, sewayakuRetryMinutes: 1800, sewayakuMinVoters: 8, sodaiPromote: 2,
+      // キープ・元氏子の欄を送らなければ、今の数のまま残る
+      keepNeed: 20, keepFromSanpai: 10, keepInviteMax: 5, keepDays: 30, motoNeed: 15, motoFromSanpai: 10, motoInviteMax: 5 });
+    expect((await post('/evaluation/ema-thresholds', g, { _csrf: gcsrf, ujikoPercent: '50', ujikoActiveHours: '8', ujikoMin: '2', inviteSubstituteMax: '0', ujikoKeep: '0', sewayakuVotePercent: '70', sewayakuVoterHours: '10', sewayakuCandidateHours: '200', sewayakuCandidateMonths: '2', sewayakuRetryHours: '30', sewayakuMinVoters: '8', sodaiPromote: '2', keepNeed: '25', keepFromSanpai: '12', motoNeed: '18' })).headers.get('location')).toBe('/evaluation?th=saved');
+    expect((await loadOverrides(db)).emaThresholds).toMatchObject({ keepNeed: 25, keepFromSanpai: 12, motoNeed: 18, keepDays: 30 });
+    expect((await listAudit(db, { action: 'ema.thresholds_edit' })).length).toBe(2);
     // 評価ページに今の枚数と、いまの参拝者→氏子の数が出る
     const page = await (await get('/evaluation?th=saved', g)).text();
     expect(page).toContain('絵馬の枚数');
