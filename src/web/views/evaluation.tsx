@@ -186,6 +186,7 @@ export function EvaluationPage({ session, data, filter, page, emaPromotion = fal
         <label>荒魂のロール ID<input type="text" name="aramitama" inputmode="numeric" pattern="[0-9]{17,20}" maxLength={20} value={nsRoles?.aramitama ?? ''}/></label>
         <button type="submit">ロールを保存</button>
       </form>
+      <p><a class="button" href="/evaluation/moto-ujiko">🍂 氏子 ⇄ 元氏子をまとめて切り替える →</a></p>
       <details><summary>くわしく</summary><p class="note">元氏子のロールが未設定のあいだは、キープに届かなくても降格しません（本人へのお知らせと #記録 だけ）。Discord でロールを作り、ロールの ID をここに入れてください。BOT のロールを、そのロールより上に置いてください。キープの判定は、④のあと・氏子になった日（前からの氏子は④の日）から{emaThresholds.keepDays}日ごとです。</p></details>
     </section>}
     {session.level === 'guji' && sewayaku && <section class="card" id="ns-election">

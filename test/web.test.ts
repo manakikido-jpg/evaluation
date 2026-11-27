@@ -371,6 +371,62 @@ describe('厄・BAN・キック・メモ（管理画面）', () => {
     expect(await send(g, { to: 'ujiko', confirm: 'yes' })).toContain('msg=moto_not_moto');
   });
 
+  it('🍂 まとめて氏子 ⇄ 元氏子：宮司だけ・選んだ人／一覧の全員・足りない人だけの絞りこみ', async () => {
+    const { members, ema } = await import('../src/db/schema.js');
+    const { setEmaPromotion } = await import('../src/services/emaPromotion.js');
+    const { resetAllShuin } = await import('../src/services/shuin.js');
+    const { isMotoUjiko, setNewSystemRoles } = await import('../src/services/ujikoKeep.js');
+    const MOTO = '700000000000007777';
+    const [A, B, C] = ['700000000000000101', '700000000000000102', '700000000000000103'];
+    await db.insert(members).values([A, B, C].map((id, i) => ({ id, username: `u${i}`, displayName: `氏子${i}`, roleIds: [ROLE.ujiko] })));
+    const s = await login(STAFF);
+    const g = await login(GUJI);
+    const send = async (cookie: string, form: Record<string, string>, ids: string[] = [], listed: string[] = []) => {
+      const q = new URLSearchParams({ _csrf: await csrfOf(cookie), ...form });
+      for (const id of ids) q.append('ids', id);
+      for (const id of listed) q.append('listed', id);
+      return (await app.request('/evaluation/moto-ujiko', { method: 'POST', headers: { cookie: `shamusho_session=${cookie}`, 'content-type': 'application/x-www-form-urlencoded' }, body: q.toString() })).headers.get('location');
+    };
+    // 神職は見られない・送れない
+    expect((await get('/evaluation/moto-ujiko', s)).status).toBe(403);
+    expect((await app.request('/evaluation/moto-ujiko', { method: 'POST', headers: { cookie: `shamusho_session=${s}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ _csrf: await csrfOf(s), to: 'moto', confirm: 'yes', mode: 'all' }).toString() })).status).toBe(403);
+    // 新制度の前：ページは出るが、押せない・送っても動かない
+    expect(await (await get('/evaluation/moto-ujiko', g)).text()).toContain('新制度がまだ始まっていません');
+    expect(await send(g, { to: 'moto', confirm: 'yes', mode: 'selected' }, [A])).toContain('msg=not_started');
+    await setEmaPromotion(db, true, GUJI);
+    await resetAllShuin(db, GUJI, clock);
+    expect(await send(g, { to: 'moto', confirm: 'yes', mode: 'selected' }, [A])).toContain('msg=no_role');
+    await setNewSystemRoles(db, { motoUjiko: MOTO }, GUJI);
+    // C だけキープに足りる（絵馬20・うち参拝者から10）
+    await db.insert(ema).values([
+      ...Array.from({ length: 10 }, (_, i) => ({ giverId: String(701000000000000000n + BigInt(i)), receiverId: C, tier: 'ujiko' as const, message: '', createdAt: clock, revokedAt: null })),
+      ...Array.from({ length: 10 }, (_, i) => ({ giverId: String(702000000000000000n + BigInt(i)), receiverId: C, tier: 'sanpai' as const, message: '', createdAt: clock, revokedAt: null })),
+    ]);
+    const all = await (await get('/evaluation/moto-ujiko', g)).text();
+    expect(all).toContain('氏子0'); expect(all).toContain('氏子2'); expect(all).toContain('足りている');
+    const short = await (await get('/evaluation/moto-ujiko?short=1', g)).text();
+    expect(short).toContain('氏子0'); expect(short).not.toContain('氏子2');
+    // チェックなし・だれも選ばない
+    expect(await send(g, { to: 'moto', mode: 'selected' }, [A])).toContain('msg=confirm');
+    expect(await send(g, { to: 'moto', confirm: 'yes', mode: 'selected' }, [], [A, B])).toContain('msg=none');
+    // 選んだ1人だけ
+    actions.length = 0;
+    expect(await send(g, { to: 'moto', confirm: 'yes', mode: 'selected' }, [A], [A, B, C])).toContain('msg=done&n=1&f=0');
+    expect(await isMotoUjiko(db, A)).toBe(true);
+    expect(await isMotoUjiko(db, B)).toBe(false);
+    expect(actions).toEqual(expect.arrayContaining([`addRole ${A} ${MOTO}`, `removeRole ${A} ${ROLE.ujiko}`]));
+    // 一覧の全員（もう元氏子の A は数えない）
+    expect(await send(g, { to: 'moto', confirm: 'yes', mode: 'all' }, [], [A, B])).toContain('msg=done&n=1&f=0');
+    expect(await isMotoUjiko(db, B)).toBe(true);
+    expect(await isMotoUjiko(db, C)).toBe(false);
+    expect((await listAudit(db, { action: 'ujiko.to_moto' })).length).toBe(2);
+    // 元氏子の一覧に出る → まとめて氏子に戻す
+    const page = await (await get('/evaluation/moto-ujiko', g)).text();
+    expect(page).toContain('元氏子 <strong>2 人</strong>');
+    expect(await send(g, { to: 'ujiko', confirm: 'yes', mode: 'all' }, [], [A, B])).toContain('msg=back&n=2&f=0');
+    expect(await isMotoUjiko(db, A)).toBe(false);
+  });
+
   it('🎐 絵馬の取り消し：宮司だけ・贈った人は出さない・取り消すと票から外れる・記録に残る', async () => {
     const { ema } = await import('../src/db/schema.js');
     const { validEmaCountOf } = await import('../src/services/ema.js');

@@ -234,3 +234,38 @@ export async function setMotoByStaff(db: Db, cfg: GuildConfig, memberId: string,
     return 'ok' as const;
   });
 }
+
+export type MotoBulkRow = { id: string; name: string; total: number; fromSanpai: number; need: number; needSanpai: number; short: number; met: boolean; judgeAt: Date | null };
+
+/**
+ * 🍂 まとめて切り替える画面の一覧。氏子（いまの絵馬とキープに足りるか）と、元氏子（氏子に戻るまで）。
+ * 氏子は足りない人を上に、元氏子はあと少しの人を上に並べる。運営のサブアカウントはのぞく。
+ */
+export async function motoBulkList(db: Db, cfg: GuildConfig, now = new Date()): Promise<{ ujiko: MotoBulkRow[]; moto: MotoBulkRow[] }> {
+  const period = cfg.emaThresholds.keepDays * DAY;
+  const [people, alts, altRows, rows] = await Promise.all([
+    db.select({ id: members.id, name: members.displayName, roleIds: members.roleIds }).from(members).where(and(eq(members.isBot, false), isNull(members.leftAt))),
+    staffAlts(db),
+    db.select({ id: memberAlts.altId }).from(memberAlts).where(eq(memberAlts.status, 'approved')),
+    db.select().from(ujikoKeepState),
+  ]);
+  const skip = new Set([...alts.map((a) => a.id), ...altRows.map((a) => a.id)]);
+  const rowOf = new Map(rows.map((r) => [r.memberId, r]));
+  const out = { ujiko: [] as MotoBulkRow[], moto: [] as MotoBulkRow[] };
+  for (const m of people) {
+    if (skip.has(m.id)) continue;
+    const rank = highestRank(cfg.ranks, m.roleIds)?.key;
+    const row = rowOf.get(m.id);
+    if (rank === 'ujiko') {
+      const judgeAt = row?.state === 'ujiko' ? row.nextJudgeAt : null;
+      const p = await keepProgress(db, cfg, m.id, new Date((judgeAt ?? new Date(now.getTime() + period)).getTime() - period), now);
+      out.ujiko.push({ id: m.id, name: m.name, total: p.total + p.inviteUsed, fromSanpai: p.fromSanpai + p.inviteUsed, need: p.need, needSanpai: p.needSanpai, short: p.short, met: p.met, judgeAt });
+    } else if (rank === 'sanpaisha' && row?.state === 'moto') {
+      const p = await motoProgress(db, cfg, m.id, row.since, now);
+      out.moto.push({ id: m.id, name: m.name, total: p.total + p.inviteUsed, fromSanpai: p.fromSanpai + p.inviteUsed, need: p.need, needSanpai: p.needSanpai, short: p.short, met: p.met, judgeAt: null });
+    }
+  }
+  out.ujiko.sort((a, b) => b.short - a.short || a.name.localeCompare(b.name, 'ja'));
+  out.moto.sort((a, b) => a.short - b.short || a.name.localeCompare(b.name, 'ja'));
+  return out;
+}

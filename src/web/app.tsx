@@ -1,4 +1,5 @@
-import { isMotoUjiko, newSystemRoles, setMotoByStaff } from '../services/ujikoKeep.js';
+import { isMotoUjiko, motoBulkList, newSystemRoles, setMotoByStaff, type MotoChange } from '../services/ujikoKeep.js';
+import { MotoUjikoPage } from './views/motoUjiko.js';
 import { newSystemActive } from '../services/perkGate.js';
 import { aramitamaRoleId } from '../services/aramitama.js';
 import { operationOf as supportOperationOf, ticketContext as supportTicketContext } from '../services/ticketOperations.js';
@@ -3146,18 +3147,10 @@ export function createWebApp(deps: WebDeps) {
     return emaBack(c, id, 'ema_revoked');
   });
 
-  // 🍂 氏子を元氏子にする／元氏子を氏子に戻す（宮司のみ・新制度）
-  app.post('/members/:id/moto-ujiko', async (c) => {
-    const id = c.req.param('id');
-    if (!validId(id)) return c.notFound();
-    const to = (msg: string) => c.redirect(`/members/${id}?msg=${msg}#sec-moto`);
-    if (!gujiOnly(c)) return to('moto_forbidden');
-    const body = await c.req.parseBody();
-    const target = body.to === 'ujiko' ? 'ujiko' : body.to === 'moto' ? 'moto' : null;
-    if (!target || body.confirm !== 'yes') return to('moto_confirm');
+  /** 🍂 1人を元氏子にする／氏子に戻す（状態 → Discord のロール → DM → 記録） */
+  const changeMoto = async (id: string, target: 'moto' | 'ujiko', by: string): Promise<{ r: MotoChange; roleOk: boolean }> => {
     const r = await setMotoByStaff(db, cfg, id, target, now());
-    if (r !== 'ok') return to(`moto_${r}`);
-    const by = c.get('session').userId;
+    if (r !== 'ok') return { r, roleOk: true };
     const roles = await newSystemRoles(db);
     const ujiko = cfg.ranks.find((x) => x.key === 'ujiko')?.roleId;
     const sanpaisha = cfg.ranks.find((x) => x.key === 'sanpaisha')?.roleId;
@@ -3179,6 +3172,50 @@ export function createWebApp(deps: WebDeps) {
       : '🍃 運営の判断で、**氏子** に戻りました。').catch(() => false);
     await audit(db, { actorId: by, targetId: id, action: target === 'moto' ? 'ujiko.to_moto' : 'ujiko.from_moto', detail: { roleOk }, via: 'web' });
     if (cfg.channels.log) await deps.discord.sendMessage(cfg.channels.log, { content: `${target === 'moto' ? '🍂 元氏子に' : '🍃 元氏子から氏子に'} <@${id}>（操作: <@${by}>）${roleOk ? '' : '\n⚠️ ロールを変更できませんでした。BOT のロールの位置と権限を確かめて、手で直してください。'}`, allowed_mentions: { parse: [] } }).catch(() => undefined);
+    return { r, roleOk };
+  };
+
+  // 🍂 まとめて：氏子の一覧から選んで元氏子にする／元氏子の一覧から選んで氏子に戻す（宮司のみ・新制度）
+  app.get('/evaluation/moto-ujiko', async (c) => {
+    c.header('Cache-Control', 'private, no-store');
+    const session = c.get('session');
+    if (session.level !== 'guji') return c.text('元氏子への切り替えは宮司だけです。', 403);
+    const [active, roles, list] = await Promise.all([newSystemActive(db), newSystemRoles(db), motoBulkList(db, cfg, now())]);
+    const shortOnly = c.req.query('short') === '1';
+    return c.html(<MotoUjikoPage session={session} active={active} roleSet={Boolean(roles.motoUjiko)} ujiko={shortOnly ? list.ujiko.filter((x) => !x.met) : list.ujiko} moto={list.moto} shortOnly={shortOnly} th={cfg.emaThresholds} flash={c.req.query('msg') ?? undefined} done={Number(c.req.query('n') ?? 0)} failed={Number(c.req.query('f') ?? 0)} />);
+  });
+  app.post('/evaluation/moto-ujiko', async (c) => {
+    c.header('Cache-Control', 'private, no-store');
+    const session = c.get('session');
+    if (session.level !== 'guji') return c.text('元氏子への切り替えは宮司だけです。', 403);
+    const body = await c.req.parseBody({ all: true });
+    const many = (v: unknown) => (Array.isArray(v) ? v : v === undefined ? [] : [v]).filter((x): x is string => typeof x === 'string' && validId(x));
+    const target = body.to === 'ujiko' ? 'ujiko' : body.to === 'moto' ? 'moto' : null;
+    const ids = [...new Set(body.mode === 'all' ? many(body.listed) : many(body.ids))].slice(0, 500);
+    const back = (q: string) => c.redirect(`/evaluation/moto-ujiko?${q}`, 303);
+    if (!target || body.confirm !== 'yes') return back('msg=confirm');
+    if (!ids.length) return back('msg=none');
+    let n = 0, f = 0, stop: MotoChange | null = null;
+    for (const id of ids) {
+      const { r, roleOk } = await changeMoto(id, target, session.userId);
+      if (r === 'not_started' || r === 'no_role') { stop = r; break; }
+      if (r === 'ok') { n++; if (!roleOk) f++; }
+    }
+    if (stop) return back(`msg=${stop}`);
+    return back(`msg=${target === 'moto' ? 'done' : 'back'}&n=${n}&f=${f}`);
+  });
+
+  // 🍂 氏子を元氏子にする／元氏子を氏子に戻す（宮司のみ・新制度）
+  app.post('/members/:id/moto-ujiko', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.notFound();
+    const to = (msg: string) => c.redirect(`/members/${id}?msg=${msg}#sec-moto`);
+    if (!gujiOnly(c)) return to('moto_forbidden');
+    const body = await c.req.parseBody();
+    const target = body.to === 'ujiko' ? 'ujiko' : body.to === 'moto' ? 'moto' : null;
+    if (!target || body.confirm !== 'yes') return to('moto_confirm');
+    const { r, roleOk } = await changeMoto(id, target, c.get('session').userId);
+    if (r !== 'ok') return to(`moto_${r}`);
     return to(roleOk ? (target === 'moto' ? 'moto_done' : 'moto_back') : 'moto_role_failed');
   });
 
