@@ -256,6 +256,21 @@ describe('厄祓い（買うと面接待ち → 運営が祓う）', () => {
     expect(await purchaseMenzaifu(ctx, U)).toEqual({ status: 'used_up', max: 1 });
   });
 
+  it('厄の記録がなくても 👹厄年ロールがあれば申し込める。運営が取り消すとロールが外れて厄祓いが終わる', async () => {
+    await clearYaku(ctx, shinshoku, U, 'x');
+    await recordJoin(db, { id: U, username: U, displayName: U, avatarUrl: null, roleIds: [ROLE.ujiko, ROLE.yakudoshi], isBot: false, joinedAt: null });
+    await addCoins(db, U, cfg.economy.menzaifuPrice, 'adjust');
+    calls = [];
+    // ロールがない（と渡された）ときは今までどおり
+    expect(await purchaseMenzaifu(ctx, U, [ROLE.ujiko])).toEqual({ status: 'no_yaku' });
+    expect(await purchaseMenzaifu(ctx, U, [ROLE.ujiko, ROLE.yakudoshi])).toEqual({ status: 'ok', price: cfg.economy.menzaifuPrice });
+    expect(await yakubaraiWaiting(db, U)).toBeTruthy();
+    expect(await clearYaku(ctx, shinshoku, U, '面接した')).toEqual({ status: 'none', roleFixed: true, roleOk: true });
+    expect(calls).toContainEqual(['removeRole', U, ROLE.yakudoshi]);
+    expect(await yakubaraiWaiting(db, U)).toBeUndefined();
+    expect(await menzaifuUsed(db, U)).toBe(1);
+  });
+
   it('面接待ちのまま、ほかの理由で厄がなくなったら閉じる（回数には数えない）', async () => {
     await addCoins(db, U, cfg.economy.menzaifuPrice, 'adjust');
     await purchaseMenzaifu(ctx, U);

@@ -336,7 +336,7 @@ export class ShopApp {
         if (item.roleGroup === 'vip' && !canBuyVip(cfg, [...i.member.roles.cache.keys()])) return '💎 極の VIP は、宵参り（18 歳以上）の方だけが受けられます。';
         return this.role(i, item, discount);
       case 'menzaifu': {
-        const r = await purchaseMenzaifu({ db: this.db, cfg, discord: this.discord }, userId);
+        const r = await purchaseMenzaifu({ db: this.db, cfg, discord: this.discord }, userId, roleIdsOf(i.member));
         return yakubaraiResultText(r, cfg.economy);
       }
       case 'omikuji_extra':

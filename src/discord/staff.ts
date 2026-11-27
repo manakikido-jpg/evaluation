@@ -212,9 +212,11 @@ export class StaffApp {
 
   private async yakuList(): Promise<string> {
     const [rows, waiting] = await Promise.all([membersWithYaku(this.db), yakubaraiWaitingList(this.db)]);
-    if (!rows.length) return '厄が付いている方はいません。';
     const wait = new Set(waiting.map((w) => w.memberId));
-    const lines = rows.slice(0, 25).map((r) => `👹 ${mention(r.memberId)}（${r.displayName ?? '?'}）厄 ${r.active}${wait.has(r.memberId) ? ' 🙏 厄祓いの面接待ち' : ''}`);
+    // 厄の記録はないが 👹厄年ロールで厄祓いを申し込んだ人
+    const roleOnly = waiting.filter((w) => !rows.some((r) => r.memberId === w.memberId)).map((w) => `🙏 ${mention(w.memberId)} 厄祓いの面接待ち（厄年ロールだけ）`);
+    if (!rows.length) return roleOnly.length ? `**厄祓いの面接待ち**\n${roleOnly.join('\n')}` : '厄が付いている方はいません。';
+    const lines = [...rows.slice(0, 25).map((r) => `👹 ${mention(r.memberId)}（${r.displayName ?? '?'}）厄 ${r.active}${wait.has(r.memberId) ? ' 🙏 厄祓いの面接待ち' : ''}`), ...roleOnly];
     return `**厄が付いている方（${rows.length} 人）**\n${lines.join('\n')}${rows.length > 25 ? `\nほか ${rows.length - 25} 人は管理画面で確認してください。` : ''}`;
   }
 
@@ -261,14 +263,17 @@ export class StaffApp {
       yakubaraiWaiting(this.db, i.user.id),
     ]);
     const left = Math.max(0, e.menzaifuMaxUses - used);
+    // 厄の記録がなくても 👹厄年ロールがあれば厄（手で付けたときなど）
+    const roleOnly = yakuCount === 0 && Boolean(this.cfg.roles.yakudoshi && i.member.roles.cache.has(this.cfg.roles.yakudoshi));
+    const hasYaku = yakuCount > 0 || roleOnly;
     const lines = [
-      `今の厄: ${yakuCount}${yakuCount ? ' 👹' : ''}`,
+      `今の厄: ${roleOnly ? '👹 厄年' : `${yakuCount}${yakuCount ? ' 👹' : ''}`}`,
       `厄祓いの値段: ${e.currencyEmoji}${e.currencyName} ${e.menzaifuPrice}`,
       `持っている${e.currencyName}: ${e.currencyEmoji} ${wallet.balance}`,
       waiting ? '🙏 面接待ちです（運営から声がかかるまでお待ちください）' : `あと受けられる回数: ${left} 回`,
       '-# 厄祓いを受けると面接待ちになり、運営との面接のあとに厄が祓われます。',
     ];
-    const canBuy = yakuCount > 0 && !waiting && left > 0 && wallet.balance >= e.menzaifuPrice;
+    const canBuy = hasYaku && !waiting && left > 0 && wallet.balance >= e.menzaifuPrice;
     const embed = new EmbedBuilder().setColor(SHU).setTitle('🙏 厄祓い').setDescription(lines.join('\n'));
     const components = canBuy
       ? [
@@ -277,13 +282,13 @@ export class StaffApp {
           ),
         ]
       : [];
-    const note = yakuCount === 0 ? '厄は付いていません。' : waiting ? '' : left === 0 ? '厄祓いはもう受けられません。' : wallet.balance < e.menzaifuPrice ? `${e.currencyName}が足りません。通話で貯まります。` : '';
+    const note = !hasYaku ? '厄は付いていません。' : waiting ? '' : left === 0 ? '厄祓いはもう受けられません。' : wallet.balance < e.menzaifuPrice ? `${e.currencyName}が足りません。通話で貯まります。` : '';
     await i.editReply({ content: note || null, embeds: [embed.toJSON()], components });
   }
 
   private async buyMenzaifu(i: ButtonInteraction<'cached'>): Promise<void> {
     await i.deferUpdate();
-    const r = await purchaseMenzaifu(this.ctx, i.user.id);
+    const r = await purchaseMenzaifu(this.ctx, i.user.id, [...i.member.roles.cache.keys()]);
     await i.editReply({ content: yakubaraiResultText(r, this.cfg.economy), embeds: [], components: [] });
   }
 

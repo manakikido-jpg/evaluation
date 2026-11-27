@@ -1,4 +1,4 @@
-import { and, count, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { EconomyConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { members, memos, yaku, yakubaraiRequests, type Yaku } from '../db/schema.js';
@@ -84,10 +84,11 @@ export async function clearYakuByStaff(
     // 厄祓いの面接待ちなら、運営の取り消しで厄祓いが終わったことにする
     const waiting = await waitingOf(tx, input.memberId);
     const cleared = await clearLatest(tx, input.memberId, input.by, waiting ? 'menzaifu' : 'staff', input.note);
-    if (cleared && waiting) await finishRequest(tx, waiting.id, input.by, 'done');
+    // 記録がなくても（ロールだけの厄）、面接待ちの人を運営が取り消したら厄祓いは終わり
+    if (waiting) await finishRequest(tx, waiting.id, input.by, 'done');
     const remaining = await countActive(tx, input.memberId);
     if (remaining === 0) await closeWaiting(tx, input.memberId, input.by);
-    return { cleared, remaining, ...(cleared && waiting ? { yakubarai: true } : {}) };
+    return { cleared, remaining, ...(waiting ? { yakubarai: true } : {}) };
   });
 }
 
@@ -138,11 +139,17 @@ export async function clearYakuForUnban(
   });
 }
 
-/** 厄祓いを使った回数（祓い終わった分＋面接待ち。前の免罪符で祓った分も数える） */
+/**
+ * 厄祓いを使った回数 = 申し込み（面接待ち＋祓い終わった分）＋ 前の免罪符で祓った分。
+ * 前の免罪符は本人が自分で祓った記録（cleared_by が本人）なので、運営が面接のあとに祓った分と二重に数えない。
+ */
 export async function menzaifuUsed(db: Db, memberId: string): Promise<number> {
   const [[r], [w]] = await Promise.all([
-    db.select({ n: count() }).from(yaku).where(and(eq(yaku.memberId, memberId), eq(yaku.clearedReason, 'menzaifu'))),
-    db.select({ n: count() }).from(yakubaraiRequests).where(and(eq(yakubaraiRequests.memberId, memberId), eq(yakubaraiRequests.status, 'waiting'))),
+    db.select({ n: count() }).from(yaku).where(and(eq(yaku.memberId, memberId), eq(yaku.clearedReason, 'menzaifu'), eq(yaku.clearedBy, memberId))),
+    db
+      .select({ n: count() })
+      .from(yakubaraiRequests)
+      .where(and(eq(yakubaraiRequests.memberId, memberId), inArray(yakubaraiRequests.status, ['waiting', 'done']))),
   ]);
   return Number(r?.n ?? 0) + Number(w?.n ?? 0);
 }
@@ -174,10 +181,17 @@ export type MenzaifuResult =
  * 厄祓いを買う。支払いと面接待ちの記録は同じトランザクション（どちらか片方だけにはならない）。
  * 厄はまだ祓わない（運営が面接して、取り消しで祓う）。面接待ちは 1 人 1 つだけ。
  */
-export async function buyMenzaifu(db: Db, economy: EconomyConfig, memberId: string, balanceOf: (tx: Db) => Promise<number>): Promise<MenzaifuResult> {
+export async function buyMenzaifu(
+  db: Db,
+  economy: EconomyConfig,
+  memberId: string,
+  balanceOf: (tx: Db) => Promise<number>,
+  /** 👹厄年ロールが付いているか（厄の記録がなくても、ロールがあれば申し込める） */
+  hasRole = false,
+): Promise<MenzaifuResult> {
   return db.transaction(async (tx) => {
     await lockMember(tx, memberId);
-    if ((await countActive(tx, memberId)) === 0) return { status: 'no_yaku' };
+    if ((await countActive(tx, memberId)) === 0 && !hasRole) return { status: 'no_yaku' };
     if (await waitingOf(tx, memberId)) return { status: 'waiting' };
     if ((await menzaifuUsed(tx, memberId)) >= economy.menzaifuMaxUses) return { status: 'used_up', max: economy.menzaifuMaxUses };
     const paid = await spendWithin(tx, memberId, economy.menzaifuPrice, 'menzaifu');

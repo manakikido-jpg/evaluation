@@ -380,6 +380,17 @@ export function YakuPage(props: {
     <Layout title="厄" session={props.session} nav="yaku">
       <h1>👹 厄が付いている方</h1>
       <p class="note">1 つ目は注意、2 つ目で BAN。本人が授与所で厄祓いを受けると「面接待ち」になります。面接のあと、その方のページの「取り消す」で祓ってください。</p>
+      {props.waiting && [...props.waiting.keys()].some((id) => !props.rows.some((r) => r.memberId === id)) && (
+        <p class="flash warn">
+          🙏 厄の記録はないが 👹厄年ロールで厄祓いを申し込んだ方:{' '}
+          {[...props.waiting.keys()]
+            .filter((id) => !props.rows.some((r) => r.memberId === id))
+            .map((id) => (
+              <a href={`/members/${id}`}>ID {id} </a>
+            ))}
+          （その方のページの「取り消す」でロールを外します）
+        </p>
+      )}
       {props.rows.length === 0 ? (
         <p class="empty">厄が付いている方はいません。</p>
       ) : (

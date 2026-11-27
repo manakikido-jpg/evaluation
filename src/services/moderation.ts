@@ -168,6 +168,7 @@ export async function clearYaku(ctx: ModCtx, actor: Actor, targetId: string, not
     const m = yakudoshi && r.remaining === 0 ? await getMember(ctx.db, targetId) : undefined;
     if (!yakudoshi || !m?.roleIds.includes(yakudoshi)) return { status: 'none', roleOk: true };
     const roleOk = await safely('remove leftover yakudoshi', () => ctx.discord.removeRole(ctx.cfg.guildId, targetId, yakudoshi, '厄の記録がないので、残っていた厄年を外す'));
+    if (roleOk) await ctx.discord.sendDm(targetId, dm.cleared()).catch(() => false);
     await audit(ctx.db, { actorId: actor.id, targetId, action: 'yaku.role_fix', detail: { note, roleOk }, via: actor.via });
     return { status: 'none', roleFixed: true, roleOk };
   }
@@ -180,8 +181,12 @@ export async function clearYaku(ctx: ModCtx, actor: Actor, targetId: string, not
 export const YAKU_ROLE_FAILED = '⚠️ 👹厄年ロールを外せませんでした。Discord のサーバー設定 → ロールで、BOT のロールを「厄年」より上に動かしてから、もう一度「取り消す」を押してください（手で外してもかまいません）。';
 
 /** 本人が厄祓いを買う（授与所・/厄祓い）。面接待ちになり、#記録 に運営への知らせ（祓うボタンつき）を出す */
-export async function purchaseMenzaifu(ctx: ModCtx, memberId: string): Promise<MenzaifuResult> {
-  const r = await buyMenzaifu(ctx.db, ctx.cfg.economy, memberId, async (tx) => (await walletOf(tx, memberId)).balance);
+export async function purchaseMenzaifu(ctx: ModCtx, memberId: string, roleIds?: readonly string[]): Promise<MenzaifuResult> {
+  // 👹厄年ロールを手で付けた人など、厄の記録がなくてもロールがあれば申し込める
+  const yakudoshi = ctx.cfg.roles.yakudoshi;
+  const roles = roleIds ?? (await getMember(ctx.db, memberId))?.roleIds ?? [];
+  const hasRole = Boolean(yakudoshi && roles.includes(yakudoshi));
+  const r = await buyMenzaifu(ctx.db, ctx.cfg.economy, memberId, async (tx) => (await walletOf(tx, memberId)).balance, hasRole);
   if (r.status === 'ok') {
     await audit(ctx.db, { actorId: memberId, targetId: memberId, action: 'yaku.yakubarai', detail: { price: r.price }, via: 'discord' });
     await ctx.discord.sendDm(memberId, dm.yakubaraiWaiting()).catch(() => false);

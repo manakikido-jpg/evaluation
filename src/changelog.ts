@@ -31,6 +31,26 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-11-27-yakubarai-role-only',
+    date: '2026-11-27',
+    kind: 'fix',
+    where: ['Discord', '社務所Web'],
+    title: '🙏 厄年ロールを手で付けた人が、厄祓いで「祓う厄がありません」と出ていたのを直した',
+    items: [
+      '厄の記録がなくても 👹厄年ロールがあれば、厄祓いを申し込めるようにしました（面接待ちになります）。',
+      '運営が #記録 の「面接して祓う」か「取り消す」を押すと、厄年ロールを外して厄祓いが終わります。',
+      '/厄 一覧・社務所Web の「厄」に、厄年ロールだけで申し込んだ人も出します。',
+    ],
+    announcement: {
+      priority: 'none',
+      audience: '運営',
+      steps: ['「祓う厄がありません」と出た人には、もう一度 厄祓い を申し込んでもらう'],
+      postText: '',
+      imagePrompt: '',
+      notes: '不具合の修正。厄の制限のお知らせ（2026-11-26-yaku-restrictions）の手順はそのまま。',
+    },
+  },
+  {
     id: '2026-11-26-yaku-role-fix',
     date: '2026-11-26',
     kind: 'fix',
