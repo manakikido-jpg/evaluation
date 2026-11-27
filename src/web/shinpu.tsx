@@ -5,7 +5,8 @@ import { adminLevelOf, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { peekLoginLink, useLoginLink } from '../services/casino/loginLinks.js';
 import { audit } from '../services/audit.js';
-import {isBetaTester} from '../services/shinpu/beta.js';
+import {isBetaTester, shinpuPublic} from '../services/shinpu/beta.js';
+import { isYakudoshi } from '../services/yakuGate.js';
 import { SavedShinpuRooms,ShinpuStorageError } from '../services/shinpu/store.js';
 import { createMemberSession, deleteMemberSession, findMemberSession } from './memberSessions.js';
 import { randomToken, safeEqual } from './sessions.js';
@@ -48,20 +49,20 @@ function Entry({ action, name, room }: { action?: string; name?: string; room?: 
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
-        <title>神符合戦・招待制無料β</title>
+        <title>神符合戦 | 咲楽ノ宮</title>
         <link rel="stylesheet" href={assetUrl('shinpu.css')} />
       </head>
       <body>
         <main class="wrap">
           <section class="arena">
             <h1>神符合戦</h1>
-            <p><strong>招待制・無料β</strong></p>
-            <p>招待されたサーバーのメンバーと、宮司・神職が参加できます。</p>
+            <p><strong>無料で遊べます</strong></p>
+            <p>咲楽ノ宮のメンバーなら、だれでも参加できます（厄のあいだはのぞく）。</p>
             <p>参加は無料です。対戦内の霊銭だけを使い、サーバーの銭は減りません。部屋は2時間で終了し、再起動しても保存期限内なら対戦に戻れます。</p>
             {action ? (
               <form method="post" action={action}>
                 <p>{name}さんとして入ります。このリンクは人に渡さないでください。</p>
-                <button class="primary">無料βに入る</button>
+                <button class="primary">神符合戦に入る</button>
               </form>
             ) : (
               <a class="beta-enter" href={`${ROOT}/auth${room ? `?room=${room}` : ''}`}>Discordで認証して入る</a>
@@ -80,6 +81,10 @@ export function mountShinpu(app: Hono<any>, d: Deps) {
     const roles = await d.api.memberRoles(d.cfg().guildId, id);
     if (!roles) return undefined;
     if (adminLevelOf(d.cfg(), roles)) return 'staff' as const;
+    // 👹 厄のあいだは遊べない
+    if (isYakudoshi(d.cfg(), roles)) return undefined;
+    // 🎴 全員に公開中なら、サーバーにいる人はだれでも（銭は使わない・無料）
+    if (await shinpuPublic(d.db, d.cfg().guildId)) return 'member' as const;
     return await isBetaTester(d.db,d.cfg().guildId,id) ? 'tester' as const : undefined;
   };
   // 権限の再確認は各リクエスト。Discordへの接続失敗も許可として扱わない。
@@ -94,7 +99,7 @@ export function mountShinpu(app: Hono<any>, d: Deps) {
         for (const room of (await rooms.list(s.userId)).filter(r=>r.mine)) await rooms.leave(room.id,s.userId);
         await deleteMemberSession(d.db, s.id);
         deleteCookie(c, COOKIE, { path: ROOT });
-        return { response: c.json({ error: '招待されたメンバーと運営だけが参加できます。' }, 403) };
+        return { response: c.json({ error: 'いまは参加できません（招待制の期間・厄のあいだ・サーバーにいない など）。' }, 403) };
       }
       return { session: s, staff: access === 'staff' };
     } catch {
@@ -103,7 +108,7 @@ export function mountShinpu(app: Hono<any>, d: Deps) {
   };
   const login = async (c: Context, user: DiscordUser, room?: string) => {
     try {
-      if (!(await allowed(user.id))) return c.text('招待されたメンバーと運営だけが参加できます。', 403);
+      if (!(await allowed(user.id))) return c.text('いまは参加できません（招待制の期間・厄のあいだ・サーバーにいない など）。', 403);
     } catch {
       return c.text('Discordで権限を確認できません。少し待ってください。', 503);
     }

@@ -12,21 +12,21 @@ export function ShinpuTestPage({ csrf, name, staff = true }: { csrf: string; nam
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-        <title>神符合戦 | 咲楽ノ宮・招待制無料β</title>
+        <title>神符合戦 | 咲楽ノ宮</title>
         <link rel="stylesheet" href="${assetUrl('shinpu.css')}" />
       </head>
       <body data-csrf="${csrf}" data-art="${art}" data-art-full="${fullArt}">
         <header>
           <div class="brand"><span class="crest" aria-hidden="true">✿</span><span>咲楽ノ宮 / 神符合戦</span></div>
-          <nav>${staff ? html`<a href="/economy/shinpu">社務所へ</a>` : html`<a href="/casino/shinpu/cards">神器図鑑</a>`}<span class="tag">招待制無料β</span><button id="viewport-toggle" aria-label="画面内表示" data-presentation-control aria-pressed="true" title="画面内表示と通常表示を切り替える">通常表示</button><button data-dialog="presentation" data-presentation-control>音・演出</button><button data-dialog="rules">遊び方</button><button id="leave">部屋を退出</button></nav>
+          <nav>${staff ? html`<a href="/economy/shinpu">社務所へ</a>` : html`<a href="/casino/shinpu/cards">神器図鑑</a>`}<span class="tag">無料</span><button id="viewport-toggle" aria-label="画面内表示" data-presentation-control aria-pressed="true" title="画面内表示と通常表示を切り替える">通常表示</button><button data-dialog="presentation" data-presentation-control>音・演出</button><button data-dialog="rules">遊び方</button><button id="leave">部屋を退出</button></nav>
         </header>
         <section id="connection-banner" class="connection-banner" role="status" hidden><span id="connection-message"></span><button id="reconnect" data-presentation-control>再接続</button><button id="back-lobby" data-presentation-control>ロビーへ</button></section>
 
         <div id="battle-fx" class="battle-fx" aria-hidden="true" hidden></div>
         <main class="wrap" id="lobby">
           <section class="arena">
-            <h1>無料βの部屋</h1>
-            <p>${name}さん、招待された人同士で対戦できます。足りない席は式神CPUに任せられます。</p>
+            <h1>神符合戦の部屋</h1>
+            <p>${name}さん、メンバー同士で対戦できます。足りない席は式神CPUに任せられます。</p>
             <p class="hint">参加は無料。部屋は2時間で終了し、再起動しても保存期限内なら対戦に戻れます。HP・MP・霊銭は上限なしの試験中です。不具合や勝敗の偏りは、使った札・人数・端末を添えて運営へ教えてください。</p>
             <p><a href="/casino/shinpu/cards">神器図鑑（237枚）を見る</a></p>
             <label for="count">対戦人数</label
@@ -112,7 +112,7 @@ export function ShinpuTestPage({ csrf, name, staff = true }: { csrf: string; nam
         <div id="card-play" class="card-play" role="status" aria-live="polite" hidden></div>
         <div class="toast" id="toast" role="status" aria-live="polite"></div>
         <footer>
-          神符合戦・招待制無料β · 招待された人同士＋CPU / テスト専用<br />HP・MP・霊銭は上限なしの招待制無料βです。対戦内の「霊銭」はサーバーの銭と別です。本番の残高には影響しません。
+          神符合戦 · メンバー同士＋CPU / 無料<br />HP・MP・霊銭は上限なしです。対戦内の「霊銭」はサーバーの銭と別です。本番の残高には影響しません。
         </footer>
         <dialog id="presentation" class="presentation-settings"><button class="close" data-close>閉じる</button><h2>音・演出</h2><button id="sound-toggle" data-presentation-control aria-pressed="false">音 OFF</button><label>音量<input id="sound-volume" type="range" min="0" max="1" step="0.05" value="0.3"/></label><label>演出<select id="effect-mode"><option value="normal">通常</option><option value="short">短い</option><option value="off">なし</option></select></label><span id="effects-status" role="status"></span></dialog>
         <dialog id="rules">

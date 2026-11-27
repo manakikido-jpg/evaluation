@@ -31,3 +31,20 @@ export async function changeBetaTester(db:Db,input:{guildId:string;userId:string
     return input.add?'added' as const:'removed' as const;
   });
 }
+
+/**
+ * 🎴 全員に公開（本人の決定 2026-11-27：銭はつながず無料のまま、サーバーの全員へリリース）。
+ * 記録がなければ公開（ON）。運営が社務所Web で OFF にすると、前の招待制（招待した人と運営だけ）に戻る。
+ */
+const publicKeyOf=(guildId:string)=>`shinpu.public:${guildId}`;
+export async function shinpuPublic(db:Db,guildId:string):Promise<boolean>{
+  const [row]=await db.select().from(settings).where(eq(settings.key,publicKeyOf(guildId)));
+  const v=row?.value as {on?:unknown}|undefined;
+  return typeof v?.on==='boolean'?v.on:true;
+}
+export async function setShinpuPublic(db:Db,input:{guildId:string;on:boolean;actorId:string},now=new Date()){
+  const key=publicKeyOf(input.guildId),value={on:input.on};
+  await db.insert(settings).values({key,value,updatedBy:input.actorId,updatedAt:now})
+    .onConflictDoUpdate({target:settings.key,set:{value,updatedBy:input.actorId,updatedAt:now}});
+  await audit(db,{actorId:input.actorId,action:input.on?'shinpu.public.on':'shinpu.public.off',via:'web',detail:{guildId:input.guildId}});
+}

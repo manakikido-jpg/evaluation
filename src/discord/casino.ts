@@ -1,4 +1,4 @@
-import {isBetaTester} from '../services/shinpu/beta.js';
+import {isBetaTester, shinpuPublic} from '../services/shinpu/beta.js';
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags, type Interaction } from 'discord.js';
 import { adminLevelOf, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
@@ -62,18 +62,19 @@ export class CasinoApp {
     if (interaction.commandName === 'shinpu') {
       const staff = !!adminLevelOf(this.cfg(), [...interaction.member.roles.cache.keys()]);
       if (!staff && !this.db) {
-        await interaction.reply({ content: '神符合戦の無料βは、招待された人と運営だけが遊べます。', flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
+        await interaction.reply({ content: '神符合戦をいま開けません。少し待ってからお試しください。', flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
         return;
       }
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       if (!staff) {
         try {
-          if (!await isBetaTester(this.db!,this.cfg().guildId,interaction.user.id)) {
-            await interaction.editReply({content:'神符合戦の無料βは招待制です。参加したいときは運営に相談してください。',allowedMentions:{parse:[]}});return;
+          // 🎴 全員に公開中なら、だれでも（無料）。公開を止めているときは招待した人だけ
+          if (!await shinpuPublic(this.db!,this.cfg().guildId) && !await isBetaTester(this.db!,this.cfg().guildId,interaction.user.id)) {
+            await interaction.editReply({content:'神符合戦は、いまは招待制です。参加したいときは運営に相談してください。',allowedMentions:{parse:[]}});return;
           }
         } catch(err) {
           logger.warn({err},'shinpu beta invitation check failed');
-          await interaction.editReply({content:'招待を確認できません。時間をおいてお試しください。',allowedMentions:{parse:[]}});return;
+          await interaction.editReply({content:'参加できるか確認できません。時間をおいてお試しください。',allowedMentions:{parse:[]}});return;
         }
       }
       let testLink: string | undefined;
@@ -102,7 +103,7 @@ export class CasinoApp {
 /** 運営本人だけに渡す入口。Webでも運営ロールを確かめる。 */
 export function shinpuTestReply(baseUrl: string | undefined, token?: string) {
   if (!baseUrl) return { content: 'Webの場所がまだ決まっていません。', allowedMentions: { parse: [] as const } };
-  return { content: '神符合戦・招待制無料β\n招待された人同士で対戦し、空いている席は式神CPUで埋められます。サーバーの銭は使いません。部屋は2時間で終了し、再起動しても保存期限内なら対戦に戻れます。\n' + (token ? 'リンクは10分・1回きりです。人に渡さないでください。' : 'ボタンから開いて、Discordで認証してください。'), allowedMentions: { parse: [] as const }, components: [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel('無料βに入る').setURL(`${baseUrl}/casino/shinpu${token ? `/link/${token}` : ''}`))] };
+  return { content: '神符合戦（無料）\nメンバー同士で対戦し、空いている席は式神CPUで埋められます。サーバーの銭は使いません。部屋は2時間で終了し、再起動しても保存期限内なら対戦に戻れます。\n' + (token ? 'リンクは10分・1回きりです。人に渡さないでください。' : 'ボタンから開いて、Discordで認証してください。'), allowedMentions: { parse: [] as const }, components: [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel('神符合戦に入る').setURL(`${baseUrl}/casino/shinpu${token ? `/link/${token}` : ''}`))] };
 }
 
 /** 👘 /マイページ: 本人だけに出す、マイページへの 1 回きりのリンク */
