@@ -598,7 +598,7 @@ describe('ShuinApp：絵馬を贈る（新制度②）', () => {
 
     const submit = interaction('modal', giver, { customId: emaModalId(SA), fields: { getTextInputValue: () => 'いっしょに過ごせてうれしかったです' } });
     await app.onInteraction(submit.i as never);
-    expect(submit.replies[0]?.content).toContain('絵馬（氏子の票）を');
+    expect(submit.replies[0]?.content).toContain('絵馬を贈りました'); expect(submit.replies[0]?.content).toContain('氏子の票');
     const { validEmaCountOf, emaMessagesOf } = await import('../src/services/ema.js');
     expect(await validEmaCountOf(db, SA)).toBe(1);
     expect((await emaMessagesOf(db, SA))[0]?.message).toBe('いっしょに過ごせてうれしかったです');
@@ -626,7 +626,7 @@ describe('ShuinApp：絵馬を贈る（新制度②）', () => {
     const press = interaction('button', giver, { customId: emaGiveId(SA) });
     await app.onInteraction(press.i as never);
     expect(press.shownModals).toHaveLength(0);
-    expect(press.replies[0]?.content).toContain('足りません');
+    expect(press.replies[0]?.content).toContain('まだ贈れません');
   });
 
   it('絵馬は③の前は見せない（ボタン・欄・押しても始まっていない）。③のあとは /絵馬 に「頂いた絵馬」が出る', async () => {

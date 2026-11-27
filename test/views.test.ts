@@ -203,7 +203,7 @@ describe('新制度の見た目', () => {
     const fields = post.embeds![0] as { fields: { name: string; value: string }[] };
     const names = fields.fields.map((f) => f.name);
     expect(new Set(names).size).toBe(names.length);
-    expect(JSON.stringify(post)).toContain('11 票以上');
+    expect(JSON.stringify(post)).toContain('11 票から');
     expect(JSON.stringify(post)).toContain('11/29');
   });
 });

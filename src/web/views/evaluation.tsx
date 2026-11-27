@@ -40,11 +40,11 @@ export function EvaluationPage({ session, data, filter, page, emaPromotion = fal
     {saved === 'confirm' && <p class="flash warn" role="alert">「切り替えてよい」にチェックを入れてから押してください。</p>}
     {session.level === 'guji' && <section class="card ns-overview">
       <h2>🌸 新制度の進み具合</h2>
-      <p class="note">上から順に押します。③を押すまで、メンバーには絵馬・選挙などの新制度は見えません。</p>
+      <p class="note">上から順に。③まで、メンバーに新制度は見えません。</p>
       <ol class="ns-steps">
-        <li><a href="#ns-ema">③ 絵馬での昇格</a> {emaPromotion ? <span class="tag green">ON</span> : <span class="tag gray">OFF</span>}<small>参拝者→氏子は絵馬・氏子→世話役は選挙・世話役→総代は絵馬。メンバーに新制度が見えるようになる</small></li>
-        <li><a href="#ns-reset">④ ご縁のリセット</a> {newSystemStartedAt ? <span class="tag green">済み（{fmtJstDay(newSystemStartedAt)}）</span> : <span class="tag gray">まだ</span>}<small>全員のご縁を0にして、呼び名が「御朱印」から「結び」に変わる</small></li>
-        <li><a href="#ns-perk">⑤ カジノ・宿を氏子から</a> {perkUjiko ? <span class="tag green">ON</span> : <span class="tag gray">OFF</span>}<small>参拝者はカジノ・宿に入れなくなる</small></li>
+        <li><a href="#ns-ema">③ 絵馬での昇格</a> {emaPromotion ? <span class="tag green">ON</span> : <span class="tag gray">OFF</span>}<small>昇格が絵馬・選挙に／メンバーに見える</small></li>
+        <li><a href="#ns-reset">④ ご縁のリセット</a> {newSystemStartedAt ? <span class="tag green">済み（{fmtJstDay(newSystemStartedAt)}）</span> : <span class="tag gray">まだ</span>}<small>全員のご縁を0に／呼び名が「結び」に</small></li>
+        <li><a href="#ns-perk">⑤ カジノ・宿を氏子から</a> {perkUjiko ? <span class="tag green">ON</span> : <span class="tag gray">OFF</span>}<small>参拝者はカジノ・宿を使えない</small></li>
       </ol>
       <p class="ns-summary">
         {ujikoWeek && <span>🎐 今週の参拝者→氏子：<strong>絵馬 {ujikoWeek.required} 枚</strong></span>}
@@ -63,7 +63,7 @@ export function EvaluationPage({ session, data, filter, page, emaPromotion = fal
         <label><input type="checkbox" name="confirm" value="yes"/> 切り替えてよい</label>
         <button type="submit">{emaPromotion ? '従来（ご縁40＋縁側20時間）に戻す' : '絵馬での昇格に切り替える'}</button>
       </form>
-      <p class="note">切り替えると、昇格は<strong>絵馬と選挙</strong>で決まり、ご縁・縁側20時間の条件は使いません（参拝者→氏子は{ujikoRule}／氏子→世話役は{sewayakuRuleText(emaThresholds)}／世話役→総代は総代の票{emaThresholds.sodaiPromote}枚）。数は下の「絵馬の枚数」で変えられます。切り替える前に、絵馬が十分にたまっているか下の「維持の注意」で確かめてください。</p>
+      <details><summary>くわしく</summary><p class="note">切り替えると、昇格は<strong>絵馬と選挙</strong>で決まり、ご縁・縁側20時間の条件は使いません（参拝者→氏子は{ujikoRule}／氏子→世話役は{sewayakuRuleText(emaThresholds)}／世話役→総代は総代の票{emaThresholds.sodaiPromote}枚）。数は下の「絵馬の枚数」で変えられます。切り替える前に、絵馬が十分にたまっているか下の「維持の注意」で確かめてください。</p></details>
       <details><summary>維持の注意：有効な絵馬が{emaThresholds.ujikoKeep}枚未満の氏子（{keepWarnings.length} 人）</summary>
         <p class="note">自動では降格しません。運営が手で判断するための一覧です（絵馬の少ない順）。</p>
         {keepWarnings.length
@@ -78,8 +78,8 @@ export function EvaluationPage({ session, data, filter, page, emaPromotion = fal
       {resetFlash === 'none' && <p class="flash warn" role="alert">元に戻せるリセットがありません。</p>}
       {resetFlash === 'confirm' && <p class="flash warn" role="alert">確認のため「リセット」と入力し、チェックを入れてから押してください。</p>}
       {resetFlash === 'need_ema' && <p class="flash warn" role="alert">先に上の「🎐 絵馬での昇格」を ON にしてください（ご縁を0にすると、従来のご縁での昇格が止まってしまうため）。</p>}
-      <p>新制度を始めるときに、<strong>全員のご縁（結び＝朱印）と ✨ 特別ご縁をいっせいに 0 に戻します</strong>。みんな同じところから結び直せます。<strong>役職は変えません</strong>（自動降格なし・今いる氏子は据え置き）。</p>
-      <p class="note">※「🎐 絵馬での昇格」が ON のときだけ押せます（ご縁を0にしても昇格が止まらないように）。デプロイでは勝手に消えません。押すのは一度、新制度を始める合図のときだけにしてください。</p>
+      <p><strong>全員のご縁と ✨ 特別ご縁を 0 に</strong>。役職は変えません。</p>
+      <details><summary>くわしく</summary><p class="note">新制度を始めるときに、みんな同じところから結び直せるようにします（自動降格なし・今いる氏子は据え置き）。③が ON のときだけ押せます（ご縁を0にしても昇格が止まらないように）。デプロイでは勝手に消えません。押すのは一度、新制度を始める合図のときだけにしてください。</p></details>
       {resetUndoable && <form method="post" action="/evaluation/goen-reset-undo">
         <input type="hidden" name="_csrf" value={session.csrfToken}/>
         <p role="status">直前のリセットは、まだ元に戻せます（結び {resetUndoable.remaining} 件・特別ご縁 {resetUndoable.specialRemaining} 件）。</p>
@@ -106,13 +106,13 @@ export function EvaluationPage({ session, data, filter, page, emaPromotion = fal
         <label><input type="checkbox" name="confirm" value="yes"/> 切り替えてよい</label>
         <button type="submit">{perkUjiko ? '参拝者から（今までどおり）に戻す' : 'カジノ・宿を氏子以上だけにする'}</button>
       </form>
-      <p class="note">ONにすると、カジノと宿（宿坊・宵宮・24時間の宿など部屋代のかかる部屋）は氏子以上の方だけになります（参拝者には「氏子になると使えます」と案内）。運営はそのままです。</p>
+      <details><summary>くわしく</summary><p class="note">ONにすると、カジノと宿（宿坊・宵宮・24時間の宿など部屋代のかかる部屋）は氏子以上の方だけになります（参拝者には「氏子になると使えます」と案内）。運営はそのままです。</p></details>
     </section>}
     {session.level === 'guji' && <section class="card">
       <h2>🎁 ご縁の節目特典（称号・ごほうび・解放）</h2>
       {goenPerksFlash === 'saved' && <p class="flash ok" role="status">ご縁の節目特典を保存しました。</p>}
       {goenPerksFlash === 'invalid' && <p class="flash warn" role="alert">書き方を確認してください（1行＝「ご縁 銭 ロールID（任意） 称号名（任意）」）。</p>}
-      <p>ご縁（出会った人の数）が節目に届いたら、銭や称号（飾りのロール）をあげます。「🎐 絵馬での昇格」が ON のときだけ効きます（1人・節目ごとに1回）。</p>
+      <p>ご縁が節目に届いたら、銭や称号をあげます（③が ON のとき・1人1回）。</p>
       <form method="post" action="/evaluation/goen-perks" class="goen-perks-form">
         <input type="hidden" name="_csrf" value={session.csrfToken}/>
         <label>節目（1行に1つ：<strong>ご縁 銭 [ロールID] [称号名]</strong>）
@@ -120,15 +120,15 @@ export function EvaluationPage({ session, data, filter, page, emaPromotion = fal
         </label>
         <button type="submit">ご縁の節目特典を保存</button>
       </form>
-      <p class="note">例：「25 500」＝ご縁25で500銭。「100 2000 123456789012345678 ご縁上手」＝ご縁100で2000銭＋そのロール（称号）を付ける。ロールIDと称号名は省けます。銭だけなら「ご縁 銭」。ロールは宮司がロールのIDを入れたときだけ付きます。</p>
-      <p class="note">🔓 <strong>解放</strong>にも使えます：そのロールに「限定チャンネルを見る」などの権限を付けておくと、節目に届いた人にそのチャンネルや機能が開きます（例：「200 0 ロールID 縁結びの間」＝ご縁200で限定チャンネル『縁結びの間』が開く。銭は 0 でもかまいません）。称号名のところが、届いたときのお知らせに出る名前になります。</p>
+      <details><summary>書き方の例</summary><p class="note">例：「25 500」＝ご縁25で500銭。「100 2000 123456789012345678 ご縁上手」＝ご縁100で2000銭＋そのロール（称号）を付ける。ロールIDと称号名は省けます。銭だけなら「ご縁 銭」。ロールは宮司がロールのIDを入れたときだけ付きます。</p>
+      <p class="note">🔓 <strong>解放</strong>にも使えます：そのロールに「限定チャンネルを見る」などの権限を付けておくと、節目に届いた人にそのチャンネルや機能が開きます（例：「200 0 ロールID 縁結びの間」＝ご縁200で限定チャンネル『縁結びの間』が開く。銭は 0 でもかまいません）。称号名のところが、届いたときのお知らせに出る名前になります。</p></details>
     </section>}
     {session.level === 'guji' && <section class="card">
       <h2 id="ns-numbers">🔢 昇格の数（絵馬・選挙）</h2>
       {emaThresholdsFlash === 'saved' && <p class="flash ok" role="status">絵馬の枚数を保存しました。</p>}
       {emaThresholdsFlash === 'invalid' && <p class="flash warn" role="alert">決められた範囲の数で入れてください（割合は1〜100%、時間は1〜168時間、最低は1〜100枚、招待の補いは0〜20、維持は0〜100、世話役・総代は1〜100）。</p>}
-      <p>昇格・維持に要る絵馬の枚数と、世話役の選挙の決まりです。③が ON のときに効きます。変えると次の見回り（1分ほど）から新しい数で判定します。</p>
-      {ujikoWeek && <p class="ujiko-week"><strong>今週（{ujikoWeek.week} からの週）の参拝者→氏子：絵馬 {ujikoWeek.required} 枚</strong>（前の7日間に縁側に{Math.round(emaThresholds.ujikoActiveMinutes / 60 * 10) / 10}時間以上いた氏子以上 {ujikoWeek.active} 人 × {emaThresholds.ujikoPercent}%・切り上げ・最低{emaThresholds.ujikoMin}枚）。この週にお参り期間が始まった人は、ずっとこの数です。</p>}
+      <p class="note">③が ON のときに効きます。変えると1分ほどで反映。</p>
+      {ujikoWeek && <p class="ujiko-week">🎐 今週の参拝者→氏子：<strong>絵馬 {ujikoWeek.required} 枚</strong> <small>（縁側にいた氏子以上 {ujikoWeek.active} 人 × {emaThresholds.ujikoPercent}%）</small></p>}
       <form method="post" action="/evaluation/ema-thresholds" class="ema-thresholds-form">
         <input type="hidden" name="_csrf" value={session.csrfToken}/>
         <fieldset><legend>🔰 参拝者 → 🍃 氏子（絵馬）</legend>
@@ -153,11 +153,11 @@ export function EvaluationPage({ session, data, filter, page, emaPromotion = fal
         </fieldset>
         <button type="submit">昇格の数を保存</button>
       </form>
-      <p class="note">票の種類は贈る人と相手の役職で自動で決まります（参拝者・氏子へは氏子以上が「氏子の票」、世話役へは総代＋運営が「総代の票」）。総代の票は失効しません（氏子の票だけ30日で失効）。氏子→世話役は絵馬ではなく選挙です。自動降格はしません。</p>
+      <details><summary>くわしく</summary><p class="note">今週の数は、前の7日間に縁側に{Math.round(emaThresholds.ujikoActiveMinutes / 60 * 10) / 10}時間以上いた氏子以上の人数 × {emaThresholds.ujikoPercent}%（切り上げ・最低{emaThresholds.ujikoMin}枚）。その週にお参り期間が始まった人は、ずっとその数です。票の種類は贈る人と相手の役職で自動で決まります（参拝者・氏子へは氏子以上が「氏子の票」、世話役へは総代＋運営が「総代の票」）。総代の票は失効しません（氏子の票だけ30日で失効）。氏子→世話役は絵馬ではなく選挙です。自動降格はしません。</p></details>
     </section>}
     {session.level === 'guji' && sewayaku && <section class="card" id="ns-election">
       <h2>🗳 世話役の選挙（候補ごと・匿名）</h2>
-      <p>{sewayakuRuleText(emaThresholds)}。③が ON のときだけ動きます。だれが投票したかは、どこにも出しません。</p>
+      <details><summary>選挙の決まり</summary><p class="note">{sewayakuRuleText(emaThresholds)}。③が ON のときだけ動きます。だれが投票したかは、どこにも出しません。</p></details>
       {sewayaku.active.length
         ? <div class="table-wrap"><table class="compact">
             <thead><tr><th>候補</th><th>期間</th><th>ようす</th><th class="num">票</th><th class="num">投票できる人</th><th class="num">昇格に要る票</th></tr></thead>

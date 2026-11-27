@@ -138,7 +138,7 @@ const EMA_HOURS = Math.round((EMA_MINUTES_TOGETHER / 60) * 10) / 10;
 export function emaGiveReply(receiverId: string, result: GiveEmaResult): Reply {
   if (result.ok) {
     const verb = result.created ? '贈りました' : '贈り直しました（ひとことと日付を新しくしました）';
-    return { content: `🎐 ${mention(receiverId)} さまに絵馬（${EMA_TIER_LABEL[result.tier]}）を${verb}。\n-# 贈った人の名前は出ません（匿名）・${mention(receiverId)} さまの絵馬は いま ${result.count} 枚` };
+    return { content: `🎐 ${mention(receiverId)} さまに絵馬を${verb}（🔒匿名）\n-# ${EMA_TIER_LABEL[result.tier]}・いま ${result.count} 枚` };
   }
   const reasons: Record<Exclude<GiveEmaResult, { ok: true }>['reason'], string> = {
     self: 'ご自身には絵馬を贈れません。',
@@ -150,9 +150,9 @@ export function emaGiveReply(receiverId: string, result: GiveEmaResult): Reply {
     giver_not_sodai: '世話役の方へ絵馬（総代の票）を贈れるのは、総代か運営だけです。',
     receiver_rank: '絵馬を贈れる相手は、参拝者・氏子・世話役の方だけです。',
     not_together: [
-      '🎐 まだ絵馬を贈れません。同じ通話で過ごした時間が足りません。',
-      `${check((result.days ?? 0) >= EMA_DAYS_TOGETHER)} 違う日に ${EMA_DAYS_TOGETHER} 日以上（いま ${result.days ?? 0} 日）`,
-      `${check((result.minutes ?? 0) >= EMA_MINUTES_TOGETHER)} 合計 ${EMA_HOURS} 時間以上（いま ${Math.floor((result.minutes ?? 0) / 60)} 時間 ${(result.minutes ?? 0) % 60} 分）`,
+      '🎐 まだ贈れません（同じ通話で過ごした時間）',
+      `${check((result.days ?? 0) >= EMA_DAYS_TOGETHER)} ${progressBar(result.days ?? 0, EMA_DAYS_TOGETHER, 5)} ${result.days ?? 0} / ${EMA_DAYS_TOGETHER} 日`,
+      `${check((result.minutes ?? 0) >= EMA_MINUTES_TOGETHER)} ${progressBar(result.minutes ?? 0, EMA_MINUTES_TOGETHER, 5)} ${Math.floor((result.minutes ?? 0) / 60)}h${(result.minutes ?? 0) % 60}m / ${EMA_HOURS}h`,
     ].join('\n'),
   };
   return { content: reasons[result.reason] };
@@ -186,7 +186,7 @@ export function progressBar(have: number, need: number, slots = 10): string {
 const DAY_MS = 86_400_000;
 const check = (ok: boolean) => (ok ? '✅' : '⬜');
 
-/** プロフィールの「⬆️ 次の役職」：参拝者→氏子（絵馬）／氏子→世話役（選挙）／世話役→総代（絵馬） */
+/** プロフィールの「⬆️ 次の役職」：参拝者→氏子（絵馬）／氏子→世話役（選挙）／世話役→総代（絵馬）。言葉は少なく、バーとチェックで見せる */
 function nextRankLines(
   ranks: readonly Rank[],
   ema: { count: number; step?: { toName: string; need: number; have?: number; inPeriod?: boolean }; sewayaku?: SewayakuCardInfo; ujiko?: UjikoProgress; th?: EmaThresholdCounts },
@@ -196,38 +196,30 @@ function nextRankLines(
   if (ema.ujiko && th) {
     const u = ema.ujiko;
     const left = Math.max(0, u.required - u.total);
-    const head = left
-      ? `**${rankName(ranks, 'ujiko')}まで あと ${left} 枚**`
-      : `**${rankName(ranks, 'ujiko')}まで：そろいました ✨**`;
     const daysLeft = u.inOmairi && u.endsAt ? Math.max(0, Math.ceil((u.endsAt.getTime() - u.until.getTime()) / DAY_MS)) : undefined;
     return [
-      head,
-      `${progressBar(u.total, u.required)}　${u.total} / ${u.required} 枚`,
-      u.inOmairi && u.endsAt
-        ? `・お参り期間：${jDay(u.since)}〜${jDay(u.endsAt)}${daysLeft !== undefined ? `（あと ${daysLeft} 日）` : ''}`
-        : '・お参り期間がないので、直近14日にもらった絵馬で数えています',
-      `・内訳：もらった絵馬 ${u.votes} 枚 ＋ 招待の補い ${u.inviteUsed} / ${th.inviteSubstituteMax}`,
-      `-# 要る数は毎週きまります（前の7日間に縁側に${hoursOf(th.ujikoActiveMinutes)}時間以上いた氏子以上 ${u.active} 人の${rate(th.ujikoPercent)}・最低${th.ujikoMin}枚）。招待した人が参拝者になると補いが1つふえ、お参り期間も1日のびます`,
+      left ? `${rankName(ranks, 'ujiko')}まで あと **${left}** 枚` : `${rankName(ranks, 'ujiko')}まで そろいました ✨`,
+      `${progressBar(u.total, u.required)}　**${u.total}** / ${u.required}`,
+      `${u.inOmairi && u.endsAt ? `📅 ${jDay(u.endsAt)} まで（あと ${daysLeft} 日）` : '📅 直近14日'}　🎐 もらった絵馬 ${u.votes} 枚 ＋ 🤝 招待 ${u.inviteUsed}`,
     ];
   }
   // 氏子 → 世話役（選挙）
   if (ema.sewayaku && th) {
     const info = ema.sewayaku;
-    const head = `**${rankName(ranks, 'sewayaku')}まで：選挙**`;
-    const rule = `-# 投票できる人の${rate(th.sewayakuVotePercent)}を超える票が集まると世話役になります（投票は #世話役選挙 で）`;
+    const head = `${rankName(ranks, 'sewayaku')}まで：🗳 選挙`;
     const e = info.election;
-    if (e?.status === 'open') return [head, `🗳 **選挙中**：${lastDay(e.endsAt)} 23:59 まで`, rule];
-    if (e?.status === 'scheduled') return [head, `🗓 選挙の日：${jDay(e.startsAt)}〜${lastDay(e.endsAt)}`, rule];
-    if (e?.status === 'closing') return [head, '・選挙を締めています'];
+    if (e?.status === 'open') return [head, `🗳 **選挙中**　〜${lastDay(e.endsAt)} 23:59`];
+    if (e?.status === 'scheduled') return [head, `📅 選挙の日：${jDay(e.startsAt)}〜${lastDay(e.endsAt)}`];
+    if (e?.status === 'closing') return [head, '⏳ 締めています'];
     const c = info.status;
     if (c.reason === 'not_started') return [head, '・新制度が始まってから数えます'];
     if (c.reason === 'rank' || c.reason === 'not_member') return [head, '・氏子になってから数えます'];
     const keptOk = !(c.keptAt && c.keptAt > new Date());
     const lines = [head];
-    lines.push(`${check(keptOk)} 氏子を${th.sewayakuCandidateMonths}か月つづける${keptOk ? '' : `（${jDay(c.keptAt!)} にそろう）`}`);
-    lines.push(`${check(c.minutes >= c.need)} 氏子になってから縁側 ${hoursOf(c.need)} 時間　${progressBar(c.minutes, c.need)} ${hoursOf(c.minutes)} / ${hoursOf(c.need)}`);
-    if (c.retry) lines.push(`${check(c.retry.minutes >= c.retry.need)} 前の選挙のあとの縁側 ${hoursOf(c.retry.need)} 時間　${progressBar(c.retry.minutes, c.retry.need)} ${hoursOf(c.retry.minutes)} / ${hoursOf(c.retry.need)}`);
-    lines.push(c.ok ? '✨ 条件がそろいました。まもなく選挙の日（金・土・日）が決まります' : '-# そろうと、その週の金・土・日（金曜より後なら次の週）に選挙があります');
+    lines.push(`${check(keptOk)} 氏子 ${th.sewayakuCandidateMonths}か月${keptOk ? '' : `　${jDay(c.keptAt!)}〜`}`);
+    lines.push(`${check(c.minutes >= c.need)} 縁側　${progressBar(c.minutes, c.need)} ${hoursOf(c.minutes)} / ${hoursOf(c.need)}h`);
+    if (c.retry) lines.push(`${check(c.retry.minutes >= c.retry.need)} 再挑戦の縁側　${progressBar(c.retry.minutes, c.retry.need)} ${hoursOf(c.retry.minutes)} / ${hoursOf(c.retry.need)}h`);
+    if (c.ok) lines.push('✨ そろいました（まもなく選挙）');
     return lines;
   }
   // 世話役 → 総代（総代の票）
@@ -235,21 +227,16 @@ function nextRankLines(
     const have = ema.step.have ?? ema.count;
     const left = Math.max(0, ema.step.need - have);
     const to = rankName(ranks, 'sodai');
-    return [
-      left ? `**${to}まで あと ${left} 枚**` : `**${to}まで：そろいました ✨**`,
-      `${progressBar(have, ema.step.need)}　${have} / ${ema.step.need} 枚`,
-      '-# 総代の票（総代と運営が贈れます・失効しません）',
-    ];
+    return [left ? `${to}まで あと **${left}** 枚` : `${to}まで そろいました ✨`, `${progressBar(have, ema.step.need)}　**${have}** / ${ema.step.need}`];
   }
   return [];
 }
 
 /** 🗳 世話役の選挙の投票権（直近30日の縁側） */
 function voterLine(v: VoterStatus, th: EmaThresholdCounts): string {
-  const need = hoursOf(th.sewayakuVoterMinutes);
   return v.ok
-    ? `✅ 投票できます（直近30日の縁側 ${hoursOf(v.minutes)} 時間）\n-# 選挙がはじまる金曜0時の時点で決まります`
-    : `⬜ 直近30日の縁側が ${need} 時間を超えると投票できます\n${progressBar(v.minutes, th.sewayakuVoterMinutes)} ${hoursOf(v.minutes)} / ${need} 時間\n-# 選挙がはじまる金曜0時の時点で決まります`;
+    ? `✅ 投票できます（縁側 ${hoursOf(v.minutes)}h／30日）`
+    : `⬜ ${progressBar(v.minutes, th.sewayakuVoterMinutes)} ${hoursOf(v.minutes)} / ${hoursOf(th.sewayakuVoterMinutes)}h（直近30日の縁側）`;
 }
 
 /** 世話役になるのに要る票（投票できる人の◯%を「超える」いちばん少ない数） */
@@ -263,14 +250,13 @@ export function sewayakuElectionPost(candidateId: string, endsAt: Date, voters: 
   const embed = new EmbedBuilder()
     .setColor(SAKURA)
     .setTitle('🗳 世話役の選挙')
-    .setDescription(`${mention(candidateId)} さまを、世話役に推しますか？\n推したいときは、下の「🗳 お世話役になってほしい」を押してください。`)
+    .setDescription(`${mention(candidateId)} さまを、世話役に推しますか？`)
     .addFields(
       { name: '⏰ 締め切り', value: `${lastDay(endsAt)} 23:59`, inline: true },
       { name: '👥 投票できる人', value: `${voters} 人`, inline: true },
-      { name: '🌸 世話役になるには', value: `${need} 票以上（${rate(th.sewayakuVotePercent)}を超える）`, inline: true },
-      { name: '投票できる人の条件', value: `選挙がはじまった金曜0時に、直近30日の縁側が ${hoursOf(th.sewayakuVoterMinutes)} 時間を超えていた氏子・世話役・総代の方` },
+      { name: '🌸 当選', value: `${need} 票から`, inline: true },
     )
-    .setFooter({ text: '投票は匿名です・もう一度押すと取り消せます・咲楽ノ宮 世話役選挙' });
+    .setFooter({ text: `🔒 匿名・もう一度押すと取り消し・投票できるのは直近30日の縁側 ${hoursOf(th.sewayakuVoterMinutes)}h 超えの氏子以上` });
   return { embeds: [embed.toJSON()], components: [row(sewayakuVoteButton(candidateId))], allowedMentions: { parse: [], users: [] } };
 }
 
@@ -278,13 +264,8 @@ export function sewayakuElectionPost(candidateId: string, endsAt: Date, voters: 
 export function sewayakuElectionResultPost(candidateId: string, passed: boolean, votes: number, voters: number): { embeds: APIEmbed[]; components: [] } {
   const embed = new EmbedBuilder()
     .setColor(passed ? SAKURA : GRAY)
-    .setTitle(passed ? '🌸 世話役の選挙：世話役になられました' : '🗳 世話役の選挙：締め切りました')
-    .setDescription(
-      passed
-        ? `${mention(candidateId)} さまは、${voters} 人中 **${votes} 票**で **世話役** になられました。おめでとうございます！`
-        : `${mention(candidateId)} さまの選挙を締め切りました。今回は世話役にはなりませんでした。\n-# また縁側で過ごすと、もう一度選挙になります。`,
-    )
-    .setFooter({ text: '咲楽ノ宮 世話役選挙' });
+    .setTitle(passed ? '🌸 世話役になられました' : '🗳 世話役の選挙　締め切り')
+    .setDescription(passed ? `${mention(candidateId)} さま　おめでとうございます！\n🗳 **${votes}** / ${voters} 票` : `${mention(candidateId)} さま　今回は見送りです`);
   return { embeds: [embed.toJSON()], components: [] };
 }
 
@@ -293,18 +274,17 @@ export function sewayakuVoteReply(candidateId: string, result: VoteResult, th: {
   if (result.ok) {
     return {
       content: result.voted
-        ? `🗳 ${mention(candidateId)} さまに「お世話役になってほしい」と投票しました（匿名）。\n-# 締め切り ${lastDay(result.endsAt)} 23:59・投票できる人の${rate(th.sewayakuVotePercent)}を超えると世話役になります・もう一度押すと取り消せます`
-        : `🗳 ${mention(candidateId)} さまへの投票を取り消しました。\n-# 締め切りまでなら、もう一度押すと投票できます`,
+        ? `🗳 ${mention(candidateId)} さまに投票しました（匿名）\n-# 〜${lastDay(result.endsAt)} 23:59・もう一度押すと取り消し`
+        : `↩️ ${mention(candidateId)} さまへの投票を取り消しました`,
     };
   }
   if (result.reason === 'self') return { content: 'ご自身には投票できません。' };
   if (result.reason === 'no_election') {
-    return { content: result.scheduled ? `🗓 ${mention(candidateId)} さまの世話役の選挙は ${jDay(result.scheduled.startsAt)}〜${lastDay(result.scheduled.endsAt)} です。その間に投票できます。` : `${mention(candidateId)} さまは、いま世話役の選挙中ではありません。` };
+    return { content: result.scheduled ? `📅 ${mention(candidateId)} さまの選挙は ${jDay(result.scheduled.startsAt)}〜${lastDay(result.scheduled.endsAt)} です` : `${mention(candidateId)} さまは、いま選挙中ではありません。` };
   }
   const v = result.voter;
-  const cond = `-# 投票できるのは、選挙がはじまったとき（金曜0時）に直近30日の縁側が ${hoursOf(th.sewayakuVoterMinutes)} 時間を超えていた氏子・世話役・総代の方です`;
-  if (v?.reason === 'rank') return { content: `この選挙では投票できません。\n${cond}` };
-  return { content: `この選挙では投票できません（金曜0時の時点の縁側 ${hoursOf(v?.minutes ?? 0)} 時間）。\n${cond}` };
+  const cond = `-# 投票できるのは、金曜0時に直近30日の縁側が ${hoursOf(th.sewayakuVoterMinutes)}h を超えていた氏子以上の方`;
+  return { content: `⬜ この選挙では投票できません${v?.reason === 'rank' ? '' : `（縁側 ${hoursOf(v?.minutes ?? 0)}h）`}\n${cond}` };
 }
 
 /** 🗳 /世話役の投票：投票中・これからの選挙と、自分が投票できるか（本人だけに表示） */
@@ -314,34 +294,20 @@ export function sewayakuInfoReply(
   voter: VoterStatus,
   th: { sewayakuVotePercent: number; sewayakuVoterMinutes: number; sewayakuCandidateMinutes: number; sewayakuCandidateMonths: number; sewayakuRetryMinutes: number },
 ): Reply {
-  const need = hoursOf(th.sewayakuVoterMinutes);
-  const right = voter.ok
-    ? `✅ 投票できます（直近30日の縁側 ${hoursOf(voter.minutes)} 時間）`
-    : voter.reason === 'time'
-      ? `⬜ 直近30日の縁側が ${need} 時間を超えると投票できます\n${progressBar(voter.minutes, th.sewayakuVoterMinutes)} ${hoursOf(voter.minutes)} / ${need} 時間`
-      : '投票できるのは、氏子・世話役・総代の方です。';
+  const right = voter.ok || voter.reason === 'time' ? voterLine(voter, th as EmaThresholdCounts) : '⬜ 投票できるのは氏子・世話役・総代の方です';
   const openLines = open.length
-    ? open.slice(0, 20).map((e) => `${e.voted ? '✅' : e.canVote ? '🗳' : '・'} ${mention(e.candidateId)} さま（${lastDay(e.endsAt)} 23:59 まで）${e.voted ? ' … 投票ずみ' : e.canVote ? ' … 投票できます' : ' … この選挙では投票できません'}`).join('\n')
-    : 'いま投票中の選挙はありません。';
-  const nextLines = scheduled.length ? scheduled.slice(0, 20).map((e) => `🗓 ${mention(e.candidateId)} さま（${jDay(e.startsAt)}〜${lastDay(e.endsAt)}）`).join('\n') : 'ありません。';
+    ? open.slice(0, 20).map((e) => `${e.voted ? '✅' : e.canVote ? '🗳' : '・'} ${mention(e.candidateId)} さま　〜${lastDay(e.endsAt)}`).join('\n')
+    : 'なし';
+  const nextLines = scheduled.length ? scheduled.slice(0, 20).map((e) => `📅 ${mention(e.candidateId)} さま　${jDay(e.startsAt)}〜`).join('\n') : 'なし';
   const embed = new EmbedBuilder()
     .setColor(SAKURA)
     .setTitle('🗳 世話役の選挙')
-    .setDescription('投票は #世話役選挙 の、その方の投稿の「🗳 お世話役になってほしい」から（匿名・もう一度押すと取り消し）。')
     .addFields(
-      { name: 'あなたの投票権', value: `${right}\n-# 選挙がはじまる金曜0時の時点で決まります` },
-      { name: '投票中の選挙', value: openLines.slice(0, 1024) },
-      { name: 'これからの選挙', value: nextLines.slice(0, 1024) },
-      {
-        name: '選挙のしくみ',
-        value: [
-          `・候補：氏子を ${th.sewayakuCandidateMonths} か月つづけ、氏子になってから縁側に ${hoursOf(th.sewayakuCandidateMinutes)} 時間いた氏子`,
-          '・日にち：条件がそろった週の金・土・日（金曜より後なら次の週）',
-          `・決まり方：投票できる人の${rate(th.sewayakuVotePercent)}を超える票で世話役`,
-          `・落ちたら：縁側 ${hoursOf(th.sewayakuRetryMinutes)} 時間で、もう一度候補に`,
-        ].join('\n'),
-      },
-    );
+      { name: 'あなたの投票権', value: right },
+      { name: '投票中', value: openLines.slice(0, 1024), inline: true },
+      { name: 'これから', value: nextLines.slice(0, 1024), inline: true },
+    )
+    .setFooter({ text: `投票は #世話役選挙 で🔒匿名 ・ 候補＝氏子${th.sewayakuCandidateMonths}か月＋縁側${hoursOf(th.sewayakuCandidateMinutes)}h ・ 当選＝${rate(th.sewayakuVotePercent)}超え ・ 再挑戦＝縁側${hoursOf(th.sewayakuRetryMinutes)}h` });
   return { embeds: [embed.toJSON()] };
 }
 
@@ -413,6 +379,14 @@ export function goshuinchoReply(
     ...(profile.titles?.length ? [{ name: '称号', value: profile.titles.join('・'), inline: true }] : []),
     ...(profile.joinedAt ? [{ name: '参拝した日', value: jstDay(profile.joinedAt), inline: true }] : []),
   ];
+  // 新制度のプロフィールでは、性別・DM・フレンド・称号・参拝した日を1行に（欄をへらして見やすく）
+  const aboutLine = [
+    profile.gender,
+    profile.dm ? `DM ${profile.dm}` : undefined,
+    profile.friend ? `フレンド ${profile.friend}` : undefined,
+    profile.titles?.length ? `🏷 ${profile.titles.join('・')}` : undefined,
+    profile.joinedAt ? `${jstDay(profile.joinedAt)}から` : undefined,
+  ].filter(Boolean).join(' ・ ');
   const introField = {
     name: '自己紹介',
     value: profile.intro ? `${profile.intro.excerpt ? `${profile.intro.excerpt}\n` : ''}[📝 自己紹介を見る](${profile.intro.url})` : 'まだありません',
@@ -424,7 +398,7 @@ export function goshuinchoReply(
   ];
   // 🧵 結びのコレクションは結びの機能なので、④（新制度のご縁の時代）が始まるまで出さない
   const collectionField = profile.self && collection && isMusubiMode()
-    ? { name: '🧵 結びのコレクション', value: `${collection.met} / ${collection.total} 人${collection.met < collection.total ? '（下の「まだ結んでいない人」から結べます）' : '（コンプリート！）'}`, inline: true }
+    ? { name: '🧵 結びのコレクション', value: `${progressBar(collection.met, collection.total)}　**${collection.met}** / ${collection.total} 人${collection.met >= collection.total ? '　🎉 コンプリート！' : ''}` }
     : undefined;
   const embed = new EmbedBuilder().setColor(SHU);
   if (owner.avatarUrl) embed.setThumbnail(owner.avatarUrl);
@@ -453,11 +427,11 @@ export function goshuinchoReply(
   // ── /ご縁帳：ご縁のことだけ ──
   if (mode === 'goen') {
     const p = view.perkNext;
-    const perk = p ? `\n🎁 次の節目：ご縁 ${p.goen}（${p.label}）まで あと **${Math.max(0, p.goen - data.goen)}**\n${progressBar(data.goen, p.goen)} ${data.goen} / ${p.goen}` : '';
+    const perk = p ? `\n🎁 ${p.label}まで あと **${Math.max(0, p.goen - data.goen)}**\n${progressBar(data.goen, p.goen)}　${data.goen} / ${p.goen}` : '';
     embed
       .setTitle(w(`📕 ${owner.displayName} さまの御朱印帳`, `📕 ${owner.displayName} さまのご縁帳`))
       .setDescription(`🧵 ご縁 **${data.goen}**${perk}`)
-      .setFooter({ text: 'ご縁は結ぶとたまり、節目でごほうびがもらえます（役職には使いません）' });
+      .setFooter({ text: '🧵 結ぶとたまる ・ 🎁 節目でごほうび ・ 役職には使いません' });
     embed.addFields(...goenFields);
     if (collectionField) embed.addFields(collectionField);
     const buttons = [
@@ -470,8 +444,7 @@ export function goshuinchoReply(
   // ── プロフィール：まとめ ──
   embed
     .setTitle(`📕 ${owner.displayName} さまのプロフィール`)
-    .setDescription(`**${rankLabel(rank)}**\n🧵 ご縁 **${data.goen}**${emaRelevant && ema ? `　🎐 絵馬 **${ema.count}** 枚` : ''}`);
-  if (about.length) embed.addFields(about);
+    .setDescription(`**${rankLabel(rank)}**　🧵 ご縁 **${data.goen}**${emaRelevant && ema ? `　🎐 絵馬 **${ema.count}** 枚` : ''}${aboutLine ? `\n-# ${aboutLine}` : ''}`);
   embed.addFields(introField);
   if (ema) {
     const nextLines = nextRankLines(ranks, ema);
@@ -481,7 +454,6 @@ export function goshuinchoReply(
   if (coins) embed.addFields({ name: coins.name, value: `${coins.emoji} ${coins.balance}`, inline: true });
   if (profile.tickets) embed.addFields({ name: '🎟 券', value: profile.tickets });
   if (profile.bannerUrl) embed.setImage(profile.bannerUrl);
-  embed.setFooter({ text: `📕 ${w('御朱印帳', 'ご縁帳')}＝ご縁のこと ・ 🎐 絵馬＝絵馬とひとこと（下のボタンから）` });
   const buttons = [
     ...(profile.self ? [] : [giveButton(owner.id)]),
     ...(profile.self || !emaRelevant ? [] : [emaGiveButton(owner.id)]),
@@ -503,19 +475,19 @@ function emaCardReply(
   const embed = new EmbedBuilder().setColor(SHU).setTitle(`🎐 ${owner.displayName} さまの絵馬`);
   if (owner.avatarUrl) embed.setThumbnail(owner.avatarUrl);
   if (!emaRelevant || !ema) {
-    embed.setDescription(`**${rankLabel(rank)}**\n絵馬（評価の票）は、参拝者・氏子・世話役の方に贈られます。`);
+    embed.setDescription(`**${rankLabel(rank)}**\n-# 絵馬は参拝者・氏子・世話役の方に贈られます`);
     return { embeds: [embed.toJSON()] };
   }
-  embed.setDescription(`**${rankLabel(rank)}**\n🎐 頂いた絵馬 **${ema.count}** 枚${ema.tierLabel ? `（${ema.tierLabel}）` : ''}`);
-  embed.addFields({ name: '💬 頂いたひとこと（匿名）', value: emaField(ema) });
+  embed.setDescription(`**${rankLabel(rank)}**　🎐 頂いた絵馬 **${ema.count}** 枚${ema.tierLabel ? `（${ema.tierLabel}）` : ''}`);
+  embed.addFields({ name: '💬 ひとこと', value: emaField(ema) });
   if (ema.promoteMode) {
     if (rank?.key === 'ujiko') {
       const keep = ema.th?.ujikoKeep ?? 0;
       embed.addFields({
-        name: '🍃 氏子の票と役職',
+        name: '🍃 氏子でいる目安',
         value: [
-          ...(keep ? [ema.count >= keep ? `✅ 氏子でいるための目安 ${keep} 枚：いま ${ema.count} 枚` : `⬜ 氏子でいるための目安 ${keep} 枚　${progressBar(ema.count, keep)} ${ema.count} / ${keep}`] : []),
-          '世話役は絵馬ではなく **選挙** で決まります（#世話役選挙・/世話役の投票）。',
+          ...(keep ? [`${check(ema.count >= keep)} ${progressBar(ema.count, keep)}　**${ema.count}** / ${keep}`] : []),
+          '-# 世話役は 🗳 選挙で決まります（/世話役の投票）',
         ].join('\n'),
       });
     } else {
@@ -523,7 +495,7 @@ function emaCardReply(
       if (lines.length) embed.addFields({ name: '⬆️ 絵馬で次の役職へ', value: lines.join('\n').slice(0, 1024) });
     }
   }
-  embed.setFooter({ text: '絵馬は匿名です（贈った人の名前は出ません）・氏子の票は30日で入れかわります' });
+  embed.setFooter({ text: '🔒 匿名 ・ 氏子の票は30日で入れかわります' });
   const buttons = profile.self ? [] : [emaGiveButton(owner.id)];
   return { embeds: [embed.toJSON()], ...(buttons.length ? { components: [row(...buttons)] } : {}) };
 }
@@ -532,7 +504,7 @@ function emaCardReply(
 function emaField(ema: { count: number; messages: { message: string; createdAt: Date }[] }): string {
   if (!ema.count) return 'まだありません';
   const withMsg = ema.messages.filter((m) => m.message.trim());
-  if (!withMsg.length) return 'ひとことは、まだありません';
+  if (!withMsg.length) return 'まだありません';
   const lines: string[] = [];
   let shown = 0;
   for (const m of withMsg) {
@@ -541,7 +513,7 @@ function emaField(ema: { count: number; messages: { message: string; createdAt: 
     lines.push(text);
     shown++;
   }
-  if (withMsg.length > shown) lines.push(`-# ほか ${withMsg.length - shown} 件のひとこと`);
+  if (withMsg.length > shown) lines.push(`-# ほか ${withMsg.length - shown} 件`);
   return lines.join('\n');
 }
 
