@@ -966,6 +966,35 @@ describe('ShuinApp：絵馬を贈る（新制度②）', () => {
     const press = interaction('button', viewer, { customId: `shuin:unmet:${GU}` });
     await app.onInteraction(press.i as never);
     expect(JSON.stringify(press.replies)).toContain(SA);
+    // えらんで結ぶメニューは出さない（遠くからは結べない）
+    expect(JSON.stringify(press.replies)).not.toContain('shuin:pickone');
+    expect(JSON.stringify(press.replies)).toContain('いま同じ縁側の通話にいるとき');
+    // 🧵 遠くからは結べない：同じ縁側の通話にいないと断る
+    const { MUSUBI_NOT_HERE } = await import('../src/discord/app.js');
+    const target = members.get(SA)!;
+    const far = interaction('button', viewer, { customId: `shuin:give:${SA}` });
+    await app.onInteraction(far.i as never);
+    expect(JSON.stringify(far.replies)).toContain(MUSUBI_NOT_HERE);
+    // 自分だけ縁側にいる・相手が別の通話 → まだ断る
+    Object.assign(viewer, { voice: { channel: { id: 'vc1', name: '縁側１' } } });
+    Object.assign(target, { voice: { channelId: 'vc2' } });
+    const other = interaction('button', viewer, { customId: `shuin:give:${SA}` });
+    await app.onInteraction(other.i as never);
+    expect(JSON.stringify(other.replies)).toContain(MUSUBI_NOT_HERE);
+    // 縁側ではない通話でいっしょ → 断る
+    Object.assign(viewer, { voice: { channel: { id: 'vc3', name: '宿坊' } } });
+    Object.assign(target, { voice: { channelId: 'vc3' } });
+    const inn = interaction('button', viewer, { customId: `shuin:give:${SA}` });
+    await app.onInteraction(inn.i as never);
+    expect(JSON.stringify(inn.replies)).toContain(MUSUBI_NOT_HERE);
+    // 同じ縁側にいる → 結べる
+    Object.assign(viewer, { voice: { channel: { id: 'vc1', name: '縁側１' } } });
+    Object.assign(target, { voice: { channelId: 'vc1' } });
+    const near = interaction('button', viewer, { customId: `shuin:give:${SA}` });
+    await app.onInteraction(near.i as never);
+    expect(JSON.stringify(near.replies)).not.toContain(MUSUBI_NOT_HERE);
+    expect((await db.select().from(shuin)).some((r) => r.giverId === GU && r.receiverId === SA && !r.revokedAt)).toBe(true);
+    Object.assign(viewer, { voice: {} }); Object.assign(target, { voice: {} });
     setMusubiMode(false);
   });
 

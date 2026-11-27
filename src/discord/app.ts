@@ -98,6 +98,8 @@ const NO_MENTIONS = { parse: [] as const };
 type Repliable = ChatInputCommandInteraction<'cached'> | UserContextMenuCommandInteraction<'cached'> | ButtonInteraction<'cached'> | StringSelectMenuInteraction<'cached'>;
 
 /** 「🌸 朱印を押す」ボタン（#絵馬 のひな形など）: そのチャンネルに投稿している人から選ぶ欄・ページ送り */
+/** 🧵 遠くからは結べない（新制度）ときの案内 */
+export const MUSUBI_NOT_HERE = '🧵 結べるのは、いま同じ縁側の通話にいる人とだけです。縁側でいっしょになったときに結んでください。';
 const SHUIN_PICK_ONE_ID = 'shuin:pickone';
 const SHUIN_PICK_PAGE_PREFIX = 'shuin:pickpage:';
 /** 投稿した人を探すときに読む最近のメッセージ（100 件 × この回数） */
@@ -500,6 +502,14 @@ export class ShuinApp {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const receiver = await this.fetchMember(interaction, receiverId);
 
+    // 🧵 新制度の結びは、いま同じ縁側の通話にいる相手とだけ（遠くからは結べない。本人の決定 2026-11-28）
+    if (isMusubiMode() && receiverId !== interaction.user.id && receiver && !receiver.user.bot) {
+      const vc = interaction.member.voice?.channel;
+      if (!vc || !isEngawaName(vc.name) || receiver.voice?.channelId !== vc.id) {
+        return void (await this.reply(interaction, { content: MUSUBI_NOT_HERE }));
+      }
+    }
+
     // 同じ相手への処理は 1 つずつ（昇格の二重発表を防ぐ）
     const outcome = await this.lock.run(receiverId, async () => {
       const giver = toInfo(interaction.member);
@@ -710,13 +720,11 @@ export class ShuinApp {
       await interaction.editReply({ content: `🧵 縁側でいっしょになったみなさんと結びました（${met} / ${total} 人・コンプリート！）。`, components: [] });
       return;
     }
-    const menu = new StringSelectMenuBuilder()
-      .setCustomId(SHUIN_PICK_ONE_ID)
-      .setPlaceholder('結ぶ相手をえらぶ')
-      .addOptions(unmet.map((x) => ({ label: x.name.slice(0, 100) || x.id, value: x.id })));
+    // 遠くからは結べないので、えらんで結ぶメニューは出さない。名前だけ見せる
     await interaction.editReply({
-      content: `🧵 縁側でいっしょになったのに、まだ結んでいない人（いま ${met} / ${total} 人）。最近きた順に ${unmet.length} 人出しています。えらぶと結べます。`,
-      components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu)],
+      content: [`🧵 縁側でいっしょになったのに、まだ結んでいない人（いま ${met} / ${total} 人）。最近きた順に ${unmet.length} 人です。`, unmet.map((x) => `<@${x.id}>`).join('　'), '-# 結べるのは、いま同じ縁側の通話にいるときです。'].join('\n').slice(0, 1900),
+      components: [],
+      allowedMentions: NO_MENTIONS,
     });
   }
 

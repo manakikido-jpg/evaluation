@@ -31,6 +31,25 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-11-28-musubi-same-engawa-only',
+    date: '2026-11-28',
+    kind: 'improve',
+    where: ['Discord'],
+    title: '🧵 結べるのは、いま同じ縁側の通話にいる人とだけに',
+    items: [
+      '結びは、いま同じ縁側の通話にいる相手とだけ結べます。離れているときは結べません。',
+      '「🧵 まだ結んでいない人」は、えらんで結ぶメニューをやめて、名前の一覧だけを出します。',
+      '結びの取り消しは、今までどおり離れていてもできます。',
+    ],
+    announcement: {
+      priority: 'optional',
+      audience: '全員（新制度の開始のお知らせに入れる）',
+      steps: ['縁側の通話に入る', 'いっしょにいる人のプロフィールか、通話のチャットのボタンから結ぶ'],
+      postText: '🧵 結びは、いま同じ縁側の通話にいる人とだけ結べます。縁側でいっしょになったときに、結んでください。',
+      imagePrompt: 'なし（新制度の案内の資料にまとめる）',
+    },
+  },
+  {
     id: '2026-11-28-new-system-count-from-start',
     date: '2026-11-28',
     kind: 'improve',
