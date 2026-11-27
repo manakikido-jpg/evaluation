@@ -412,7 +412,7 @@ describe('厄・BAN・キック・メモ（管理画面）', () => {
     // 評価ページに今のきまりが出る
     const html = await (await get('/evaluation?ema=on', g)).text();
     expect(html).toContain('絵馬での昇格');
-    expect(html).toContain('絵馬で昇格');
+    expect(html).toContain('新制度（参拝者→氏子は絵馬');
     // OFF に戻せる
     expect((await post('/evaluation/ema-promotion', g, { _csrf: gcsrf, on: '0', confirm: 'yes' })).headers.get('location')).toBe('/evaluation?ema=off');
     expect(await emaPromotionEnabled(db)).toBe(false);
@@ -430,7 +430,7 @@ describe('厄・BAN・キック・メモ（管理画面）', () => {
     expect((await post('/evaluation/perk-ujiko', g, { _csrf: gcsrf, on: '1', confirm: 'yes' })).headers.get('location')).toBe('/evaluation?perk=on');
     expect(await perkUjikoEnabled(db)).toBe(true);
     expect((await listAudit(db, { action: 'perk.ujiko_gate' })).length).toBe(1);
-    expect(await (await get('/evaluation?perk=on', g)).text()).toContain('特典のゲート');
+    expect(await (await get('/evaluation?perk=on', g)).text()).toContain('⑤ カジノ・宿を氏子から');
     expect((await post('/evaluation/perk-ujiko', g, { _csrf: gcsrf, on: '0', confirm: 'yes' })).headers.get('location')).toBe('/evaluation?perk=off');
     expect(await perkUjikoEnabled(db)).toBe(false);
   });
@@ -473,7 +473,7 @@ describe('厄・BAN・キック・メモ（管理画面）', () => {
     expect(page).toContain('絵馬の枚数');
     expect(page).toContain('🗳 世話役の選挙（候補ごと・匿名）');
     expect(page).toContain('いま決まっている選挙はありません');
-    expect(page).toContain('の参拝者→氏子：絵馬 1 枚'); // 縁側にいた氏子以上0人→最低1枚（設定の読み直しは60秒ごとなので既定の数で）
+    expect(page).toContain('今週の参拝者→氏子：<strong>絵馬 1 枚'); // 縁側にいた氏子以上0人→最低1枚（設定の読み直しは60秒ごとなので既定の数で）
   });
 
   it('🔄 ご縁のリセット: 宮司だけ・絵馬昇格ONと合言葉が要る・元に戻せる', async () => {
