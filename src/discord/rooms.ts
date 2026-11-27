@@ -44,7 +44,7 @@ import {
   type RoomRow,
 } from '../services/rooms.js';
 import { OWNER_ALLOW } from './tempVoice.js';
-import { perkUjikoEnabled, meetsUjiko } from '../services/perkGate.js';
+import { newSystemActive, roomsUjikoOnly, meetsUjiko } from '../services/perkGate.js';
 import { isYakudoshi, YAKU_BLOCKED } from '../services/yakuGate.js';
 import { KeyedLock } from '../lib/lock.js';
 import { ROOM_MODES, roomKnockConfig, roomKnockState, type RoomMode } from '../services/roomKnock.js';
@@ -311,7 +311,7 @@ export class RoomApp {
     }
     // 🎁 宿（部屋代のかかる部屋）を氏子からに（新制度⑤・既定OFF）。24時間の宿はパネル側で確かめる。
     // 参拝者が通話入口・シクレで開こうとしたら、部屋代を取る前に部屋を消して知らせる。
-    if (!opts.stay && (await perkUjikoEnabled(this.db))) {
+    if (!opts.stay && (await roomsUjikoOnly(this.db))) {
       const opener = this.guild?.members.cache.get(ownerId) ?? (await this.guild?.members.fetch(ownerId).catch(() => undefined));
       if (opener && !meetsUjiko(cfg, opener.roles.cache.keys())) {
         // 部屋はすぐ消すので、本人へ DM で知らせる（部屋のメッセージは消えてしまうため）
@@ -747,7 +747,14 @@ export class RoomApp {
   }
 
   private async invite(i: UserSelectMenuInteraction<'cached'>, row: RoomRow, ch: VoiceChannel, v: PanelView = {}): Promise<void> {
-    const ids = i.values.filter((id) => id !== row.ownerId && !i.users.get(id)?.bot);
+    let ids = i.values.filter((id) => id !== row.ownerId && !i.users.get(id)?.bot);
+    // 🤫 新制度：シクレに入れるのは氏子以上だけ（参拝者・元氏子・荒魂は招待できない）
+    if (row.kind === 'secret' && (await newSystemActive(this.db))) {
+      const cfg = this.cfg();
+      const ok = ids.filter((id) => { const m = i.members.get(id); return !m || meetsUjiko(cfg, m.roles.cache.keys()) || Boolean(adminLevelOf(cfg, [...m.roles.cache.keys()])); });
+      if (ok.length < ids.length && !ok.length) return void (await i.reply({ content: '🤫 シクレに入れるのは、氏子以上の方だけです。', ...EPHEMERAL }));
+      ids = ok;
+    }
     if (!ids.length) return void (await i.reply({ content: '招待できる人がいません（自分・BOT は選べません）。', ...EPHEMERAL }));
     const updated = await addInvites(this.db, ch.id, ids);
     if (!updated) return;

@@ -1,3 +1,4 @@
+import { casinoRoleLimit } from '../services/perkGate.js';
 import { drawCost, drawableStyles, drawStyles, stylesOf, styleChances, styleItem } from '../services/casino/styles.js';
 import {
   ActionRowBuilder,
@@ -687,13 +688,17 @@ export class GachaApp {
       }
       case 'omikuji_extra':
         return void (await i.update({ content: await this.omikujiExtra(i), components: [] }));
-      case 'casino_boost': {
+      case 'casino_boost':
+      case 'casino_boost_ex': {
+        // 🎰 新制度：参拝者・元氏子・荒魂は大勝負の札を使えない（札を減らす前に断る）
+        const lim = await casinoRoleLimit(this.db, cfg, [...i.member.roles.cache.keys()]);
+        if (lim) return void (await i.update({ content: `🎰 大勝負の札は、氏子以上の方が使えます（いまのカジノの1日の上限は ${lim.limit} ${coin}）。札は減っていません。`, components: [] }));
+        if (kind === 'casino_boost_ex') {
+          const r = await useCasinoBoost(this.db, i.user.id, new Date(), cfg.casino, true);
+          return void (await i.update({ content: casinoBoostText(cfg.casino, coin, r, true), components: [] }));
+        }
         const r = await useCasinoBoost(this.db, i.user.id, new Date(), cfg.casino);
         return void (await i.update({ content: casinoBoostText(cfg.casino, coin, r), components: [] }));
-      }
-      case 'casino_boost_ex': {
-        const r = await useCasinoBoost(this.db, i.user.id, new Date(), cfg.casino, true);
-        return void (await i.update({ content: casinoBoostText(cfg.casino, coin, r, true), components: [] }));
       }
       case 'gacha_free':
         return void (await i.update({

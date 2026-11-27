@@ -1,3 +1,4 @@
+import { casinoRoleLimit } from '../perkGate.js';
 import { and, eq, gt, sql } from 'drizzle-orm';
 import type { CasinoConfig, GuildConfig } from '../../config.js';
 import type { Db } from '../../db/client.js';
@@ -71,6 +72,12 @@ export async function casinoCfgFor(db: Db, cfg: GuildConfig, memberId: string, n
       const limit = base.casino.yakuDailyBetLimit;
       return { ...base, casino: { ...base.casino, dailyBetLimit: limit, maxBet: Math.max(base.casino.minBet, Math.min(base.casino.maxBet, limit)) } };
     }
+  }
+  // 🔥 荒魂・⛩ 参拝者（元氏子も）：新制度では1日の合計が決まった数まで。札でも上がらない
+  {
+    const [m] = await db.select({ roleIds: members.roleIds }).from(members).where(eq(members.id, memberId));
+    const r = m ? await casinoRoleLimit(db, cfg, m.roleIds) : null;
+    if (r) return { ...base, casino: { ...base.casino, dailyBetLimit: r.limit, maxBet: Math.max(base.casino.minBet, Math.min(base.casino.maxBet, r.limit)) } };
   }
   const b = await casinoBoostOf(db, memberId, now);
   return b ? { ...base, casino: boostCasino(base.casino, b.level, b.ex) } : base;

@@ -69,7 +69,7 @@ import { eq } from 'drizzle-orm';
 import { members } from '../db/schema.js';
 import type { DiscordApi } from './discordApi.js';
 import { createMemberSession, deleteMemberSession, findMemberSession, markMemberChecked, MEMBER_RECHECK_MS, MEMBER_SESSION_DAYS } from './memberSessions.js';
-import { meetsUjiko, perkUjikoEnabled } from '../services/perkGate.js';
+import { aramitamaAccessRole, meetsUjiko, perkUjikoEnabled } from '../services/perkGate.js';
 import { randomToken, safeEqual } from './sessions.js';
 import {
   BaccaratPage,
@@ -145,9 +145,12 @@ type Deps = { db: Db; api: DiscordApi; cfg: () => GuildConfig; baseUrl: string; 
 type Me = CasinoMe;
 
 /** 位のロールがあるか（requireRank を止めていれば、サーバーにいればよい）。ujikoOnly なら氏子以上だけ（新制度⑤） */
-export const casinoAllowed = (cfg: GuildConfig, roles: string[], ujikoOnly = false) =>
+export const casinoAllowed = (cfg: GuildConfig, roles: string[], ujikoOnly = false, aramitamaRole?: string) =>
   // 👹 厄のあいだも入れる（1日の合計は yakuDailyBetLimit まで：casinoCfgFor）
-  cfg.casino.accessRoleId
+  // 🔥 荒魂（位のロールがない）も、新制度では入れる（1日の合計は aramitamaDailyBetLimit まで）
+  aramitamaRole && roles.includes(aramitamaRole) && !cfg.casino.accessRoleId
+    ? true
+    : cfg.casino.accessRoleId
     ? roles.includes(cfg.casino.accessRoleId)
     : !cfg.casino.requireRank
       ? true
@@ -184,7 +187,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
       }
       if (roles !== undefined) {
         const ujikoOnly = await perkUjikoEnabled(db);
-        if (!roles || !casinoAllowed(d.cfg(), roles, ujikoOnly)) {
+        if (!roles || !casinoAllowed(d.cfg(), roles, ujikoOnly, await aramitamaAccessRole(db))) {
           await deleteMemberSession(db, session.id);
           deleteCookie(c, COOKIE, { path: '/casino' });
           return { error: roles ? deniedCode(d.cfg(), ujikoOnly, roles) : 'not_member' };
@@ -424,7 +427,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     }
     if (!roles) return c.redirect('/casino?e=not_member');
     const ujikoOnly = await perkUjikoEnabled(db);
-    if (!casinoAllowed(d.cfg(), roles, ujikoOnly)) return c.redirect(`/casino?e=${deniedCode(d.cfg(), ujikoOnly, roles)}`);
+    if (!casinoAllowed(d.cfg(), roles, ujikoOnly, await aramitamaAccessRole(db))) return c.redirect(`/casino?e=${deniedCode(d.cfg(), ujikoOnly, roles)}`);
     const token = await createMemberSession(db, { id: user.id, username: user.displayName, displayName: user.displayName, avatarUrl: user.avatarUrl }, d.now());
     setCookie(c, COOKIE, token, { httpOnly: true, secure: d.secure, sameSite: 'Lax', path: '/casino', maxAge: MEMBER_SESSION_DAYS * 86_400 });
     await audit(db, { actorId: user.id, action: 'casino.login', detail: { via: 'link' }, via: 'web' });
@@ -448,7 +451,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     }
     if (!roles) return c.redirect('/casino?e=not_member');
     const ujikoOnly = await perkUjikoEnabled(db);
-    if (!casinoAllowed(d.cfg(), roles, ujikoOnly)) return c.redirect(`/casino?e=${deniedCode(d.cfg(), ujikoOnly, roles)}`);
+    if (!casinoAllowed(d.cfg(), roles, ujikoOnly, await aramitamaAccessRole(db))) return c.redirect(`/casino?e=${deniedCode(d.cfg(), ujikoOnly, roles)}`);
     const token = await createMemberSession(db, user, d.now());
     setCookie(c, COOKIE, token, { httpOnly: true, secure: d.secure, sameSite: 'Lax', path: '/casino', maxAge: MEMBER_SESSION_DAYS * 86_400 });
     await audit(db, { actorId: user.id, action: 'casino.login', via: 'web' });

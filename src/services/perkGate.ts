@@ -3,6 +3,9 @@ import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { settings } from '../db/schema.js';
 import { highestRank } from '../domain/ranks.js';
+import { emaPromotionEnabled } from './emaPromotion.js';
+import { newSystemStartedAt } from './shuin.js';
+import { newSystemRoles } from './ujikoKeep.js';
 
 /**
  * 🎁 特典のゲート（新制度⑤）：カジノ・宿を「氏子から」にするスイッチ。宮司が社務所Webで切り替える。
@@ -28,4 +31,38 @@ export function meetsUjiko(cfg: GuildConfig, roleIds: Iterable<string>): boolean
   if (ujikoWeight === undefined) return true;
   const rank = highestRank(cfg.ranks, roleIds);
   return rank !== undefined && rank.weight >= ujikoWeight;
+}
+
+/** 新制度が始まっているか（③絵馬での昇格が ON・④ご縁のリセットずみ） */
+export async function newSystemActive(db: Db): Promise<boolean> {
+  return Boolean(await newSystemStartedAt(db)) && (await emaPromotionEnabled(db));
+}
+
+/**
+ * 🏨 宿・シクレを作れるのは氏子以上だけか。
+ * 新制度が始まったら、いつも氏子以上だけ（参拝者・元氏子・荒魂は参加だけ）。その前は⑤のスイッチで決める。
+ */
+export async function roomsUjikoOnly(db: Db): Promise<boolean> {
+  return (await perkUjikoEnabled(db)) || (await newSystemActive(db));
+}
+
+/**
+ * 🎰 新制度の、ロールごとのカジノの1日の上限（本人の決定 2026-11-27）。
+ * 荒魂＝aramitamaDailyBetLimit（500）／参拝者・元氏子＝sanpaishaDailyBetLimit（5,000）。氏子以上は null（ふつうの上限）。
+ * 当てはまる人は、大勝負の札でも上がらない。新制度が始まるまでは null。
+ */
+export async function casinoRoleLimit(db: Db, cfg: GuildConfig, roleIds: readonly string[]): Promise<{ limit: number; who: 'aramitama' | 'sanpaisha' } | null> {
+  if (!(await newSystemActive(db))) return null;
+  const ara = (await newSystemRoles(db)).aramitama;
+  if (ara && roleIds.includes(ara)) return { limit: cfg.casino.aramitamaDailyBetLimit, who: 'aramitama' };
+  if (meetsUjiko(cfg, roleIds)) return null;
+  // 位のロールがない人（運営だけのロールなど）は、今までどおり
+  if (!highestRank(cfg.ranks, roleIds)) return null;
+  return { limit: cfg.casino.sanpaishaDailyBetLimit, who: 'sanpaisha' };
+}
+
+/** 🔥 荒魂のロール ID（新制度が始まっていて、設定ずみのときだけ）。カジノに入れる人の判定に使う */
+export async function aramitamaAccessRole(db: Db): Promise<string | undefined> {
+  if (!(await newSystemActive(db))) return undefined;
+  return (await newSystemRoles(db)).aramitama;
 }

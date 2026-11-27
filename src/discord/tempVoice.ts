@@ -1,7 +1,7 @@
 import {roomAmountLabel,roomCoreTimeNote,roomRateAt} from '../services/roomPricing.js';
 import { ButtonStyle, ChannelType, DiscordAPIError, MessageFlags, OverwriteType, PermissionFlagsBits, type Guild, type GuildMember, type Interaction, type VoiceState } from 'discord.js';
 import { staffRoleIds } from '../services/meetings.js';
-import { perkUjikoEnabled, meetsUjiko } from '../services/perkGate.js';
+import { roomsUjikoOnly, meetsUjiko } from '../services/perkGate.js';
 import { isYakudoshi, YAKU_BLOCKED } from '../services/yakuGate.js';
 import { STAFF_STAY_LIMIT } from '../services/tempVoice.js';
 import type { GuildConfig } from '../config.js';
@@ -128,7 +128,7 @@ export class TempVoiceApp {
     if (!this.ctx) return { status: 'failed' as const };
     this.ctx.cfg = this.cfg();
     // 🎁 宿を氏子からに（新制度⑤・既定OFF）。運営はそのまま。参拝者は部屋代を取る前に断る。
-    if (!staff && (await perkUjikoEnabled(this.db)) && !meetsUjiko(this.cfg(), roleIds)) return { status: 'rank_too_low' as const };
+    if (!staff && (await roomsUjikoOnly(this.db)) && !meetsUjiko(this.cfg(), roleIds)) return { status: 'rank_too_low' as const };
     // 👹 厄のあいだは宿を開けない
     if (!staff && isYakudoshi(this.cfg(), roleIds)) return { status: 'yaku' as const };
     const r = await createStayRoom(this.ctx, { hubId, userId, displayName, mode, parentId, staff });

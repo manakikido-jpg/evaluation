@@ -743,6 +743,9 @@ export const casinoSchema = z.object({
   boostExMult: z.number().int().min(2).max(100).default(20),
   /** 👹 厄のあいだの、カジノで1日に賭けられる合計（札では上がらない。本人の決定 2026-11-27） */
   yakuDailyBetLimit: z.number().int().min(0).max(100_000_000).default(500),
+  /** 🔥 荒魂・⛩ 参拝者（元氏子も）の、カジノで1日に賭けられる合計（新制度が始まってから。大勝負の札では上がらない） */
+  aramitamaDailyBetLimit: z.number().int().min(0).max(100_000_000).default(500),
+  sanpaishaDailyBetLimit: z.number().int().min(0).max(100_000_000).default(5000),
   /** 札が効く長さ（時間。0 なら使った日の日本時間の 0 時まで） */
   boostHours: z.number().int().min(0).max(168).default(0),
   /** 上がる上限を別々に（0 なら boostMult と同じ・1 なら上げない）: 1 回の最高・ルーレットの 1 か所の最高・1 日の合計 */
