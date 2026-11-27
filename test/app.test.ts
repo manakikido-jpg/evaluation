@@ -737,7 +737,7 @@ describe('ShuinApp：絵馬を贈る（新制度②）', () => {
     // 固めた人に入っていない人は投票できない
     const p3 = vote(SA);
     await app.onInteraction(p3.i as never);
-    expect(p3.replies.at(-1)?.content).toContain('この選挙で投票できるのは');
+    expect(p3.replies.at(-1)?.content).toContain('この選挙では投票できません');
     // 締め：投票できる人5人のうち4票（80%）
     const voters = ['400000000000000081', '400000000000000082', '400000000000000083', '400000000000000084', '400000000000000085'];
     await db.update(sewayakuElections).set({ voterIds: voters, endsAt: new Date(real.getTime() - 60_000) }).where(eq(sewayakuElections.id, e!.id));
@@ -780,7 +780,7 @@ describe('ShuinApp：絵馬を贈る（新制度②）', () => {
     expect(profile).toContain('さまのプロフィール');
     expect(profile).toContain('絵馬 **1** 枚');
     expect(profile).toContain('⬆️ 次の役職');
-    expect(profile).toContain('期間中にもらった絵馬：0 枚');
+    expect(profile).toContain('もらった絵馬 0 枚');
     expect(profile).toContain(`shuin:goen:${SA}`);
     expect(profile).toContain(`ema:card:${SA}`);
     expect(profile).not.toContain('頂いた絵馬');
@@ -790,7 +790,8 @@ describe('ShuinApp：絵馬を贈る（新制度②）', () => {
     expect(goen).not.toContain('頂いた絵馬');
     const ema = await open('ema');
     expect(ema).toContain('さまの絵馬');
-    expect(ema).toContain('頂いた絵馬（氏子の票）');
+    expect(ema).toContain('頂いた絵馬 **');
+    expect(ema).toContain('（氏子の票）');
     expect(ema).toContain('すてきな時間でした');
     expect(ema).toContain('⬆️ 絵馬で次の役職へ');
     expect(ema).not.toContain('結んでくれた人');

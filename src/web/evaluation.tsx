@@ -5,7 +5,7 @@ import type { AdminSession } from '../db/schema.js';
 import { evaluationCsv, EvaluationSelectionError, ujikoEvaluation, type EvaluationFilter } from '../services/ujikoEvaluation.js';
 import { ujikoRatingRows, ujikoRatingXlsx } from '../services/ujikoRating.js';
 import { emaPromotionEnabled, setEmaPromotion, ujikoBelowKeep } from '../services/emaPromotion.js';
-import { resetAllShuin, undoAllShuinReset, lastAllShuinReset } from '../services/shuin.js';
+import { resetAllShuin, undoAllShuinReset, lastAllShuinReset, newSystemStartedAt } from '../services/shuin.js';
 import { perkUjikoEnabled, setPerkUjiko } from '../services/perkGate.js';
 import { loadOverrides, saveOverrides } from '../services/settings.js';
 import { ujikoWeekRequirement } from '../services/ujikoRequirement.js';
@@ -73,7 +73,8 @@ export function mountEvaluation(app: Hono<Env>, db: Db, cfg: () => GuildConfig, 
         const sNames = await namesOf(db, [...new Set([...active, ...recent].map((e) => e.candidateId))]);
         sewayaku = { active: rows, recent, names: sNames };
       }
-      return c.html(<EvaluationPage ujikoWeek={ujikoWeek} sewayaku={sewayaku} session={session} data={data} filter={filter} page={page} emaPromotion={emaPromotion} keepWarnings={keepWarnings} names={names} saved={c.req.query('ema') ?? undefined} resetFlash={c.req.query('reset') ?? undefined} resetUndoable={resetUndoable} perkUjiko={perkUjiko} perkFlash={c.req.query('perk') ?? undefined} goenPerksText={goenPerksToText(cfg().goenPerks)} goenPerksFlash={c.req.query('gp') ?? undefined} emaThresholds={cfg().emaThresholds} emaThresholdsFlash={c.req.query('th') ?? undefined}/>);
+      const started = session.level === 'guji' ? await newSystemStartedAt(db) : undefined;
+      return c.html(<EvaluationPage newSystemStartedAt={started} ujikoWeek={ujikoWeek} sewayaku={sewayaku} session={session} data={data} filter={filter} page={page} emaPromotion={emaPromotion} keepWarnings={keepWarnings} names={names} saved={c.req.query('ema') ?? undefined} resetFlash={c.req.query('reset') ?? undefined} resetUndoable={resetUndoable} perkUjiko={perkUjiko} perkFlash={c.req.query('perk') ?? undefined} goenPerksText={goenPerksToText(cfg().goenPerks)} goenPerksFlash={c.req.query('gp') ?? undefined} emaThresholds={cfg().emaThresholds} emaThresholdsFlash={c.req.query('th') ?? undefined}/>);
     } catch (error) {
       if (!(error instanceof EvaluationSelectionError)) throw error;
       return c.text(error.message, 400);

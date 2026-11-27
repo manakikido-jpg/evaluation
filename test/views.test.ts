@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { setNewSystemVisible } from '../src/domain/terms.js';
 import { commandDefinitions } from '../src/discord/commands.js';
 import { parseShuinId, shuinId } from '../src/discord/ids.js';
-import { breakdownLine, giveLog, giveReply, goshuinchoReply, giversReply, promotionAnnouncement, revokeReply } from '../src/discord/views.js';
+import { breakdownLine, giveLog, giveReply, goshuinchoReply, giversReply, progressBar, promotionAnnouncement, revokeReply, sewayakuElectionPost, sewayakuVotesNeeded } from '../src/discord/views.js';
 import { decidePromotion } from '../src/domain/ranks.js';
 import { KeyedLock } from '../src/lib/lock.js';
 import { cfg, ROLE } from './helpers.js';
@@ -183,5 +183,27 @@ describe('KeyedLock', () => {
     const lock = new KeyedLock();
     await expect(lock.run('a', async () => Promise.reject(new Error('x')))).rejects.toThrow('x');
     await expect(lock.run('a', async () => 1)).resolves.toBe(1);
+  });
+});
+
+describe('新制度の見た目', () => {
+  it('進み具合のバーは 10 マスで、こえたら満タン・0 なら空', () => {
+    expect(progressBar(3, 4)).toBe('▰▰▰▰▰▰▰▱▱▱');
+    expect(progressBar(0, 4)).toBe('▱▱▱▱▱▱▱▱▱▱');
+    expect(progressBar(9, 4)).toBe('▰▰▰▰▰▰▰▰▰▰');
+  });
+
+  it('世話役に要る票は「投票できる人の◯%を超える」いちばん少ない数', () => {
+    expect(sewayakuVotesNeeded(18, 60)).toBe(11);
+    expect(sewayakuVotesNeeded(10, 60)).toBe(7);
+  });
+
+  it('#世話役選挙 の投稿：締め切り・人数・要る票を出し、欄の名前が重ならない', () => {
+    const post = sewayakuElectionPost('999', new Date('2026-11-30T00:00:00+09:00'), 18, { sewayakuVotePercent: 60, sewayakuVoterMinutes: 1440 });
+    const fields = post.embeds![0] as { fields: { name: string; value: string }[] };
+    const names = fields.fields.map((f) => f.name);
+    expect(new Set(names).size).toBe(names.length);
+    expect(JSON.stringify(post)).toContain('11 票以上');
+    expect(JSON.stringify(post)).toContain('11/29');
   });
 });
