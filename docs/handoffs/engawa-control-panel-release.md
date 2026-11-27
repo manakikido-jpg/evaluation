@@ -2,7 +2,7 @@
 
 本人がrain銀行風の見本に「それでいいね」「それで作成してみて」と了承し、続けて「寝落ち報告と運営を呼ぶもこれに追加」と依頼。装飾画像は使いません。
 
-対象ブランチは `codex/new-system-bot-ui`。本番への直接pushやVPS操作はCodexで行っていません。
+保存先：[PR #185](https://github.com/manakikido-jpg/sakuranomiya/pull/185)。対象ブランチは `codex/new-system-bot-ui`。本番への直接pushやVPS操作はCodexで行っていません。
 
 ## 変更内容
 
