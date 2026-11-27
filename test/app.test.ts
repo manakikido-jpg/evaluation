@@ -604,6 +604,39 @@ describe('ShuinApp：絵馬を贈る（新制度②）', () => {
     expect((await emaMessagesOf(db, SA))[0]?.message).toBe('いっしょに過ごせてうれしかったです');
   });
 
+  it('/絵馬 で、贈れる相手を確かめられる（自分＝いま贈れる人・あと少しの人と選ぶメニュー／ほかの人＝あなたとの縁側 ○/3日）', async () => {
+    await (await import('../src/services/emaPromotion.js')).setEmaPromotion(db, true, 'guji');
+    await seedMembers();
+    await seedTogether(2, 30); // まだ2日
+    const viewer = members.get(GU)!;
+    const ema = async (target: string) => {
+      const show = interaction('slash', viewer, { commandName: 'ema', options: { getUser: () => members.get(target)!.user, getBoolean: () => null } });
+      await app.onInteraction(show.i as never);
+      return JSON.stringify(show.replies.at(-1));
+    };
+    let mine = await ema(GU);
+    expect(mine).toContain('いま絵馬を贈れる人（0人）');
+    expect(mine).toContain('あと少し');
+    expect(mine).toContain('参拝者さん（2日）');
+    let theirs = await ema(SA);
+    expect(theirs).toContain('あなたとの縁側');
+    expect(theirs).toContain('2 / 3 日');
+    // 3日目（30分以上）→ 贈れる
+    const { engawaPairs } = await import('../src/db/schema.js');
+    const [a, b] = GU < SA ? [GU, SA] : [SA, GU];
+    await db.insert(engawaPairs).values({ memberA: a, memberB: b, date: '2026-11-09', minutes: 45 });
+    mine = await ema(GU);
+    expect(mine).toContain('いま絵馬を贈れる人（1人）');
+    expect(mine).toContain(`ema:to:${GU}`);
+    theirs = await ema(SA);
+    expect(theirs).toContain('3 / 3 日');
+    expect(theirs).toContain('絵馬を贈れます');
+    // メニューから選ぶと、ひとことを入れる画面（氏子なのでモーダル）
+    const pick = interaction('stringSelect', viewer, { customId: `ema:to:${GU}`, values: [SA] });
+    await app.onInteraction(pick.i as never);
+    expect(pick.shownModals[0]?.customId).toBe(`ema:modal:${SA}`);
+  });
+
   it('参拝者は氏子へ定型文で贈れる（参拝者の票）。もう贈った相手には「書き直す・取り消す」が出て、本人が取り消せる', async () => {
     await (await import('../src/services/emaPromotion.js')).setEmaPromotion(db, true, 'guji');
     const { recordJoin } = await import('../src/services/members.js');

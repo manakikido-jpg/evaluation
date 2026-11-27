@@ -31,6 +31,25 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-11-27-ema-partners',
+    date: '2026-11-27',
+    kind: 'new',
+    where: ['Discord'],
+    title: '🎐 /絵馬 で「絵馬を贈れる相手」を確かめられるようにした',
+    items: [
+      'ほかの人の /絵馬 に「あなたとの縁側 ○/3日（1日30分以上の日）」と、贈れるかを出します。',
+      '自分の /絵馬 に「いま絵馬を贈れる人」「あと少しの人」を出し、贈れる人をメニューから選んでそのまま贈れます。',
+    ],
+    announcement: {
+      priority: 'optional',
+      audience: 'メンバー全員（新制度を始めるときにまとめて）',
+      steps: ['/絵馬 を自分に使うと、いま贈れる人とあと少しの人が出る', 'ほかの人に /絵馬 を使うと、その人との縁側の日数が出る'],
+      postText: '🎐 /絵馬 で、いま絵馬を贈れる人と「あと何日」かが分かります。',
+      imagePrompt: '和風のカードに「🎐 いま贈れる人」「⏳ あと少し」と、3マスのバー。やさしい色。',
+      notes: '新制度（③）まではメンバーに見えない。絵馬・結び・招待の周知（2026-11-27-ema-goen-musubi-rules）とまとめてよい。',
+    },
+  },
+  {
     id: '2026-11-27-ema-goen-musubi-rules',
     date: '2026-11-27',
     kind: 'improve',

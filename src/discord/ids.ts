@@ -17,8 +17,8 @@ export function parseShuinId(customId: string): { action: ShuinAction; userId: s
 }
 
 /** 🎐 絵馬（評価の票）のボタン・モーダルの customId。形式: ema:<kind>:<相手のユーザー ID>（vote は世話役の投票） */
-export type EmaIdKind = 'give' | 'modal' | 'vote' | 'card' | 'pick' | 'edit' | 'undo';
-const EMA_KINDS: readonly string[] = ['give', 'modal', 'vote', 'card', 'pick', 'edit', 'undo'];
+export type EmaIdKind = 'give' | 'modal' | 'vote' | 'card' | 'pick' | 'edit' | 'undo' | 'to';
+const EMA_KINDS: readonly string[] = ['give', 'modal', 'vote', 'card', 'pick', 'edit', 'undo', 'to'];
 const EMA_PREFIX = 'ema';
 
 /** プロフィールの「絵馬を贈る」ボタン（押すと一言のモーダルが出る） */
@@ -40,6 +40,10 @@ export function emaCardId(userId: string): string {
 /** 参拝者が定型文を選ぶメニュー */
 export function emaPickId(userId: string): string {
   return `${EMA_PREFIX}:pick:${userId}`;
+}
+/** 自分の /絵馬 の「贈れる人」から選ぶメニュー（userId は開いた本人） */
+export function emaToId(userId: string): string {
+  return `${EMA_PREFIX}:to:${userId}`;
 }
 /** 贈った絵馬を書き直す */
 export function emaEditId(userId: string): string {

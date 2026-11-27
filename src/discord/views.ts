@@ -20,7 +20,7 @@ import type { GiveDenied, GiveOutcome } from '../services/flows.js';
 import type { RevokeResult, GoshuinchoData } from '../services/shuin.js';
 import type { GiveEmaResult } from '../services/ema.js';
 import { EMA_DAYS_TOGETHER, EMA_MESSAGE_MAX, EMA_MINUTES_PER_DAY, EMA_TEMPLATES, EMA_TIER_LABEL } from '../domain/ema.js';
-import { emaCardId, emaEditId, emaGiveId, emaModalId, emaPickId, emaUndoId, sewayakuVoteId, shuinId } from './ids.js';
+import { emaCardId, emaEditId, emaGiveId, emaModalId, emaPickId, emaToId, emaUndoId, sewayakuVoteId, shuinId } from './ids.js';
 import type { CandidateStatus, VoterStatus, VoteResult } from '../services/sewayakuElection.js';
 import type { UjikoProgress } from '../services/ujikoRequirement.js';
 import type { EmaThresholdCounts } from '../domain/ema.js';
@@ -381,7 +381,13 @@ export function goshuinchoReply(
   data: GoshuinchoData,
   coins?: { emoji: string; name: string; balance: number },
   profile: ProfileExtra = {},
-  ema?: { count: number; messages: { message: string; createdAt: Date }[]; promoteMode?: boolean; step?: { toName: string; need: number; have?: number; inPeriod?: boolean }; sewayaku?: SewayakuCardInfo; ujiko?: UjikoProgress; voter?: VoterStatus; th?: EmaThresholdCounts; tierLabel?: string },
+  ema?: {
+    count: number; messages: { message: string; createdAt: Date }[]; promoteMode?: boolean; step?: { toName: string; need: number; have?: number; inPeriod?: boolean }; sewayaku?: SewayakuCardInfo; ujiko?: UjikoProgress; voter?: VoterStatus; th?: EmaThresholdCounts; tierLabel?: string;
+    /** ほかの人の /絵馬：見ている人との縁側（1日30分以上の日）と、贈れるか */
+    pair?: { days: number; given: boolean; canGive: boolean };
+    /** 自分の /絵馬：いま贈れる人・あと少しの人 */
+    partners?: { ready: { id: string; name: string; days: number }[]; soon: { id: string; name: string; days: number }[] };
+  },
   collection?: { total: number; met: number },
   view: { mode?: CardMode; perkNext?: { goen: number; label: string } } = {},
 ): Reply {
@@ -505,7 +511,8 @@ function emaCardReply(
   if (owner.avatarUrl) embed.setThumbnail(owner.avatarUrl);
   if (!emaRelevant || !ema) {
     embed.setDescription(`**${rankLabel(rank)}**\n-# 絵馬は参拝者・氏子・世話役の方に贈られます`);
-    return { embeds: [embed.toJSON()] };
+    // 自分が総代以上でも「贈れる人」は出す
+    return ema && profile.self ? emaWithPartners(embed, owner.id, profile, ema) : { embeds: [embed.toJSON()] };
   }
   embed.setDescription(`**${rankLabel(rank)}**　🎐 頂いた絵馬 **${ema.count}** 枚${ema.tierLabel ? `（${ema.tierLabel}）` : ''}`);
   embed.addFields({ name: '💬 ひとこと', value: emaField(ema) });
@@ -524,9 +531,41 @@ function emaCardReply(
       if (lines.length) embed.addFields({ name: '⬆️ 絵馬で次の役職へ', value: lines.join('\n').slice(0, 1024) });
     }
   }
-  embed.setFooter({ text: '🔒 匿名 ・ 氏子の票は30日で入れかわります' });
-  const buttons = profile.self ? [] : [emaGiveButton(owner.id)];
-  return { embeds: [embed.toJSON()], ...(buttons.length ? { components: [row(...buttons)] } : {}) };
+  embed.setFooter({ text: '🔒 匿名 ・ 参拝者の票は30日で入れかわります' });
+  return emaWithPartners(embed, owner.id, profile, ema);
+}
+
+/** /絵馬 の下の段：ほかの人なら「あなたとの縁側」、自分なら「いま贈れる人・あと少しの人」と選ぶメニュー */
+function emaWithPartners(embed: EmbedBuilder, ownerId: string, profile: ProfileExtra, ema: NonNullable<Parameters<typeof goshuinchoReply>[5]>): Reply {
+  const p = ema.pair;
+  if (!profile.self && p) {
+    embed.addFields({
+      name: '🤝 あなたとの縁側',
+      value: [
+        `${check(p.days >= EMA_DAYS_TOGETHER)} ${progressBar(p.days, EMA_DAYS_TOGETHER, 5)} ${p.days} / ${EMA_DAYS_TOGETHER} 日`,
+        p.given ? '🎐 もう贈っています' : p.canGive && p.days >= EMA_DAYS_TOGETHER ? '🎐 絵馬を贈れます' : `-# 縁側で1日${EMA_MINUTES_PER_DAY}分以上いっしょにいた日を数えます`,
+      ].join('\n'),
+    });
+  }
+  const parts = ema.partners;
+  const comps: Row[] = [];
+  if (profile.self && parts) {
+    const list = (xs: { name: string; days: number }[], n: number) => xs.slice(0, n).map((x) => `${x.name}（${x.days}日）`).join('・');
+    embed.addFields({
+      name: `🎐 いま絵馬を贈れる人（${parts.ready.length}人）`,
+      value: parts.ready.length ? `${list(parts.ready, 15)}${parts.ready.length > 15 ? ` ほか${parts.ready.length - 15}人` : ''}`.slice(0, 1024) : 'まだいません',
+    });
+    if (parts.soon.length) embed.addFields({ name: '⏳ あと少し', value: `${list(parts.soon, 12)}${parts.soon.length > 12 ? ` ほか${parts.soon.length - 12}人` : ''}\n-# 縁側で1日${EMA_MINUTES_PER_DAY}分以上の日が${EMA_DAYS_TOGETHER}日で贈れます`.slice(0, 1024) });
+    if (parts.ready.length) {
+      const menu = new StringSelectMenuBuilder()
+        .setCustomId(emaToId(ownerId))
+        .setPlaceholder('🎐 贈る相手をえらぶ')
+        .addOptions(parts.ready.slice(0, 25).map((x) => ({ label: x.name.slice(0, 100) || x.id, value: x.id, description: `縁側 ${x.days}日` })));
+      comps.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu) as unknown as Row);
+    }
+  }
+  if (!profile.self) comps.push(row(emaGiveButton(ownerId)));
+  return { embeds: [embed.toJSON()], ...(comps.length ? { components: comps } : {}) };
 }
 
 /** 🎐 匿名のひとこと（新しい順に少しだけ）。1024 字をこえないようにする */

@@ -144,6 +144,60 @@ export async function giveEma(
   return { ok: true, created, count: total, days, minutes, tier };
 }
 
+/**
+ * 🎐 その人が絵馬を贈れる相手（縁側で1日30分以上の日が◯日以上・相手の役職で贈れる・まだ贈っていない）と、あと少しの相手。
+ * ready＝いま贈れる（縁側の日が多い順）、soon＝あと少し（1日以上・足りない）。在籍・BOT/運営サブをのぞく。
+ */
+export async function emaPartners(
+  db: Db,
+  cfg: GuildConfig,
+  viewerId: string,
+  now = new Date(),
+): Promise<{ ready: { id: string; name: string; days: number }[]; soon: { id: string; name: string; days: number }[] }> {
+  const rows = await db
+    .select({
+      a: engawaPairs.memberA,
+      b: engawaPairs.memberB,
+      days: sql<number>`count(*) filter (where ${engawaPairs.minutes} >= ${EMA_MINUTES_PER_DAY})::int`,
+    })
+    .from(engawaPairs)
+    .where(or(eq(engawaPairs.memberA, viewerId), eq(engawaPairs.memberB, viewerId)))
+    .groupBy(engawaPairs.memberA, engawaPairs.memberB);
+  const daysOf = new Map(rows.map((r) => [r.a === viewerId ? r.b : r.a, Number(r.days)] as const).filter(([, d]) => d > 0));
+  if (!daysOf.size) return { ready: [], soon: [] };
+  const ids = [...daysOf.keys(), viewerId];
+  const [people, alts, given] = await Promise.all([
+    db.select({ id: members.id, name: members.displayName, roleIds: members.roleIds, isBot: members.isBot, leftAt: members.leftAt }).from(members).where(inArray(members.id, ids)),
+    staffAlts(db),
+    db.select({ receiverId: ema.receiverId, tier: ema.tier, createdAt: ema.createdAt }).from(ema).where(and(eq(ema.giverId, viewerId), isNull(ema.revokedAt))),
+  ]);
+  const viewer = people.find((p) => p.id === viewerId);
+  if (!viewer) return { ready: [], soon: [] };
+  const skip = new Set(alts.map((a) => a.id));
+  const fresh = emaFreshSince(now);
+  const done = new Set(given.filter((g) => !emaTierExpires(g.tier as EmaTier) || g.createdAt >= fresh).map((g) => g.receiverId));
+  const weightOf = (key: string) => cfg.ranks.find((r) => r.key === key)?.weight;
+  const giverWeight = highestRank(cfg.ranks, viewer.roleIds)?.weight ?? 0;
+  const ready: { id: string; name: string; days: number }[] = [];
+  const soon: { id: string; name: string; days: number }[] = [];
+  for (const p of people) {
+    if (p.id === viewerId || p.isBot || p.leftAt || skip.has(p.id) || done.has(p.id) || skip.has(viewerId)) continue;
+    const tier = emaTierFor({
+      giverWeight,
+      receiverKey: highestRank(cfg.ranks, p.roleIds)?.key,
+      ujikoWeight: weightOf('ujiko'),
+      sewayakuWeight: weightOf('sewayaku'),
+      sodaiWeight: weightOf('sodai'),
+      sanpaishaWeight: weightOf('sanpaisha'),
+    });
+    if (!tier) continue;
+    const days = daysOf.get(p.id) ?? 0;
+    (days >= EMA_DAYS_TOGETHER ? ready : soon).push({ id: p.id, name: p.name, days });
+  }
+  const order = (x: { days: number; name: string }, y: { days: number; name: string }) => y.days - x.days || x.name.localeCompare(y.name, 'ja');
+  return { ready: ready.sort(order), soon: soon.sort(order) };
+}
+
 /** その人がその相手に贈っている絵馬（取り消し・失効していないもの）。書き直し・取り消しの案内に使う */
 export async function myEmaTo(db: Db, giverId: string, receiverId: string, now = new Date()): Promise<{ tier: EmaTier; message: string } | undefined> {
   const rows = await db
