@@ -165,7 +165,7 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .setName('shinpu')
       .setNameLocalizations({ ja: '神符合戦' })
       .setDescription('Open the invite-only free Shinpu beta')
-      .setDescriptionLocalizations({ ja: '招待制の神符合戦無料βを開く（本人にだけ表示）' })
+      .setDescriptionLocalizations({ ja: '神符合戦を開く（無料・本人にだけ表示）' })
       .setDefaultMemberPermissions(null)
       .setContexts(InteractionContextType.Guild)
       .toJSON(),

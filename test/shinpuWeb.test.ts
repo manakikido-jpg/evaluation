@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest';
 import { createWebApp } from '../src/web/app.js';
 import type { DiscordApi } from '../src/web/discordApi.js';
 import type { DiscordActions } from '../src/lib/discordRest.js';
-import {betaTesters,changeBetaTester} from '../src/services/shinpu/beta.js';
+import {betaTesters,changeBetaTester,setShinpuPublic,shinpuPublic} from '../src/services/shinpu/beta.js';
 import { createSession } from '../src/web/sessions.js';
 import { createMemberSession } from '../src/web/memberSessions.js';
 import { createLoginLink } from '../src/services/casino/loginLinks.js';
@@ -26,6 +26,8 @@ function token(res: Response, key: string) {
 }
 beforeEach(async () => {
   ({ db, close } = await makeDb());
+  // ここのテストは招待制（公開を止めたとき）の動き。全員に公開の動きは下のテストで確かめる
+  await setShinpuPublic(db, { guildId: cfg.guildId, on: false, actorId: A });
   roles = [ROLE.guji];
   fail = false;
   present = true;
@@ -243,7 +245,7 @@ async function betaPlayer(userId=B){
 const invite=(userId=B,add=true)=>changeBetaTester(db,{guildId:cfg.guildId,userId,actorId:A,add});
 it('招待した一般メンバーだけが無料βの対戦・図鑑へ入り、運営画面の権限は得ない',async()=>{
  roles=[ROLE.sanpaisha];expect((await betaPlayer()).status).toBe(403);await invite();const player=await betaPlayer();expect(player.status).toBe(200);
- expect(player.html).toContain('招待制無料β');expect(player.html).toContain('再起動');expect(player.html).not.toContain('社務所へ');
+ expect(player.html).toContain('無料');expect(player.html).toContain('再起動');expect(player.html).not.toContain('社務所へ');
  expect((await app.request(ROOT+'/cards',{headers:player.h})).status).toBe(200);
  expect((await app.request(ROOT+'/cards/SK-038',{headers:player.h})).status).toBe(200);
  const created=await app.request(ROOT+'/api',{method:'POST',headers:player.postHeaders,body:JSON.stringify({operation:'create',capacity:2})});expect(created.status).toBe(200);
@@ -319,4 +321,43 @@ it('防御の見通しは本人とCSRFを検査し、公開結果だけ返して
  v=await(await post({operation:'move',roomId:v.roomId,revision:v.revision,action:'attack',ids:[v.state!.players[0]!.hand[0]!.uid],target:1})).json() as RoomView;
  const body={operation:'preview',roomId:v.roomId,revision:v.revision,ids:[]};expect((await post(body)).status).toBe(400);expect((await post(body,{...bh,'x-csrf-token':'bad'})).status).toBe(403);const preview=await post(body,bh);expect(preview.status).toBe(200);expect(preview.headers.get('cache-control')).toContain('no-store');expect(await preview.json()).toMatchObject({revision:v.revision,without:{damage:5},selected:{damage:5}});
  const after=await get(ROOT+'/api?room='+v.roomId);expect(after.headers.get('cache-control')).toContain('no-store');expect((await after.json() as RoomView).revision).toBe(v.revision);
+});
+
+it('🎴 全員に公開中は、招待していないメンバーも入れる（厄のあいだと、サーバーにいない人はのぞく）。社務所の切り替えは確認・権限が要る', async () => {
+  await setShinpuPublic(db, { guildId: cfg.guildId, on: true, actorId: A });
+  expect(await shinpuPublic(db, cfg.guildId)).toBe(true);
+  roles = [ROLE.sanpaisha];
+  const player = await betaPlayer();
+  expect(player.status).toBe(200);
+  expect(player.html).not.toContain('招待制');
+  const created = await app.request(ROOT + '/api', { method: 'POST', headers: player.postHeaders, body: JSON.stringify({ operation: 'create', capacity: 2 }) });
+  expect(created.status).toBe(200);
+  // 厄のあいだは入れない
+  roles = [ROLE.sanpaisha, ROLE.yakudoshi];
+  expect((await app.request(ROOT + '/cards', { headers: player.h })).status).toBe(403);
+  // サーバーにいない人も入れない
+  roles = [ROLE.sanpaisha];
+  present = false;
+  expect((await betaPlayer()).status).toBe(403);
+  present = true;
+  // 社務所：宮司が「切り替えてよい」で公開を止められる
+  roles = [ROLE.guji];
+  const admin = await officeLogin(), g = { cookie: 'shamusho_session=' + admin, 'content-type': 'application/x-www-form-urlencoded' };
+  const page = await (await app.request('/economy/shinpu', { headers: g })).text();
+  expect(page).toContain('全員に公開中');
+  const csrf = /name="_csrf" value="([^"]+)"/.exec(page)?.[1] ?? '';
+  const post = (body: Record<string, string>) => app.request('/economy/shinpu/public', { method: 'POST', headers: g, body: new URLSearchParams({ _csrf: csrf, ...body }) });
+  expect((await post({ on: '0' })).headers.get('location')).toBe('/economy/shinpu?msg=confirm');
+  expect(await shinpuPublic(db, cfg.guildId)).toBe(true);
+  expect((await post({ on: '0', confirm: 'yes' })).headers.get('location')).toBe('/economy/shinpu?msg=public_off');
+  expect(await shinpuPublic(db, cfg.guildId)).toBe(false);
+});
+
+it('🎴 公開の記録がないときは、全員に公開（はじめから公開）', async () => {
+  const { db: fresh, close: done } = await makeDb();
+  try {
+    expect(await shinpuPublic(fresh, cfg.guildId)).toBe(true);
+  } finally {
+    await done();
+  }
 });
