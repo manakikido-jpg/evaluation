@@ -153,6 +153,10 @@ export function EvaluationPage({ session, data, filter, page, emaPromotion = fal
           <label>そのうち参拝者・元氏子から<input type="number" name="motoFromSanpai" min={0} max={999} value={emaThresholds.motoFromSanpai}/></label>
           <label>招待で補える数<input type="number" name="motoInviteMax" min={0} max={100} value={emaThresholds.motoInviteMax}/></label>
         </fieldset>
+        <fieldset><legend>🧿 お守り</legend>
+          <label>持てる数<input type="number" name="omamoriMax" min={0} max={100} value={emaThresholds.omamoriMax}/></label>
+          <label>買える週の縁側の時間（時間）<input type="number" name="omamoriWeekHours" min={0} max={168} value={Math.round(emaThresholds.omamoriWeekMinutes / 60)}/></label>
+        </fieldset>
         <fieldset><legend>🔥 荒魂 → ⛩ 参拝者（戻る）</legend>
           <label>荒魂になってからの招待（人）<input type="number" name="aramitamaInvites" min={1} max={100} value={emaThresholds.aramitamaInvites}/></label>
         </fieldset>

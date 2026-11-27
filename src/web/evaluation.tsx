@@ -159,8 +159,9 @@ export function mountEvaluation(app: Hono<Env>, db: Db, cfg: () => GuildConfig, 
       sewayakuRetryMinutes: (() => { const v = typeof body.sewayakuRetryHours === 'string' && /^\d{1,4}$/.test(body.sewayakuRetryHours) ? Number(body.sewayakuRetryHours) : NaN; return Number.isNaN(v) ? NaN : v * 60; })(),
       sewayakuMinVoters: (() => { const v = typeof body.sewayakuMinVoters === 'string' && /^\d{1,4}$/.test(body.sewayakuMinVoters) ? Number(body.sewayakuMinVoters) : NaN; return v; })(),
       sodaiPromote: (() => { const v = typeof body.sodaiPromote === 'string' && /^\d{1,4}$/.test(body.sodaiPromote) ? Number(body.sodaiPromote) : NaN; return v; })(),
+      omamoriWeekMinutes: body.omamoriWeekHours === undefined ? cfg().emaThresholds.omamoriWeekMinutes : Number.isNaN(num('omamoriWeekHours')) ? NaN : num('omamoriWeekHours') * 60,
       // 🍃 キープと元氏子（欄がないときは今の値のまま）
-      ...Object.fromEntries((['keepNeed', 'keepFromSanpai', 'keepInviteMax', 'keepDays', 'motoNeed', 'motoFromSanpai', 'motoInviteMax', 'aramitamaInvites'] as const).map((k) => [k, body[k] === undefined ? cfg().emaThresholds[k] : num(k)])),
+      ...Object.fromEntries((['keepNeed', 'keepFromSanpai', 'keepInviteMax', 'keepDays', 'motoNeed', 'motoFromSanpai', 'motoInviteMax', 'aramitamaInvites', 'omamoriMax'] as const).map((k) => [k, body[k] === undefined ? cfg().emaThresholds[k] : num(k)])),
     });
     if (!parsed.success) return c.redirect('/evaluation?th=invalid', 303);
     await saveOverrides(db, { ...(await loadOverrides(db)), emaThresholds: parsed.data }, session.userId);

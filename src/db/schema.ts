@@ -765,7 +765,7 @@ export const shopItems = pgTable(
     id: bigserial('id', { mode: 'number' }).primaryKey(),
     /** otoshidama: お年玉袋（値段は手数料）/ mycolor: 自分だけの色（BOT がロールを作る） */
     /** casino_style: 🎴 勝負の御籤の品（見た目の品・お試し券。style_key で決める） */
-    kind: text('kind').$type<'role' | 'hanafubuki' | 'gift' | 'ema_pin' | 'omikuji_extra' | 'menzaifu' | 'otoshidama' | 'mycolor' | 'casino_boost' | 'casino_boost_ex' | 'casino_style' | 'name_change' | 'koban_1000' | 'koban_3000' | 'koban_5000' | 'koban_10000'>().notNull(),
+    kind: text('kind').$type<'role' | 'hanafubuki' | 'gift' | 'ema_pin' | 'omikuji_extra' | 'menzaifu' | 'omamori' | 'otoshidama' | 'mycolor' | 'casino_boost' | 'casino_boost_ex' | 'casino_style' | 'name_change' | 'koban_1000' | 'koban_3000' | 'koban_5000' | 'koban_10000'>().notNull(),
     name: text('name').notNull(),
     emoji: text('emoji').notNull().default(''),
     description: text('description').notNull().default(''),
@@ -2991,3 +2991,16 @@ export const shinpuSavedRooms = pgTable('shinpu_saved_rooms', {
   snapshot:jsonb('snapshot').$type<import('../services/shinpu/rooms.js').StoredRoom>().notNull(),
   expiresAt:timestamp('expires_at',{withTimezone:true}).notNull(),updatedAt:timestamp('updated_at',{withTimezone:true}).notNull().defaultNow(),
 },t=>[index('shinpu_saved_guild_expiry_idx').on(t.guildId,t.expiresAt)]);
+
+/**
+ * 🧿 お守り（新制度）。氏子のキープの判定で、降格を1回防ぐ。
+ * 1行＝1個。week は買う条件（その週に縁側40時間）を満たした週の月曜日（日本時間・YYYY-MM-DD）。同じ週の分は1個だけ。
+ * usedAt が入っていれば使いおわり。
+ */
+export const omamoriHoldings = pgTable('omamori_holdings', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  memberId: text('member_id').notNull(),
+  week: text('week').notNull(),
+  boughtAt: timestamp('bought_at', { withTimezone: true }).notNull().defaultNow(),
+  usedAt: timestamp('used_at', { withTimezone: true }),
+}, (t) => [uniqueIndex('omamori_holdings_member_week_idx').on(t.memberId, t.week)]);

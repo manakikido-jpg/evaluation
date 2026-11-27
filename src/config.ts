@@ -401,6 +401,9 @@ export const emaThresholdsSchema = z
     motoInviteMax: z.number().int().min(0).max(100).default(5),
     /** 🔥 荒魂が参拝者に戻るのに要る招待（荒魂になってから「1人」と数えた数） */
     aramitamaInvites: z.number().int().min(1).max(100).default(3),
+    /** 🧿 お守り：持てる数と、買える週の縁側の時間（分） */
+    omamoriMax: z.number().int().min(0).max(100).default(3),
+    omamoriWeekMinutes: z.number().int().min(0).max(10080).default(2400),
   });
 export type EmaThresholds = z.infer<typeof emaThresholdsSchema>;
 

@@ -406,6 +406,8 @@ export function goshuinchoReply(
     keep?: KeepCard;
     /** 🔥 荒魂：荒魂になってからの招待と、参拝者に戻るのに要る数 */
     aramitama?: { invites: number; need: number };
+    /** 🧿 持っているお守りの数 */
+    omamori?: number;
     /** 自分の /絵馬：いま贈れる人・あと少しの人 */
     partners?: { ready: { id: string; name: string; days: number }[]; soon: { id: string; name: string; days: number }[] };
   },
@@ -507,7 +509,7 @@ export function goshuinchoReply(
     if (ema.aramitama) embed.addFields({ name: '🔥 荒魂', value: `${check(ema.aramitama.invites >= ema.aramitama.need)} 招待 ${progressBar(ema.aramitama.invites, ema.aramitama.need)}　**${ema.aramitama.invites}** / ${ema.aramitama.need} 人\n-# そろうと参拝者に戻り、お参り期間を最初から始めます` });
     if (ema.keep?.kind === 'moto') embed.addFields({ name: '🍂 元氏子', value: keepLines(ema.keep).join('\n') });
     else if (nextLines.length) embed.addFields({ name: '⬆️ 次の役職', value: nextLines.join('\n').slice(0, 1024) });
-    if (ema.keep?.kind === 'keep') embed.addFields({ name: '🍃 氏子のキープ', value: keepLines(ema.keep).join('\n') });
+    if (ema.keep?.kind === 'keep') embed.addFields({ name: '🍃 氏子のキープ', value: [...keepLines(ema.keep), ...(ema.omamori ? [`🧿 お守り ×${ema.omamori}`] : [])].join('\n') });
     if (ema.voter && ema.th && SEWAYAKU_VOTER_KEYS_VIEW.includes(rank?.key ?? '')) embed.addFields({ name: '🗳 世話役の選挙の投票権', value: voterLine(ema.voter, ema.th) });
   }
   if (coins) embed.addFields({ name: coins.name, value: `${coins.emoji} ${coins.balance}`, inline: true });
@@ -542,7 +544,7 @@ function emaCardReply(
   embed.addFields({ name: '💬 ひとこと', value: emaField(ema) });
   if (ema.promoteMode) {
     if (ema.keep) {
-      embed.addFields({ name: ema.keep.kind === 'keep' ? '🍃 氏子のキープ' : '🍂 元氏子', value: keepLines(ema.keep).join('\n') });
+      embed.addFields({ name: ema.keep.kind === 'keep' ? '🍃 氏子のキープ' : '🍂 元氏子', value: [...keepLines(ema.keep), ...(ema.omamori ? [`🧿 お守り ×${ema.omamori}`] : [])].join('\n') });
     } else if (rank?.key === 'ujiko') {
       const keep = ema.th?.ujikoKeep ?? 0;
       embed.addFields({

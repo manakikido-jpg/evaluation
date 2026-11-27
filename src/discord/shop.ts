@@ -1,3 +1,6 @@
+import { isNewSystemVisible } from '../domain/terms.js';
+import { highestRank } from '../domain/ranks.js';
+import { buyOmamori } from '../services/omamori.js';
 import { kobanBuyConfirm, kobanStaff, roleIdsOf } from './koban.js';
 import { kobanValue } from '../domain/koban.js';
 import { giftCost, giftFee } from '../services/shop.js';
@@ -172,7 +175,9 @@ export class ShopApp {
   private async open(i: ButtonInteraction<'cached'>, page = 0): Promise<void> {
     if (i.customId === 'shop:open') await i.deferReply(EPHEMERAL);
     else await i.deferUpdate();
-    const [items, purchases, mine] = await Promise.all([listItems(this.db, { enabledOnly: true }), activeRolePurchases(this.db, i.user.id), activeMyColor(this.db, i.user.id)]);
+    const [all, purchases, mine] = await Promise.all([listItems(this.db, { enabledOnly: true }), activeRolePurchases(this.db, i.user.id), activeMyColor(this.db, i.user.id)]);
+    // 🧿 お守りは、新制度が始まるまで出さない
+    const items = isNewSystemVisible() ? all : all.filter((x) => x.kind !== 'omamori');
     // 受けている授与品（ロールをまだ持っているものだけ）
     const owned = new Map<number, Date | null>();
     for (const p of purchases) {
@@ -338,6 +343,20 @@ export class ShopApp {
       case 'menzaifu': {
         const r = await purchaseMenzaifu({ db: this.db, cfg, discord: this.discord }, userId, roleIdsOf(i.member));
         return yakubaraiResultText(r, cfg.economy);
+      }
+      case 'omamori': {
+        // 🧿 お守り（新制度）：氏子だけ・1週間に縁側40時間の週に1個・3個まで。割引は使わない
+        if (!isNewSystemVisible()) return 'この授与品は、今は受けられません。';
+        if (highestRank(cfg.ranks, i.member.roles.cache.keys())?.key !== 'ujiko') return '🧿 お守りは、氏子の方だけが受けられます（氏子のキープの判定で、降格を1回防ぎます）。';
+        const r = await buyOmamori(this.db, cfg, item, userId);
+        const hours = (m: number) => Math.floor(m / 60);
+        if (r.status === 'insufficient') return `${cfg.economy.currencyName}が足りません（${r.price} 枚・いま ${r.balance} 枚）。`;
+        if (r.status === 'denied') {
+          return r.s.reason === 'full' ? `🧿 お守りは ${r.s.max} 個まで持てます（いま ${r.s.count} 個）。`
+            : r.s.reason === 'bought' ? '🧿 今週の分は、もう受けています（1週間に1個です）。'
+            : `🧿 お守りは、1週間に縁側で ${hours(r.s.need)} 時間すごした週に受けられます（今週 ${hours(r.s.minutes)} / ${hours(r.s.need)} 時間）。`;
+        }
+        return `🧿 お守りを 1 個受けました（持っている: ${r.count} 個）。残り ${r.balance} 枚。\n-# 氏子のキープの判定で絵馬が足りないとき、自動で1個使って降格を防ぎます（2回つづけては防げません）。`;
       }
       case 'omikuji_extra':
         return this.omikujiExtra(i, item, discount);

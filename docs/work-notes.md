@@ -1,4 +1,10 @@
-## 2026年11月27日：③荒魂（Claude・作業中）
+## 2026年11月27日：④お守り（Claude・作業中）
+- ③は push 済み（c30dd63b・全テスト318ファイル3377件 OK）。本人「もう新しくしても問題ない？」→ ④⑤とロール ID がそろってから押すのをすすめた（返事待ちではなく続行）。
+- 決めた形（Claude の解釈・本人に伝える）：授与所の品物 kind='omamori'（30,000銭・割引なし・新制度まで出さない）。買えるのは氏子だけ。週は月〜日（日本時間）で、今週か先週に縁側40時間なら、その週の分を1個。3個まで。判定で自動で使う（元氏子ロール未設定のあいだは使わない）。
+- 実装ずみ：表 omamori_holdings（移行0181）・src/services/omamori.ts・授与所の購入・checkUjikoKeep で consumeOmamori・プロフィール表示・評価ページの欄。テスト test/omamori.test.ts 4件。
+- 次：関係テスト → 全テスト → fetch → push → ⑤ロールごとのカジノ上限・シクレ/宿。
+
+## 2026年11月27日：③荒魂（Claude・push 済み c30dd63b）
 - ②は push 済み（0085d7b6・本番 healthz 200）。本人の質問「氏子から元氏子への変更はどこから？」→ 自動だけ（手動ボタンは無い・要るなら足すと返事）。
 - 決めた形：判定カードの「退出にする」の場所に「🔥 荒魂にする」（③④後・荒魂ロール ID が設定ずみのときだけ）。状態は omairi.status='aramitama'（移行なし）。荒魂になってからの招待3人（emaThresholds.aramitamaInvites）で10分ごとの見回りが参拝者に戻し、お参り期間を最初から。絵馬・結び・キャストを止める門（aramitamaGate）。
 - 実装ずみ：src/services/aramitama.ts・decideOmairi('aramitama')・カード/Web のボタン・プロフィール表示・テスト test/aramitama.test.ts 4件。説明書・更新履歴・引き継ぎ資料も直した。

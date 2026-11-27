@@ -1,3 +1,4 @@
+import { consumeOmamori, omamoriCount } from '../services/omamori.js';
 import { aramitamaProgress, aramitamaRoleId, runAramitamaReturn } from '../services/aramitama.js';
 import { AramitamaGate } from './aramitamaGate.js';
 import { controlAccess, controlPanel, parseControlId } from './controlPanel.js';
@@ -763,6 +764,7 @@ export class ShuinApp {
     // 参拝者：お参り期間・毎週の数・招待の補いをくわしく／氏子・世話役・総代：世話役の選挙の投票権
     // 🍃 氏子のキープ／🍂 元氏子の復帰（③④のあと・状態の表にある人だけ）
     const keep = emaMode && (ownerKey === 'ujiko' || ownerKey === 'sanpaisha') ? await keepCardOf(this.db, this.cfg, ownerId) : undefined;
+    const omamori = keep ? await omamoriCount(this.db, ownerId) : 0;
     // 🔥 荒魂：参拝者に戻るまでの招待
     const ara = emaMode && !ownerKey ? await aramitamaProgress(this.db, this.cfg, ownerId) : null;
     const ujiko = emaMode && ownerKey === 'sanpaisha' && keep?.kind !== 'moto' ? await ujikoProgress(this.db, this.cfg, ownerId) : undefined;
@@ -801,7 +803,7 @@ export class ShuinApp {
         {
           count: emaCount, messages: emaMessages, promoteMode: emaMode, th: this.cfg.emaThresholds, tierLabel: emaTier.map((t) => EMA_TIER_LABEL[t]).join('＋'),
           ...(emaStepInfo ? { step: emaStepInfo } : {}), ...(sewayakuInfo ? { sewayaku: sewayakuInfo } : {}), ...(ujiko ? { ujiko } : {}), ...(voter ? { voter } : {}),
-          ...(emaPair ? { pair: emaPair } : {}), ...(emaPartnerList ? { partners: emaPartnerList } : {}), ...(keep ? { keep } : {}), ...(ara ? { aramitama: { invites: ara.invites, need: ara.need } } : {}),
+          ...(emaPair ? { pair: emaPair } : {}), ...(emaPartnerList ? { partners: emaPartnerList } : {}), ...(keep ? { keep } : {}), ...(omamori ? { omamori } : {}), ...(ara ? { aramitama: { invites: ara.invites, need: ara.need } } : {}),
         },
         collection ? { total: collection.total, met: collection.met } : undefined,
         { mode, ...(perkNext ? { perkNext } : {}) },
@@ -946,7 +948,7 @@ export class ShuinApp {
     this.lastUjikoKeepAt = now.getTime();
     this.checkingUjikoKeep = true;
     try {
-      const actions = await runUjikoKeep(this.db, this.cfg, now);
+      const actions = await runUjikoKeep(this.db, this.cfg, now, { consumeOmamori: (id) => consumeOmamori(this.db, id, now) });
       if (!actions.length) return;
       const roles = await newSystemRoles(this.db);
       const rank = (key: string) => this.cfg.ranks.find((r) => r.key === key);

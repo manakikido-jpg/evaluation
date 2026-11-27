@@ -120,6 +120,8 @@ export interface EmaThresholdCounts {
   motoFromSanpai: number;
   motoInviteMax: number;
   aramitamaInvites: number;
+  omamoriMax: number;
+  omamoriWeekMinutes: number;
 }
 
 /** 既定の枚数（たたき台）。設定がないときのフォールバック。 */
@@ -144,6 +146,8 @@ export const EMA_DEFAULT_THRESHOLDS: EmaThresholdCounts = {
   motoFromSanpai: 10,
   motoInviteMax: 5,
   aramitamaInvites: 3,
+  omamoriMax: 3,
+  omamoriWeekMinutes: 2400,
 };
 
 /** 枚数の設定から、絵馬の昇格の段を作る。 */

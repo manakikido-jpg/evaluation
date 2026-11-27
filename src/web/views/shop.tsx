@@ -32,6 +32,7 @@ const KIND_LABEL: Record<ShopItem['kind'], string> = {
   ema_pin: '絵馬の奉納',
   omikuji_extra: 'おみくじもう 1 回',
   menzaifu: '免罪符',
+  omamori: '🧿 お守り（新制度が始まるまで授与所に出ません）',
   otoshidama: 'お年玉袋',
   mycolor: '自分だけの色',
   casino_boost: '🎰 大勝負の札（持ち物に 1 枚）',

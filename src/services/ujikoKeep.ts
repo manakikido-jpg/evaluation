@@ -173,7 +173,7 @@ export async function runUjikoKeep(db: Db, cfg: GuildConfig, now = new Date(), d
         if (p.met) {
           await db.update(ujikoKeepState).set({ nextJudgeAt: next, omamoriUsedLast: false, updatedAt: now }).where(eq(ujikoKeepState.memberId, id));
           out.push({ type: 'kept', id, nextJudgeAt: next, p });
-        } else if (!row.omamoriUsedLast && deps.consumeOmamori && (await deps.consumeOmamori(id))) {
+        } else if (roles.motoUjiko && !row.omamoriUsedLast && deps.consumeOmamori && (await deps.consumeOmamori(id))) {
           await db.update(ujikoKeepState).set({ nextJudgeAt: next, omamoriUsedLast: true, updatedAt: now }).where(eq(ujikoKeepState.memberId, id));
           out.push({ type: 'omamori', id, nextJudgeAt: next, p });
         } else if (roles.motoUjiko) {
