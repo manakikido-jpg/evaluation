@@ -24,6 +24,7 @@ import { EMA_DAYS_TOGETHER, EMA_MESSAGE_MAX, EMA_MINUTES_PER_DAY, EMA_TEMPLATES,
 import { emaCardId, emaEditId, emaGiveId, emaModalId, emaPickId, emaToId, emaUndoId, sewayakuVoteId, shuinId } from './ids.js';
 import type { CandidateStatus, VoterStatus, VoteResult } from '../services/sewayakuElection.js';
 import type { UjikoProgress } from '../services/ujikoRequirement.js';
+import type { KeepCard } from '../services/ujikoKeep.js';
 import type { EmaThresholdCounts } from '../domain/ema.js';
 import { w, isMusubiMode } from '../domain/terms.js';
 
@@ -262,6 +263,20 @@ function nextRankLines(
   return [];
 }
 
+/** 🍃 氏子のキープ／🍂 元氏子が氏子に戻るまで（合計と「参拝者から」の2本のバー） */
+function keepLines(k: KeepCard): string[] {
+  const p = k.p;
+  const head = k.kind === 'keep'
+    ? (p.met ? `✅ キープできます　📅 判定 ${jDay(k.judgeAt)}` : `あと **${p.short}** 枚　📅 判定 ${jDay(k.judgeAt)}`)
+    : (p.met ? '✨ そろいました（まもなく氏子に戻ります）' : `氏子に戻るまで あと **${p.short}** 枚`);
+  return [
+    head,
+    `${check(p.total + p.inviteUsed >= p.need)} 絵馬　${progressBar(p.total + p.inviteUsed, p.need)} **${p.total + p.inviteUsed}** / ${p.need}`,
+    `${check(p.fromSanpai + p.inviteUsed >= p.needSanpai)} 参拝者から　${progressBar(p.fromSanpai + p.inviteUsed, p.needSanpai)} **${p.fromSanpai + p.inviteUsed}** / ${p.needSanpai}`,
+    ...(p.inviteUsed ? [`-# 🤝 招待 ${p.inviteUsed} をふくみます`] : []),
+  ];
+}
+
 /** 🗳 世話役の選挙の投票権（直近30日の縁側） */
 function voterLine(v: VoterStatus, th: EmaThresholdCounts): string {
   return v.ok
@@ -386,6 +401,8 @@ export function goshuinchoReply(
     count: number; messages: { message: string; createdAt: Date }[]; promoteMode?: boolean; step?: { toName: string; need: number; have?: number; inPeriod?: boolean }; sewayaku?: SewayakuCardInfo; ujiko?: UjikoProgress; voter?: VoterStatus; th?: EmaThresholdCounts; tierLabel?: string;
     /** ほかの人の /絵馬：見ている人との縁側（1日30分以上の日）と、贈れるか */
     pair?: { days: number; given: boolean; canGive: boolean };
+    /** 🍃 氏子のキープ／🍂 元氏子の復帰 */
+    keep?: KeepCard;
     /** 自分の /絵馬：いま贈れる人・あと少しの人 */
     partners?: { ready: { id: string; name: string; days: number }[]; soon: { id: string; name: string; days: number }[] };
   },
@@ -484,7 +501,9 @@ export function goshuinchoReply(
   embed.addFields(introField);
   if (ema) {
     const nextLines = nextRankLines(ranks, ema);
-    if (nextLines.length) embed.addFields({ name: '⬆️ 次の役職', value: nextLines.join('\n').slice(0, 1024) });
+    if (ema.keep?.kind === 'moto') embed.addFields({ name: '🍂 元氏子', value: keepLines(ema.keep).join('\n') });
+    else if (nextLines.length) embed.addFields({ name: '⬆️ 次の役職', value: nextLines.join('\n').slice(0, 1024) });
+    if (ema.keep?.kind === 'keep') embed.addFields({ name: '🍃 氏子のキープ', value: keepLines(ema.keep).join('\n') });
     if (ema.voter && ema.th && SEWAYAKU_VOTER_KEYS_VIEW.includes(rank?.key ?? '')) embed.addFields({ name: '🗳 世話役の選挙の投票権', value: voterLine(ema.voter, ema.th) });
   }
   if (coins) embed.addFields({ name: coins.name, value: `${coins.emoji} ${coins.balance}`, inline: true });
@@ -518,7 +537,9 @@ function emaCardReply(
   embed.setDescription(`**${rankLabel(rank)}**　🎐 頂いた絵馬 **${ema.count}** 枚${ema.tierLabel ? `（${ema.tierLabel}）` : ''}`);
   embed.addFields({ name: '💬 ひとこと', value: emaField(ema) });
   if (ema.promoteMode) {
-    if (rank?.key === 'ujiko') {
+    if (ema.keep) {
+      embed.addFields({ name: ema.keep.kind === 'keep' ? '🍃 氏子のキープ' : '🍂 元氏子', value: keepLines(ema.keep).join('\n') });
+    } else if (rank?.key === 'ujiko') {
       const keep = ema.th?.ujikoKeep ?? 0;
       embed.addFields({
         name: '🍃 氏子でいる目安',

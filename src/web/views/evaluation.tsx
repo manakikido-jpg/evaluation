@@ -16,7 +16,7 @@ export function evaluationQuery(filter: EvaluationFilter, selectedIds: string[],
   return query.toString();
 }
 
-export function EvaluationPage({ session, data, filter, page, emaPromotion = false, keepWarnings = [], names, saved, resetFlash, resetUndoable, perkUjiko = false, perkFlash, goenPerksText = '', goenPerksFlash, emaThresholds = EMA_DEFAULT_THRESHOLDS, emaThresholdsFlash, ujikoWeek, sewayaku, newSystemStartedAt }: {
+export function EvaluationPage({ session, data, filter, page, emaPromotion = false, keepWarnings = [], names, saved, resetFlash, resetUndoable, perkUjiko = false, perkFlash, goenPerksText = '', goenPerksFlash, emaThresholds = EMA_DEFAULT_THRESHOLDS, emaThresholdsFlash, ujikoWeek, sewayaku, newSystemStartedAt, nsRoles, motoCount = 0, rolesFlash }: {
   session: AdminSession; data: EvaluationData; filter: EvaluationFilter; page: number;
   emaPromotion?: boolean; keepWarnings?: { id: string; count: number }[]; names?: Map<string, string>; saved?: string;
   resetFlash?: string; resetUndoable?: { at: Date; remaining: number; specialRemaining: number };
@@ -25,6 +25,8 @@ export function EvaluationPage({ session, data, filter, page, emaPromotion = fal
   emaThresholds?: EmaThresholdCounts; emaThresholdsFlash?: string;
   ujikoWeek?: { week: string; active: number; required: number };
   sewayaku?: { active: (SewayakuElection & { votes: number | null })[]; recent: SewayakuElection[]; names: Map<string, string> };
+  /** 🍂 元氏子・荒魂のロール ID と、いまの元氏子の人数 */
+  nsRoles?: { motoUjiko?: string; aramitama?: string }; motoCount?: number; rolesFlash?: string;
   /** ④ご縁のリセットが済んだ時刻（済んでいなければなし） */
   newSystemStartedAt?: Date;
 }) {
@@ -140,6 +142,17 @@ export function EvaluationPage({ session, data, filter, page, emaPromotion = fal
         <fieldset><legend>🍃 氏子の維持</legend>
           <label>これ未満で注意（0で注意なし）<input type="number" name="ujikoKeep" min={0} max={100} value={emaThresholds.ujikoKeep}/></label>
         </fieldset>
+        <fieldset><legend>🍃 氏子のキープ（足りないと元氏子に）</legend>
+          <label>判定の日に要る絵馬<input type="number" name="keepNeed" min={0} max={999} value={emaThresholds.keepNeed}/></label>
+          <label>そのうち参拝者・元氏子から<input type="number" name="keepFromSanpai" min={0} max={999} value={emaThresholds.keepFromSanpai}/></label>
+          <label>招待で補える数<input type="number" name="keepInviteMax" min={0} max={100} value={emaThresholds.keepInviteMax}/></label>
+          <label>判定の間かく（日）<input type="number" name="keepDays" min={1} max={365} value={emaThresholds.keepDays}/></label>
+        </fieldset>
+        <fieldset><legend>🍂 元氏子 → 🍃 氏子（戻る）</legend>
+          <label>元氏子になってからの絵馬<input type="number" name="motoNeed" min={1} max={999} value={emaThresholds.motoNeed}/></label>
+          <label>そのうち参拝者・元氏子から<input type="number" name="motoFromSanpai" min={0} max={999} value={emaThresholds.motoFromSanpai}/></label>
+          <label>招待で補える数<input type="number" name="motoInviteMax" min={0} max={100} value={emaThresholds.motoInviteMax}/></label>
+        </fieldset>
         <fieldset><legend>🍃 氏子 → 🎋 世話役（選挙）</legend>
           <label>投票できる人の何%を超えたら昇格<input type="number" name="sewayakuVotePercent" min={1} max={100} value={emaThresholds.sewayakuVotePercent}/></label>
           <label>投票できる人：直近30日の縁側の時間（時間・これを超える）<input type="number" name="sewayakuVoterHours" min={0} max={720} value={Math.round(emaThresholds.sewayakuVoterMinutes / 60)}/></label>
@@ -154,6 +167,19 @@ export function EvaluationPage({ session, data, filter, page, emaPromotion = fal
         <button type="submit">昇格の数を保存</button>
       </form>
       <details><summary>くわしく</summary><p class="note">今週の数は、前の7日間に縁側に{Math.round(emaThresholds.ujikoActiveMinutes / 60 * 10) / 10}時間以上いた氏子以上の人数 × {emaThresholds.ujikoPercent}%（切り上げ・最低{emaThresholds.ujikoMin}枚）。その週にお参り期間が始まった人は、ずっとその数です。票の種類は贈る人と相手の役職で自動で決まります（参拝者・氏子へは氏子以上が「氏子の票」、世話役へは総代＋運営が「総代の票」）。総代の票は失効しません（氏子の票だけ30日で失効）。氏子→世話役は絵馬ではなく選挙です。自動降格はしません。</p></details>
+    </section>}
+    {session.level === 'guji' && <section class="card" id="ns-roles">
+      <h2>🍂 元氏子・荒魂のロール</h2>
+      {rolesFlash === 'saved' && <p class="flash ok" role="status">ロールを保存しました。</p>}
+      {rolesFlash === 'invalid' && <p class="flash warn" role="alert">ロール ID は数字17〜20桁で入れてください。</p>}
+      <p>{nsRoles?.motoUjiko ? <span class="tag green">元氏子：設定ずみ</span> : <span class="tag gray">元氏子：未設定</span>} いまの元氏子 <strong>{motoCount} 人</strong></p>
+      <form method="post" action="/evaluation/new-system-roles" class="ema-thresholds-form">
+        <input type="hidden" name="_csrf" value={session.csrfToken}/>
+        <label>元氏子のロール ID<input type="text" name="motoUjiko" inputmode="numeric" pattern="[0-9]{17,20}" maxLength={20} value={nsRoles?.motoUjiko ?? ''}/></label>
+        <label>荒魂のロール ID<input type="text" name="aramitama" inputmode="numeric" pattern="[0-9]{17,20}" maxLength={20} value={nsRoles?.aramitama ?? ''}/></label>
+        <button type="submit">ロールを保存</button>
+      </form>
+      <details><summary>くわしく</summary><p class="note">元氏子のロールが未設定のあいだは、キープに届かなくても降格しません（本人へのお知らせと #記録 だけ）。Discord でロールを作り、ロールの ID をここに入れてください。BOT のロールを、そのロールより上に置いてください。キープの判定は、④のあと・氏子になった日（前からの氏子は④の日）から{emaThresholds.keepDays}日ごとです。</p></details>
     </section>}
     {session.level === 'guji' && sewayaku && <section class="card" id="ns-election">
       <h2>🗳 世話役の選挙（候補ごと・匿名）</h2>

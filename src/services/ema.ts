@@ -1,7 +1,7 @@
 import { and, count, desc, eq, gte, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
-import { ema, engawaPairs, members } from '../db/schema.js';
+import { ema, engawaPairs, members, ujikoKeepState } from '../db/schema.js';
 import { highestRank } from '../domain/ranks.js';
 import { EMA_DAYS_TOGETHER, EMA_MESSAGE_MAX, EMA_MINUTES_PER_DAY, emaFreshSince, emaTierExpires, emaTierFor, type EmaTier } from '../domain/ema.js';
 import { staffAlts } from './staffAlts.js';
@@ -95,7 +95,7 @@ export async function checkGiveEma(
   if (receiverKey !== 'sanpaisha' && receiverKey !== 'ujiko' && receiverKey !== 'sewayaku') {
     return { ok: false, reason: 'receiver_rank' };
   }
-  const tier = emaTierFor({
+  const baseTier = emaTierFor({
     giverWeight: giverRank?.weight ?? 0,
     receiverKey,
     ujikoWeight: weightOf('ujiko'),
@@ -103,6 +103,13 @@ export async function checkGiveEma(
     sodaiWeight: weightOf('sodai'),
     sanpaishaWeight: weightOf('sanpaisha'),
   });
+  // 🍂 元氏子（位は参拝者）：参拝者・氏子のどちらにも贈れる。参拝者・元氏子からも贈ってもらえる（参拝者からの絵馬として数える）
+  let tier: EmaTier | null = baseTier;
+  if (!tier && giverRank?.key === 'sanpaisha' && receiverKey === 'sanpaisha') {
+    const moto = new Set((await db.select({ id: ujikoKeepState.memberId }).from(ujikoKeepState).where(and(inArray(ujikoKeepState.memberId, [giverId, receiverId]), eq(ujikoKeepState.state, 'moto')))).map((r) => r.id));
+    if (moto.has(receiverId)) tier = 'sanpai';
+    else if (moto.has(giverId)) tier = 'ujiko';
+  }
   // 贈れない：参拝者より前の人は贈れない・参拝者どうしは贈れない
   if (!tier) return { ok: false, reason: giverRank && receiverKey === 'sanpaisha' ? 'sanpai_to_sanpai' : 'giver_no_rank' };
 

@@ -112,6 +112,13 @@ export interface EmaThresholdCounts {
   sewayakuRetryMinutes: number;
   sewayakuMinVoters: number;
   sodaiPromote: number;
+  keepNeed: number;
+  keepFromSanpai: number;
+  keepInviteMax: number;
+  keepDays: number;
+  motoNeed: number;
+  motoFromSanpai: number;
+  motoInviteMax: number;
 }
 
 /** 既定の枚数（たたき台）。設定がないときのフォールバック。 */
@@ -128,6 +135,13 @@ export const EMA_DEFAULT_THRESHOLDS: EmaThresholdCounts = {
   sewayakuRetryMinutes: SEWAYAKU_RETRY_MINUTES,
   sewayakuMinVoters: SEWAYAKU_MIN_VOTERS,
   sodaiPromote: EMA_SODAI_PROMOTE,
+  keepNeed: 20,
+  keepFromSanpai: 10,
+  keepInviteMax: 5,
+  keepDays: 30,
+  motoNeed: 15,
+  motoFromSanpai: 10,
+  motoInviteMax: 5,
 };
 
 /** 枚数の設定から、絵馬の昇格の段を作る。 */

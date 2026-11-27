@@ -1,7 +1,8 @@
 import { and, count, eq, gte, inArray, isNotNull, isNull, or } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
-import { ema, emaKeepWarn, invites, memberAlts, members, settings } from '../db/schema.js';
+import { ema, emaKeepWarn, invites, memberAlts, members, settings, ujikoKeepState } from '../db/schema.js';
+import { motoProgress } from './ujikoKeep.js';
 import { highestRank } from '../domain/ranks.js';
 import { emaStepFrom, emaTiersShown, emaFreshSince, type EmaStep } from '../domain/ema.js';
 import { ujikoProgress } from './ujikoRequirement.js';
@@ -46,6 +47,12 @@ async function targetMembers(db: Db): Promise<{ id: string; roleIds: string[] }[
  */
 export async function emaStepProgress(db: Db, cfg: GuildConfig, memberId: string, step: EmaStep, now = new Date()): Promise<{ count: number; need: number }> {
   if (step.from === 'sanpaisha') {
+    // 🍂 元氏子は、元氏子になってからの絵馬（15・うち参拝者から10・招待で5まで）で氏子に戻る
+    const [k] = await db.select().from(ujikoKeepState).where(eq(ujikoKeepState.memberId, memberId));
+    if (k?.state === 'moto') {
+      const m = await motoProgress(db, cfg, memberId, k.since, now);
+      return { count: m.need - m.short, need: m.need };
+    }
     const p = await ujikoProgress(db, cfg, memberId, now);
     return { count: p.total, need: p.required };
   }
@@ -74,9 +81,10 @@ export async function emaPromotable(db: Db, cfg: GuildConfig, now = new Date()):
     for (const r of votes) upper.set(r.id, Number(r.n));
     for (const r of inv) upper.set(r.id, (upper.get(r.id) ?? 0) + Math.min(Number(r.n), cfg.emaThresholds.inviteSubstituteMax));
   }
+  const moto = new Set((await db.select({ id: ujikoKeepState.memberId }).from(ujikoKeepState).where(eq(ujikoKeepState.state, 'moto'))).map((r) => r.id));
   for (const p of people) {
     const step = p.step!;
-    if (step.from === 'sanpaisha' && (upper.get(p.id) ?? 0) < cfg.emaThresholds.ujikoMin) continue;
+    if (step.from === 'sanpaisha' && !moto.has(p.id) && (upper.get(p.id) ?? 0) < cfg.emaThresholds.ujikoMin) continue;
     const { count: have, need } = await emaStepProgress(db, cfg, p.id, step, now);
     if (have >= need) out.push(p.id);
   }

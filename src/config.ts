@@ -390,6 +390,15 @@ export const emaThresholdsSchema = z
     sewayakuMinVoters: z.number().int().min(1).max(1000).default(5),
     /** 世話役→総代に要る「総代の票」 */
     sodaiPromote: z.number().int().min(1).max(1000).default(200),
+    /** 🍃 氏子のキープ：判定の日に有効な絵馬がこの数（うち keepFromSanpai は参拝者・元氏子から。招待で keepInviteMax まで補える）。判定は keepDays 日ごと */
+    keepNeed: z.number().int().min(0).max(1000).default(20),
+    keepFromSanpai: z.number().int().min(0).max(1000).default(10),
+    keepInviteMax: z.number().int().min(0).max(100).default(5),
+    keepDays: z.number().int().min(1).max(365).default(30),
+    /** 🍂 元氏子が氏子に戻る：元氏子になってからの絵馬がこの数（うち motoFromSanpai は参拝者・元氏子から。招待で motoInviteMax まで補える） */
+    motoNeed: z.number().int().min(1).max(1000).default(15),
+    motoFromSanpai: z.number().int().min(0).max(1000).default(10),
+    motoInviteMax: z.number().int().min(0).max(100).default(5),
   });
 export type EmaThresholds = z.infer<typeof emaThresholdsSchema>;
 

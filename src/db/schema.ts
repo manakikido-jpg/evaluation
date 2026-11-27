@@ -611,6 +611,24 @@ export const emaKeepWarn = pgTable('ema_keep_warn', {
   warnedAt: timestamp('warned_at', { withTimezone: true }),
 });
 
+/**
+ * 🍃 氏子のキープと元氏子（新制度・2026-11-27）。
+ * state: ujiko（キープの判定を待つ氏子）/ moto（元氏子。絵馬を集め直して氏子に戻る）
+ * since: 氏子になった日（または④の日）／元氏子になった日。元氏子は since より後にもらった絵馬だけ数える。
+ * nextJudgeAt: 次のキープの判定の日（氏子だけ）。warnedFor / heldFor: その判定の日について、7日前のお知らせ・「ロール未設定で降格を見送った」お知らせを出したか。
+ * omamoriUsedLast: 前の判定でお守りを使った（次の判定では使えない）。
+ */
+export const ujikoKeepState = pgTable('ujiko_keep_state', {
+  memberId: text('member_id').primaryKey(),
+  state: text('state').$type<'ujiko' | 'moto'>().notNull().default('ujiko'),
+  since: timestamp('since', { withTimezone: true }).notNull(),
+  nextJudgeAt: timestamp('next_judge_at', { withTimezone: true }),
+  warnedFor: timestamp('warned_for', { withTimezone: true }),
+  heldFor: timestamp('held_for', { withTimezone: true }),
+  omamoriUsedLast: boolean('omamori_used_last').notNull().default(false),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const settings = pgTable('settings', {
   key: text('key').primaryKey(),
   value: jsonb('value').$type<unknown>().notNull(),

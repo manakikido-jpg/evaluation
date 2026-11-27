@@ -43,6 +43,7 @@ import { currentAutoRank, decidePromotion, highestRank, voiceCapPercentOf, voice
 import { emaStepFrom, emaTiersShown, EMA_PROMOTION_BURST, EMA_TEMPLATES, EMA_TIER_LABEL } from '../domain/ema.js';
 import { w, isMusubiMode, isNewSystemVisible } from '../domain/terms.js';
 import { collectEmaKeepWarnings, emaPromotable, emaPromotionEnabled, emaStepProgress } from '../services/emaPromotion.js';
+import { keepCardOf, newSystemRoles, runUjikoKeep } from '../services/ujikoKeep.js';
 import { ujikoProgress } from '../services/ujikoRequirement.js';
 import { candidateStatus, closeDueSewayakuElections, currentElectionOf, finishSewayakuElection, hasSewayakuVote, listSewayakuElections, openSewayakuElections, scheduleSewayakuElections, setSewayakuElectionMessage, toggleSewayakuVote, voterStatus } from '../services/sewayakuElection.js';
 import { grantGoenPerks } from '../services/goenPerks.js';
@@ -313,6 +314,7 @@ export class ShuinApp {
     await this.checkEvaluationPromotions(guild, now).catch(err => logger.warn({ err }, 'evaluation promotion check failed'));
     await this.checkGoenPerks(guild, now).catch(err => logger.warn({ err }, 'goen perk check failed'));
     await this.checkEmaKeep(guild, now).catch(err => logger.warn({ err }, 'ema keep check failed'));
+    await this.checkUjikoKeep(guild, now).catch(err => logger.warn({ err }, 'ujiko keep check failed'));
     await this.checkSewayakuElection(guild, now).catch(err => logger.warn({ err }, 'sewayaku election check failed'));
     await awardLongVoiceBonuses(this.db, this.cfg, now).catch(err => logger.warn({ err }, 'long voice bonus tick failed'));
     await notifyLongVoiceBonuses(this.db, this.cfg, { sendMessage: async (channelId, body) => {
@@ -756,7 +758,9 @@ export class ShuinApp {
       sewayakuInfo = { status: cand, ...(election ? { election: { status: election.status, startsAt: election.startsAt, endsAt: election.endsAt } } : {}), showVote: false, voted: false };
     }
     // 参拝者：お参り期間・毎週の数・招待の補いをくわしく／氏子・世話役・総代：世話役の選挙の投票権
-    const ujiko = emaMode && ownerKey === 'sanpaisha' ? await ujikoProgress(this.db, this.cfg, ownerId) : undefined;
+    // 🍃 氏子のキープ／🍂 元氏子の復帰（③④のあと・状態の表にある人だけ）
+    const keep = emaMode && (ownerKey === 'ujiko' || ownerKey === 'sanpaisha') ? await keepCardOf(this.db, this.cfg, ownerId) : undefined;
+    const ujiko = emaMode && ownerKey === 'sanpaisha' && keep?.kind !== 'moto' ? await ujikoProgress(this.db, this.cfg, ownerId) : undefined;
     const voter = emaMode && (ownerKey === 'ujiko' || ownerKey === 'sewayaku' || ownerKey === 'sodai') ? await voterStatus(this.db, this.cfg, ownerId) : undefined;
     // 次のご縁の節目（ご縁帳）
     const nextPerk = [...this.cfg.goenPerks].sort((a, b) => a.goen - b.goen).find((p) => p.goen > data.goen);
@@ -792,7 +796,7 @@ export class ShuinApp {
         {
           count: emaCount, messages: emaMessages, promoteMode: emaMode, th: this.cfg.emaThresholds, tierLabel: emaTier.map((t) => EMA_TIER_LABEL[t]).join('＋'),
           ...(emaStepInfo ? { step: emaStepInfo } : {}), ...(sewayakuInfo ? { sewayaku: sewayakuInfo } : {}), ...(ujiko ? { ujiko } : {}), ...(voter ? { voter } : {}),
-          ...(emaPair ? { pair: emaPair } : {}), ...(emaPartnerList ? { partners: emaPartnerList } : {}),
+          ...(emaPair ? { pair: emaPair } : {}), ...(emaPartnerList ? { partners: emaPartnerList } : {}), ...(keep ? { keep } : {}),
         },
         collection ? { total: collection.total, met: collection.met } : undefined,
         { mode, ...(perkNext ? { perkNext } : {}) },
@@ -891,6 +895,66 @@ export class ShuinApp {
   }
 
   private checkingEmaKeep = false;
+  private checkingUjikoKeep = false;
+  private lastUjikoKeepAt = 0;
+
+  /**
+   * 🍃 氏子のキープと 🍂 元氏子（10分ごと）。③④のあとだけ動く。
+   * 判定の7日前に「あと◯枚」→ 判定で足りなければ元氏子に（お守りがあれば防ぐ・元氏子のロールが未設定なら見送る）。
+   * 元氏子は絵馬がそろうと氏子に戻る。
+   */
+  async checkUjikoKeep(guild: Guild, now = new Date(), force = false): Promise<void> {
+    if (guild.id !== this.cfg.guildId || this.checkingUjikoKeep) return;
+    if (!force && now.getTime() - this.lastUjikoKeepAt < 10 * 60_000) return;
+    this.lastUjikoKeepAt = now.getTime();
+    this.checkingUjikoKeep = true;
+    try {
+      const actions = await runUjikoKeep(this.db, this.cfg, now);
+      if (!actions.length) return;
+      const roles = await newSystemRoles(this.db);
+      const rank = (key: string) => this.cfg.ranks.find((r) => r.key === key);
+      const dm = (id: string, content: string) => this.client.users.fetch(id).then((u) => u.send({ content, allowedMentions: { parse: [] as never[] } })).catch(() => undefined);
+      const day = (d: Date) => d.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric' });
+      const th = this.cfg.emaThresholds;
+      const rule = `絵馬 ${th.keepNeed}（うち ${th.keepFromSanpai} は参拝者から・招待で ${th.keepInviteMax} まで補える）`;
+      for (const a of actions) {
+        const have = `いま ${a.p.total} 枚（参拝者から ${a.p.fromSanpai}・招待 ${a.p.inviteUsed}）`;
+        if (a.type === 'warn') {
+          await dm(a.id, `🍃 氏子のキープの判定が ${day(a.judgeAt)} にあります。あと **${a.p.short} 枚** 足りません（${have}）。\n-# 氏子でいるには ${rule} が要ります。縁側でいっしょに過ごした方から絵馬をいただけます`);
+          await this.log(`🍃 キープのお知らせ <@${a.id}>（判定 ${day(a.judgeAt)}・あと ${a.p.short} 枚）`);
+        } else if (a.type === 'omamori') {
+          await dm(a.id, `🧿 氏子のキープに絵馬が足りませんでしたが、お守りが降格を防ぎました（お守りを1つ使いました）。次の判定は ${day(a.nextJudgeAt)} です。\n-# 次の判定では、お守りは使えません`);
+          await this.log(`🧿 お守りで降格を防ぎました <@${a.id}>（${have}・次の判定 ${day(a.nextJudgeAt)}）`);
+        } else if (a.type === 'hold') {
+          await dm(a.id, `🍃 氏子のキープの判定で、絵馬があと **${a.p.short} 枚** 足りませんでした（${have}）。\n-# 氏子でいるには ${rule} が要ります`);
+          await this.log(`⚠️ キープに届かない氏子 <@${a.id}>（${have}）。元氏子のロールが未設定のため、降格は見送りました（社務所Web の評価ページでロールを入れてください）。`);
+        } else if (a.type === 'demote' || a.type === 'return') {
+          const member = await guild.members.fetch({ user: a.id, force: true }).catch(() => undefined);
+          if (!member) continue;
+          const ujiko = rank('ujiko'), sanpaisha = rank('sanpaisha');
+          try {
+            if (a.type === 'demote') {
+              if (sanpaisha) await member.roles.add(sanpaisha.roleId, '氏子のキープに届かず元氏子に');
+              if (roles.motoUjiko) await member.roles.add(roles.motoUjiko, '氏子のキープに届かず元氏子に');
+              if (ujiko) await member.roles.remove(ujiko.roleId, '氏子のキープに届かず元氏子に');
+              await dm(a.id, `🍂 氏子のキープに絵馬が足りなかったため、**元氏子** になりました（${have}）。\n絵馬を ${th.motoNeed}（うち ${th.motoFromSanpai} は参拝者から・招待で ${th.motoInviteMax} まで補える）集めると、氏子に戻れます。ご縁はそのままです。`);
+              await this.log(`🍂 元氏子に <@${a.id}>（キープ ${have}）`);
+              await recordPromotion(this.db, a.id, 'ujiko', 'moto_ujiko', 0).catch(() => undefined);
+            } else {
+              if (ujiko && !member.roles.cache.has(ujiko.roleId)) await member.roles.add(ujiko.roleId, '元氏子から氏子に戻る');
+              if (roles.motoUjiko && member.roles.cache.has(roles.motoUjiko)) await member.roles.remove(roles.motoUjiko, '元氏子から氏子に戻る');
+              if (sanpaisha && member.roles.cache.has(sanpaisha.roleId)) await member.roles.remove(sanpaisha.roleId, '元氏子から氏子に戻る');
+              await dm(a.id, '🍃 絵馬がそろい、**氏子** に戻りました。おかえりなさい！');
+              await this.log(`🍃 元氏子から氏子に戻りました <@${a.id}>`);
+            }
+          } catch (err) {
+            logger.error({ err, userId: a.id, type: a.type }, 'ujiko keep role update failed');
+            await this.log(`⚠️ <@${a.id}> さまの${a.type === 'demote' ? '元氏子への変更' : '氏子への復帰'}でロールを変更できませんでした。BOT のロールの位置と権限を確認して、手で直してください。`);
+          }
+        }
+      }
+    } finally { this.checkingUjikoKeep = false; }
+  }
   /**
    * 🎐 維持の注意（新制度③⑧）: 絵馬での昇格が ON のときだけ。
    * 氏子の票が維持の枚数を割った氏子（一度は届いたことがある人）へ、本人にやさしくDM＋運営へ記録を、1回ずつ。
@@ -899,6 +963,8 @@ export class ShuinApp {
   async checkEmaKeep(guild: Guild, now = new Date()): Promise<void> {
     if (guild.id !== this.cfg.guildId || this.checkingEmaKeep) return;
     if (!(await emaPromotionEnabled(this.db))) return;
+    // 🍃 ④のあとは、新しいキープの判定（checkUjikoKeep・7日前のお知らせつき）に任せる
+    if (await newSystemStartedAt(this.db)) return;
     this.checkingEmaKeep = true;
     try {
       const keep = this.cfg.emaThresholds.ujikoKeep;

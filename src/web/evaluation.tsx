@@ -11,6 +11,7 @@ import { loadOverrides, saveOverrides } from '../services/settings.js';
 import { ujikoWeekRequirement } from '../services/ujikoRequirement.js';
 import { jstPeriodStart } from '../domain/ema.js';
 import { listSewayakuElections, sewayakuVoteCount } from '../services/sewayakuElection.js';
+import { motoUjikoIds, newSystemRoles, setNewSystemRoles } from '../services/ujikoKeep.js';
 import { goenPerkSchema, emaThresholdsSchema, type GoenPerk } from '../config.js';
 import { namesOf } from '../services/members.js';
 
@@ -74,7 +75,9 @@ export function mountEvaluation(app: Hono<Env>, db: Db, cfg: () => GuildConfig, 
         sewayaku = { active: rows, recent, names: sNames };
       }
       const started = session.level === 'guji' ? await newSystemStartedAt(db) : undefined;
-      return c.html(<EvaluationPage newSystemStartedAt={started} ujikoWeek={ujikoWeek} sewayaku={sewayaku} session={session} data={data} filter={filter} page={page} emaPromotion={emaPromotion} keepWarnings={keepWarnings} names={names} saved={c.req.query('ema') ?? undefined} resetFlash={c.req.query('reset') ?? undefined} resetUndoable={resetUndoable} perkUjiko={perkUjiko} perkFlash={c.req.query('perk') ?? undefined} goenPerksText={goenPerksToText(cfg().goenPerks)} goenPerksFlash={c.req.query('gp') ?? undefined} emaThresholds={cfg().emaThresholds} emaThresholdsFlash={c.req.query('th') ?? undefined}/>);
+      const nsRoles = session.level === 'guji' ? await newSystemRoles(db) : undefined;
+      const motoCount = session.level === 'guji' ? (await motoUjikoIds(db)).size : 0;
+      return c.html(<EvaluationPage nsRoles={nsRoles} motoCount={motoCount} rolesFlash={c.req.query('roles') ?? undefined} newSystemStartedAt={started} ujikoWeek={ujikoWeek} sewayaku={sewayaku} session={session} data={data} filter={filter} page={page} emaPromotion={emaPromotion} keepWarnings={keepWarnings} names={names} saved={c.req.query('ema') ?? undefined} resetFlash={c.req.query('reset') ?? undefined} resetUndoable={resetUndoable} perkUjiko={perkUjiko} perkFlash={c.req.query('perk') ?? undefined} goenPerksText={goenPerksToText(cfg().goenPerks)} goenPerksFlash={c.req.query('gp') ?? undefined} emaThresholds={cfg().emaThresholds} emaThresholdsFlash={c.req.query('th') ?? undefined}/>);
     } catch (error) {
       if (!(error instanceof EvaluationSelectionError)) throw error;
       return c.text(error.message, 400);
@@ -155,12 +158,28 @@ export function mountEvaluation(app: Hono<Env>, db: Db, cfg: () => GuildConfig, 
       sewayakuCandidateMonths: num('sewayakuCandidateMonths'),
       sewayakuRetryMinutes: (() => { const v = typeof body.sewayakuRetryHours === 'string' && /^\d{1,4}$/.test(body.sewayakuRetryHours) ? Number(body.sewayakuRetryHours) : NaN; return Number.isNaN(v) ? NaN : v * 60; })(),
       sewayakuMinVoters: (() => { const v = typeof body.sewayakuMinVoters === 'string' && /^\d{1,4}$/.test(body.sewayakuMinVoters) ? Number(body.sewayakuMinVoters) : NaN; return v; })(),
-      sodaiPromote: num('sodaiPromote'),
+      sodaiPromote: (() => { const v = typeof body.sodaiPromote === 'string' && /^\d{1,4}$/.test(body.sodaiPromote) ? Number(body.sodaiPromote) : NaN; return v; })(),
+      // 🍃 キープと元氏子（欄がないときは今の値のまま）
+      ...Object.fromEntries((['keepNeed', 'keepFromSanpai', 'keepInviteMax', 'keepDays', 'motoNeed', 'motoFromSanpai', 'motoInviteMax'] as const).map((k) => [k, body[k] === undefined ? cfg().emaThresholds[k] : num(k)])),
     });
     if (!parsed.success) return c.redirect('/evaluation?th=invalid', 303);
     await saveOverrides(db, { ...(await loadOverrides(db)), emaThresholds: parsed.data }, session.userId);
     await audit(db, { actorId: session.userId, action: 'ema.thresholds_edit', detail: parsed.data, via: 'web' });
     return c.redirect('/evaluation?th=saved', 303);
+  });
+  // 🍂 元氏子・荒魂のロール ID（宮司だけ）
+  app.post('/evaluation/new-system-roles', async (c) => {
+    c.header('Cache-Control', 'private, no-store');
+    const session = c.get('session');
+    if (session.level !== 'guji') return c.text('ロールの設定は宮司だけです。', 403);
+    const body = await c.req.parseBody();
+    const read = (name: string) => (typeof body[name] === 'string' ? (body[name] as string).trim() : '');
+    const moto = read('motoUjiko'), ara = read('aramitama');
+    if ((moto && !/^\d{17,20}$/.test(moto)) || (ara && !/^\d{17,20}$/.test(ara))) return c.redirect('/evaluation?roles=invalid#ns-roles', 303);
+    const roles = { ...(moto ? { motoUjiko: moto } : {}), ...(ara ? { aramitama: ara } : {}) };
+    await setNewSystemRoles(db, roles, session.userId);
+    await audit(db, { actorId: session.userId, action: 'new_system.roles', detail: roles, via: 'web' });
+    return c.redirect('/evaluation?roles=saved#ns-roles', 303);
   });
   app.post('/evaluation/goen-reset-undo', async (c) => {
     c.header('Cache-Control', 'private, no-store');
