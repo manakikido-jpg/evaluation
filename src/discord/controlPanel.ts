@@ -2,8 +2,8 @@ import { ButtonBuilder, ButtonStyle, ContainerBuilder, SectionBuilder, Separator
 import { isMusubiMode, isNewSystemVisible } from '../domain/terms.js';
 import { isEngawaName } from '../services/voiceUsage.js';
 
-export type ControlAction = 'open' | 'profile' | 'send' | 'musubi' | 'ema' | 'help';
-const actions: readonly string[] = ['open', 'profile', 'send', 'musubi', 'ema', 'help'];
+export type ControlAction = 'open' | 'profile' | 'send' | 'musubi' | 'ema' | 'help' | 'sleep' | 'call';
+const actions: readonly string[] = ['open', 'profile', 'send', 'musubi', 'ema', 'help', 'sleep', 'call'];
 export const controlId = (action: ControlAction, channelId: string, ownerId?: string) => `control:${action}:${channelId}${ownerId ? `:${ownerId}` : ''}`;
 export function parseControlId(id: string) {
   const parts = id.split(':');
@@ -35,5 +35,7 @@ export function controlPanel(channelId: string, ownerId: string) {
   if (isNewSystemVisible() && isMusubiMode()) line('musubi', '初めましての人と結ぶ', 'ご縁を結ぶ');
   if (isNewSystemVisible()) line('ema', '相手に絵馬をおくる', '絵馬をおくる', ButtonStyle.Success);
   line('help', '使えるコマンドを見る', '一覧');
+  line('sleep', '寝落ちしている人を報告', '寝落ち報告');
+  line('call', '困ったときに運営へ連絡', '運営を呼ぶ');
   return { components: [container], flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2 };
 }

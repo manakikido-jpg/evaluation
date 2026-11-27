@@ -90,6 +90,44 @@
               "label": "一覧",
               "style": 2
             }
+          },
+          {
+            "type": 14,
+            "divider": true
+          },
+          {
+            "type": 9,
+            "components": [
+              {
+                "type": 10,
+                "content": "寝落ちしている人を報告"
+              }
+            ],
+            "accessory": {
+              "type": 2,
+              "custom_id": "control:sleep:950000000000000001:810000000000000001",
+              "label": "寝落ち報告",
+              "style": 2
+            }
+          },
+          {
+            "type": 14,
+            "divider": true
+          },
+          {
+            "type": 9,
+            "components": [
+              {
+                "type": 10,
+                "content": "困ったときに運営へ連絡"
+              }
+            ],
+            "accessory": {
+              "type": 2,
+              "custom_id": "control:call:950000000000000001:810000000000000001",
+              "label": "運営を呼ぶ",
+              "style": 2
+            }
           }
         ]
       }
@@ -198,6 +236,44 @@
               "type": 2,
               "custom_id": "control:help:950000000000000001:810000000000000001",
               "label": "一覧",
+              "style": 2
+            }
+          },
+          {
+            "type": 14,
+            "divider": true
+          },
+          {
+            "type": 9,
+            "components": [
+              {
+                "type": 10,
+                "content": "寝落ちしている人を報告"
+              }
+            ],
+            "accessory": {
+              "type": 2,
+              "custom_id": "control:sleep:950000000000000001:810000000000000001",
+              "label": "寝落ち報告",
+              "style": 2
+            }
+          },
+          {
+            "type": 14,
+            "divider": true
+          },
+          {
+            "type": 9,
+            "components": [
+              {
+                "type": 10,
+                "content": "困ったときに運営へ連絡"
+              }
+            ],
+            "accessory": {
+              "type": 2,
+              "custom_id": "control:call:950000000000000001:810000000000000001",
+              "label": "運営を呼ぶ",
               "style": 2
             }
           }

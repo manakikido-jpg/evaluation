@@ -10,22 +10,22 @@ const CH = '950000000000000001', A = '810000000000000001', B = '8100000000000000
 afterEach(() => { setMusubiMode(false); setNewSystemVisible(false); });
 const sections = () => controlPanel(CH, A).components[0]!.toJSON().components.filter(c => c.type === 9);
 const buttons = () => sections().map(c => c.accessory);
-it('公開後は5項目、本人・通話を識別するボタン。画像は使わない', () => {
+it('公開後は7項目、本人・通話を識別するボタン。画像は使わない', () => {
   setMusubiMode(true); setNewSystemVisible(true);
-  expect(buttons().map(b => 'label' in b ? b.label : '')).toEqual(['プロフィール', '送金', 'ご縁を結ぶ', '絵馬をおくる', '一覧']);
+  expect(buttons().map(b => 'label' in b ? b.label : '')).toEqual(['プロフィール', '送金', 'ご縁を結ぶ', '絵馬をおくる', '一覧', '寝落ち報告', '運営を呼ぶ']);
   for (const b of buttons()) expect(parseControlId('custom_id' in b ? b.custom_id : '')).toMatchObject({ channelId: CH, ownerId: A });
   expect(controlPanel(CH, A)).not.toHaveProperty('embeds');
   expect(controlPanel(CH, A).flags).toBe(MessageFlags.Ephemeral | MessageFlags.IsComponentsV2);
-  expect(sections()).toHaveLength(5);
-  expect(controlPanel(CH, A).components[0]!.toJSON().components.filter(c => c.type === 14)).toHaveLength(5);
+  expect(sections()).toHaveLength(7);
+  expect(controlPanel(CH, A).components[0]!.toJSON().components.filter(c => c.type === 14)).toHaveLength(7);
   expect(JSON.stringify(controlPanel(CH, A))).not.toMatch(/https:|attachment:|image/);
-  expect(new Set(buttons().map(b => 'custom_id' in b ? b.custom_id : '')) .size).toBe(5);
+  expect(new Set(buttons().map(b => 'custom_id' in b ? b.custom_id : '')) .size).toBe(7);
 });
 it('③④が未公開なら新制度の入口は出さない', () => {
-  expect(buttons()).toHaveLength(3);
-  setMusubiMode(true); expect(buttons()).toHaveLength(3);
+  expect(buttons()).toHaveLength(5);
+  setMusubiMode(true); expect(buttons()).toHaveLength(5);
   setMusubiMode(false); setNewSystemVisible(true);
-  expect(buttons()).toHaveLength(4);
+  expect(buttons()).toHaveLength(6);
   expect(JSON.stringify(buttons())).not.toContain('ご縁を結ぶ');
 });
 it('共有の入口には操作内容・個人データを出さず、旧パネルも消せる識別IDを残す', () => {

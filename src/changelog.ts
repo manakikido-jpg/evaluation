@@ -33,7 +33,7 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     id: '2026-11-27-engawa-personal-control', date: '2026-11-27', kind: 'new', where: ['Discord'],
     title: '縁側から、自分だけの操作パネルを開けるように',
-    items: ['画像なしの個人用パネルにプロフィール・送金・ご縁・絵馬・コマンド確認をまとめます。',
+    items: ['画像なしの個人用パネルにプロフィール・送金・ご縁・絵馬・コマンド確認・寝落ち報告・運営呼び出しをまとめます。',
       '送金は相手と金額を選んでから既存の確認画面へ進みます。新制度の入口は公開設定まで隠します。'],
     announcement: {
       priority: 'optional', audience: '縁側に参加するメンバー',
