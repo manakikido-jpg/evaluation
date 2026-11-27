@@ -1,3 +1,4 @@
+import { newSystemFloor } from './newSystemFloor.js';
 import { and, count, desc, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
@@ -71,14 +72,20 @@ export async function voterStatus(db: Db, cfg: GuildConfig, voterId: string, now
   const p = await personOf(db, voterId);
   if (!p || p.isBot || p.leftAt || (await altIds(db)).has(voterId)) return { ok: false, reason: 'not_member', minutes: 0, need };
   if (!SEWAYAKU_VOTER_KEYS.includes(highestRank(cfg.ranks, p.roleIds)?.key ?? '')) return { ok: false, reason: 'rank', minutes: 0, need };
-  const minutes = await engawaMinutesBetween(db, voterId, jstDate(new Date(now.getTime() - 29 * DAY)), jstDate(now));
+  // 直近30日。ただし新制度が始まった日より前は数えない
+  const floor = (await newSystemFloor(db)).date;
+  const from30 = jstDate(new Date(now.getTime() - 29 * DAY));
+  const minutes = await engawaMinutesBetween(db, voterId, from30 > floor ? from30 : floor, jstDate(now));
   return minutes > need ? { ok: true, minutes, need } : { ok: false, reason: 'time', minutes, need };
 }
 
 /** その時点で投票できる人を全員（直近30日＝その日の前日までの30日。BOT・抜けた人・サブ・除く人は入れない） */
 export async function eligibleVoters(db: Db, cfg: GuildConfig, at: Date, exclude: readonly string[] = []): Promise<string[]> {
   const to = jstDate(new Date(at.getTime() - 1));
-  const from = jstDate(new Date(at.getTime() - 30 * DAY));
+  // 直近30日。ただし新制度が始まった日より前は数えない
+  const floor = (await newSystemFloor(db)).date;
+  const from30 = jstDate(new Date(at.getTime() - 30 * DAY));
+  const from = from30 > floor ? from30 : floor;
   const [people, alts, ids] = await Promise.all([
     db.select({ id: members.id, roleIds: members.roleIds }).from(members).where(and(eq(members.isBot, false), isNull(members.leftAt))),
     altIds(db),

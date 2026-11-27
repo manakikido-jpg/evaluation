@@ -1,4 +1,10 @@
-## 2026年11月28日：「残す人」の名簿から元氏子を決める（Claude・作業中）
+## 2026年11月28日：新制度が始まってからの分だけ数える（Claude・作業中）
+- 名簿の欄は push 済み（a2d48fa3・全テスト320ファイル3388件 OK）。
+- 本人「参拝者→氏子の必要数 以外は新制度からのカウントでいいよ」→ newSystemFloor（④の時刻・日付）を足し、絵馬の枚数（validEmaCountOf・emaMessagesOf・キープ・ujikoProgress・emaPromotable・維持の注意）、縁側の日（togetherStats・emaPartners・beenTogether・metCollection）、投票権（voterStatus・eligibleVoters）、お守りの週に当てた。必要数（ujikoWeekRequirement）は変えていない。
+- 古いテスト（リセット前の日付の縁側で結ぶ）を shuin.test.ts・app.test.ts で直した。新しいテスト test/newSystemFloor.test.ts 4件。
+- 次：全テスト → fetch → push。
+
+## 2026年11月28日：「残す人」の名簿から元氏子を決める（Claude・push 済み a2d48fa3）
 - まとめて切り替えは push 済み（03b27f7f・全テスト320ファイル3388件 OK）。
 - 本人が「残る人」のユーザー名の名簿（36行）を出し「それ以外元氏子」と依頼。Claude は本番のデータを変えられないので、名簿を貼って絞りこむ欄（/evaluation/moto-ujiko/keep・変えるのは宮司が押す）を足した。名簿そのものは公開リポジトリに書かない。
 - 次：全テスト → fetch → push → 本人に手順を伝える。

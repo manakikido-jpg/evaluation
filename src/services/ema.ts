@@ -1,3 +1,4 @@
+import { newSystemFloor } from './newSystemFloor.js';
 import { and, count, desc, eq, gte, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
@@ -23,7 +24,7 @@ export async function togetherStats(db: Db, a: string, b: string): Promise<{ day
       minutes: sql<number>`coalesce(sum(${engawaPairs.minutes}), 0)::int`,
     })
     .from(engawaPairs)
-    .where(and(eq(engawaPairs.memberA, x), eq(engawaPairs.memberB, y)));
+    .where(and(eq(engawaPairs.memberA, x), eq(engawaPairs.memberB, y), gte(engawaPairs.date, (await newSystemFloor(db)).date)));
   return { days: row?.days ?? 0, minutes: row?.minutes ?? 0 };
 }
 
@@ -41,7 +42,7 @@ function tierWhere(tiers: EmaTier | readonly EmaTier[], now: Date) {
 
 /** 有効な絵馬の枚数（取り消しを除く。氏子の票は失効していないものだけ） */
 export async function validEmaCountOf(db: Db, receiverId: string, now = new Date(), tier: EmaTier | readonly EmaTier[] = 'ujiko'): Promise<number> {
-  const [row] = await db.select({ n: count() }).from(ema).where(and(eq(ema.receiverId, receiverId), isNull(ema.revokedAt), tierWhere(tier, now)));
+  const [row] = await db.select({ n: count() }).from(ema).where(and(eq(ema.receiverId, receiverId), isNull(ema.revokedAt), gte(ema.createdAt, (await newSystemFloor(db)).at), tierWhere(tier, now)));
   return row?.n ?? 0;
 }
 
@@ -50,7 +51,7 @@ export async function emaMessagesOf(db: Db, receiverId: string, now = new Date()
   return db
     .select({ message: ema.message, createdAt: ema.createdAt })
     .from(ema)
-    .where(and(eq(ema.receiverId, receiverId), isNull(ema.revokedAt), tierWhere(tier, now)))
+    .where(and(eq(ema.receiverId, receiverId), isNull(ema.revokedAt), gte(ema.createdAt, (await newSystemFloor(db)).at), tierWhere(tier, now)))
     .orderBy(desc(ema.createdAt));
 }
 
@@ -173,7 +174,7 @@ export async function emaPartners(
       days: sql<number>`count(*) filter (where ${engawaPairs.minutes} >= ${EMA_MINUTES_PER_DAY})::int`,
     })
     .from(engawaPairs)
-    .where(or(eq(engawaPairs.memberA, viewerId), eq(engawaPairs.memberB, viewerId)))
+    .where(and(or(eq(engawaPairs.memberA, viewerId), eq(engawaPairs.memberB, viewerId)), gte(engawaPairs.date, (await newSystemFloor(db)).date)))
     .groupBy(engawaPairs.memberA, engawaPairs.memberB);
   const daysOf = new Map(rows.map((r) => [r.a === viewerId ? r.b : r.a, Number(r.days)] as const).filter(([, d]) => d > 0));
   if (!daysOf.size) return { ready: [], soon: [] };

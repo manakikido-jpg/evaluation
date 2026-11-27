@@ -1,3 +1,4 @@
+import { newSystemFloor } from './newSystemFloor.js';
 import { and, count, eq, gte, inArray, isNotNull, isNull, lte, sql } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
@@ -102,10 +103,12 @@ export async function ujikoProgress(db: Db, cfg: GuildConfig, memberId: string, 
   const [o] = await db.select().from(omairi).where(eq(omairi.memberId, memberId));
   const inOmairi = Boolean(o && (o.status === 'ongoing' || o.status === 'review'));
   const since = inOmairi ? o!.startedAt : new Date(now.getTime() - ROLLING_DAYS * DAY);
+  // 絵馬は、新制度が始まってからの分だけ数える
+  const floor = (await newSystemFloor(db)).at;
   const until = inOmairi && o!.endsAt < now ? o!.endsAt : now;
   const { week, active, required } = await ujikoWeekRequirement(db, cfg, jstPeriodStart(inOmairi ? o!.startedAt : now));
   const [[v], [i]] = await Promise.all([
-    db.select({ n: count() }).from(ema).where(and(eq(ema.receiverId, memberId), eq(ema.tier, 'ujiko'), isNull(ema.revokedAt), gte(ema.createdAt, since), lte(ema.createdAt, until))),
+    db.select({ n: count() }).from(ema).where(and(eq(ema.receiverId, memberId), eq(ema.tier, 'ujiko'), isNull(ema.revokedAt), gte(ema.createdAt, since > floor ? since : floor), lte(ema.createdAt, until))),
     // 招待の補い：招待された人が通話に4時間いて「1人」と数えた招待（2026-11-27〜）
     db.select({ n: count() }).from(invites).where(and(eq(invites.inviterId, memberId), isNotNull(invites.qualifiedAt), gte(invites.qualifiedAt, since), lte(invites.qualifiedAt, until))),
   ]);

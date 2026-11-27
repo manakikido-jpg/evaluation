@@ -1,3 +1,4 @@
+import { newSystemFloor } from './newSystemFloor.js';
 import { and, asc, count, eq, isNull } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
@@ -38,10 +39,13 @@ export async function omamoriStatus(db: Db, cfg: GuildConfig, memberId: string, 
   const th = cfg.emaThresholds;
   const thisWeek = jstWeekStart(now);
   const lastWeek = addDays(thisWeek, -7);
+  // 縁側の時間は、新制度が始まった日からの分だけ数える
+  const floor = (await newSystemFloor(db)).date;
+  const from = (d: string) => (d > floor ? d : floor);
   const [held, minutes, lastMinutes, bought] = await Promise.all([
     omamoriCount(db, memberId),
-    engawaMinutesBetween(db, memberId, thisWeek, dayOf(now)),
-    engawaMinutesBetween(db, memberId, lastWeek, addDays(thisWeek, -1)),
+    engawaMinutesBetween(db, memberId, from(thisWeek), dayOf(now)),
+    engawaMinutesBetween(db, memberId, from(lastWeek), addDays(thisWeek, -1)),
     db.select({ week: omamoriHoldings.week }).from(omamoriHoldings).where(eq(omamoriHoldings.memberId, memberId)),
   ]);
   const base = { count: held, max: th.omamoriMax, minutes, need: th.omamoriWeekMinutes };

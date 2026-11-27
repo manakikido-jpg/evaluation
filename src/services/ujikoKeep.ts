@@ -1,3 +1,4 @@
+import { newSystemFloor } from './newSystemFloor.js';
 import { and, count, eq, gte, inArray, isNotNull, isNull, lte } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
@@ -68,7 +69,7 @@ export type KeepProgress = {
 
 async function progress(db: Db, memberId: string, opts: { emaSince?: Date; inviteSince: Date; need: number; needSanpai: number; inviteMax: number }, now: Date): Promise<KeepProgress> {
   const since = opts.emaSince ? [gte(ema.createdAt, opts.emaSince)] : [];
-  const base = [eq(ema.receiverId, memberId), isNull(ema.revokedAt), lte(ema.createdAt, now), ...since];
+  const base = [eq(ema.receiverId, memberId), isNull(ema.revokedAt), lte(ema.createdAt, now), gte(ema.createdAt, (await newSystemFloor(db)).at), ...since];
   const [[u], [s], [i]] = await Promise.all([
     db.select({ n: count() }).from(ema).where(and(...base, eq(ema.tier, 'ujiko'))),
     db.select({ n: count() }).from(ema).where(and(...base, eq(ema.tier, 'sanpai'), gte(ema.createdAt, emaFreshSince(now)))),

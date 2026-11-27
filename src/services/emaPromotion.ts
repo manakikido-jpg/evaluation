@@ -1,3 +1,4 @@
+import { newSystemFloor } from './newSystemFloor.js';
 import { and, count, eq, gte, inArray, isNotNull, isNull, or } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
@@ -75,7 +76,7 @@ export async function emaPromotable(db: Db, cfg: GuildConfig, now = new Date()):
   const upper = new Map<string, number>();
   if (sanIds.length) {
     const [votes, inv] = await Promise.all([
-      db.select({ id: ema.receiverId, n: count() }).from(ema).where(and(inArray(ema.receiverId, sanIds), eq(ema.tier, 'ujiko'), isNull(ema.revokedAt))).groupBy(ema.receiverId),
+      db.select({ id: ema.receiverId, n: count() }).from(ema).where(and(inArray(ema.receiverId, sanIds), eq(ema.tier, 'ujiko'), isNull(ema.revokedAt), gte(ema.createdAt, (await newSystemFloor(db)).at))).groupBy(ema.receiverId),
       db.select({ id: invites.inviterId, n: count() }).from(invites).where(and(inArray(invites.inviterId, sanIds), isNotNull(invites.rewardedAt))).groupBy(invites.inviterId),
     ]);
     for (const r of votes) upper.set(r.id, Number(r.n));
@@ -122,7 +123,7 @@ export async function collectEmaKeepWarnings(db: Db, cfg: GuildConfig, now = new
   const countRows = await db
     .select({ id: ema.receiverId, n: count() })
     .from(ema)
-    .where(and(inArray(ema.receiverId, ids), isNull(ema.revokedAt), or(eq(ema.tier, 'ujiko'), and(eq(ema.tier, 'sanpai'), gte(ema.createdAt, emaFreshSince(now))))))
+    .where(and(inArray(ema.receiverId, ids), isNull(ema.revokedAt), gte(ema.createdAt, (await newSystemFloor(db)).at), or(eq(ema.tier, 'ujiko'), and(eq(ema.tier, 'sanpai'), gte(ema.createdAt, emaFreshSince(now))))))
     .groupBy(ema.receiverId);
   const countOf = new Map(countRows.map((r) => [r.id, Number(r.n)]));
   const stateRows = await db.select().from(emaKeepWarn).where(inArray(emaKeepWarn.memberId, ids));

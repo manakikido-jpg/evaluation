@@ -74,15 +74,21 @@ describe('🔄 新制度の切替：全員のご縁リセット', () => {
 
 describe('🧵 新制度の結び（④リセットのあと）', () => {
   /** 2人が通話でいっしょになった記録（結べるのは、いっしょになったことのある人だけ） */
-  const together = async (...pairs: [string, string][]) => {
+  const together = async (pairsOrDate: [string, string] | string, ...rest: [string, string][]) => {
     const { engawaPairs } = await import('../src/db/schema.js');
-    await db.insert(engawaPairs).values(pairs.map(([x, y]) => ({ memberA: x < y ? x : y, memberB: x < y ? y : x, date: '2026-11-20', minutes: 10 })));
+    // 日付を指定しなければ、新制度が始まったあとの日（リセットは「いま」なので、ずっと先の日にしておく）
+    const date = typeof pairsOrDate === 'string' ? pairsOrDate : '2099-01-01';
+    const pairs = typeof pairsOrDate === 'string' ? rest : [pairsOrDate, ...rest];
+    await db.insert(engawaPairs).values(pairs.map(([x, y]) => ({ memberA: x < y ? x : y, memberB: x < y ? y : x, date, minutes: 10 })));
   };
 
   it('結べるのは通話でいっしょになったことのある人だけ（④の前の朱印は今までどおり）', async () => {
     const { resetAllShuin } = await import('../src/services/shuin.js');
     expect(await giveFlow(db, cfg, member(A, ROLE.ujiko), member(B, ROLE.sanpaisha))).toMatchObject({ kind: 'given' }); // ④の前
     await resetAllShuin(db, 'guji');
+    expect(await giveFlow(db, cfg, member(A, ROLE.ujiko), member(B, ROLE.sanpaisha))).toMatchObject({ kind: 'denied', reason: 'not_together' });
+    // 新制度が始まる前にいっしょだった日は数えない（2026-11-28 本人の決定）
+    await together('2020-01-01', [A, B]);
     expect(await giveFlow(db, cfg, member(A, ROLE.ujiko), member(B, ROLE.sanpaisha))).toMatchObject({ kind: 'denied', reason: 'not_together' });
     await together([A, B]);
     expect(await giveFlow(db, cfg, member(A, ROLE.ujiko), member(B, ROLE.sanpaisha))).toMatchObject({ kind: 'given', weight: 1 });
