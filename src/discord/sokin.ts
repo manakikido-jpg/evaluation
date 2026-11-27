@@ -1,4 +1,5 @@
-import { MessageFlags, type Interaction } from 'discord.js';
+import { controlAccess, parseControlId } from './controlPanel.js';
+import { ActionRowBuilder, UserSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, MessageFlags, type Interaction } from 'discord.js';
 import type { EconomyConfig, GuildConfig } from '../config.js';
 import type { DirectTransfer } from '../db/schema.js';
 import type { DiscordActions } from '../lib/discordRest.js';
@@ -123,10 +124,42 @@ export class SokinApp {
   async onInteraction(i: Interaction): Promise<void> {
     if (!i.inCachedGuild() || i.guildId !== this.cfg().guildId) return;
     const command = i.isChatInputCommand() && i.commandName === 'sokin';
-    const panel = 'customId' in i && i.customId.startsWith('sokin:');
+    const control = !command && i.isButton() ? parseControlId(i.customId) : undefined;
+    const panel = ('customId' in i && i.customId.startsWith('sokin:')) || control?.action === 'send';
     if ((!command && !panel) || !i.isRepliable()) return;
     let committed: { transfer: DirectTransfer; balance: number } | undefined;
     try {
+      if (control?.action === 'send' && i.isButton()) {
+        const blocked = controlAccess(i, control);
+        if (blocked) return void await i.reply({ content: blocked, ...EPHEMERAL });
+        return void await i.reply({ content: '💰 送金する相手を選んでください。金額を入力した後、手数料込みの確認画面が出ます。',
+          components: [new ActionRowBuilder<UserSelectMenuBuilder>().addComponents(new UserSelectMenuBuilder()
+            .setCustomId(`sokin:recipient:${i.user.id}`).setPlaceholder('送金する相手').setMinValues(1).setMaxValues(1))],
+          allowedMentions: { parse: [] }, ...EPHEMERAL });
+      }
+      if ('customId' in i && i.customId.startsWith('sokin:recipient:') && i.isUserSelectMenu()) {
+        if (i.customId !== `sokin:recipient:${i.user.id}`) return void await i.reply({ content: 'この操作は、開いた本人だけが使えます。', ...EPHEMERAL });
+        const target = i.values[0];
+        if (!target || !/^\d{17,20}$/.test(target) || target === i.user.id) return void await i.reply({ content: '自分以外の相手を選んでください。', ...EPHEMERAL });
+        return void await i.showModal(new ModalBuilder().setCustomId(`sokin:draft:${i.user.id}:${target}`).setTitle('送金する金額')
+          .addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('amount')
+            .setLabel('相手が受け取る金額（銭）').setPlaceholder('例：1000').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(20)),
+          new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('note').setLabel('ひとこと（任意）')
+            .setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(200))));
+      }
+      if ('customId' in i && i.customId.startsWith('sokin:draft:') && i.isModalSubmit()) {
+        const parts = i.customId.split(':');
+        const targetId = parts[3];
+        if (parts.length !== 4 || parts[2] !== i.user.id || !/^\d{17,20}$/.test(targetId ?? '')) return void await i.reply({ content: 'パネルを開き直してください。', ...EPHEMERAL });
+        await i.deferReply(EPHEMERAL);
+        const [sender, target] = await Promise.all([i.guild.members.fetch({ user: i.user.id, force: true }), i.guild.members.fetch({ user: targetId!, force: true })]);
+        const t = await prepareTransfer(this.db, this.cfg(), { id: i.id,
+          from: { id: sender.id, roleIds: [...sender.roles.cache.keys()], bot: sender.user.bot },
+          to: { id: target.id, roleIds: [...target.roles.cache.keys()], bot: target.user.bot },
+          amount: parseAmount(i.fields.getTextInputValue('amount')), note: i.fields.getTextInputValue('note') });
+        if (t.status !== 'pending') return void await i.editReply({ content: 'この確認は終了しています。パネルを開き直してください。', components: [] });
+        return void await i.editReply(directTransferConfirm(this.cfg().economy, t) as never);
+      }
       if (command && i.isChatInputCommand()) {
         await i.deferReply(EPHEMERAL);
         const user = i.options.getUser('user');

@@ -1,3 +1,4 @@
+import { controlAccess, parseControlId } from './controlPanel.js';
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -25,7 +26,7 @@ const PREFIX = 'vchelp:';
 export const VC_HELP_COOLDOWN_MS = 2 * 60_000;
 
 export type VcHelpKind = 'sleep' | 'call';
-export const vcHelpId = (kind: 'sleep' | 'call' | 'pick' | 'modal', channelId: string) => `${PREFIX}${kind}:${channelId}`;
+export const vcHelpId = (kind: 'sleep' | 'call' | 'pick' | 'modal', channelId: string, ownerId?: string) => `${PREFIX}${kind}:${channelId}${ownerId ? `:${ownerId}` : ''}`;
 
 /** 本殿・作業の通話か（通話の名前か、入っているカテゴリの名前で見る） */
 export function isVcHelpChannel(channel: { name: string; parent?: { name: string } | null }): boolean {
@@ -57,16 +58,26 @@ export class VcHelpApp {
   async onInteraction(i: Interaction): Promise<void> {
     if (!i.inCachedGuild() || i.guildId !== this.cfg().guildId) return;
     const id = 'customId' in i ? i.customId : '';
-    if (!id.startsWith(PREFIX)) return;
-    const [kind, channelId] = id.slice(PREFIX.length).split(':') as [string, string];
+    const control = i.isButton() ? parseControlId(id) : undefined;
+    if (!id.startsWith(PREFIX) && !(control && ['sleep', 'call'].includes(control.action))) return;
+    const parts = id.slice(PREFIX.length).split(':');
+    const kind = control?.action ?? parts[0];
+    const channelId = control?.channelId ?? parts[1]!;
+    const ownerId = control?.ownerId ?? parts[2];
     try {
+      if (control && i.isButton()) {
+        const blocked = controlAccess(i, control);
+        if (blocked) return void await i.reply({ content: blocked, flags: MessageFlags.Ephemeral });
+      } else if (ownerId && (!/^\d{17,20}$/.test(ownerId) || ownerId !== i.user.id || i.member.voice.channel?.id !== channelId)) {
+        return void (i.isRepliable() && await i.reply({ content: 'この操作は、パネルを開いた本人が同じ縁側にいる間だけ使えます。', flags: MessageFlags.Ephemeral }));
+      }
       const vc = i.guild.channels.cache.get(channelId);
       if (!vc?.isVoiceBased()) return void (i.isRepliable() && (await i.reply({ content: 'この通話が見つかりませんでした。', flags: MessageFlags.Ephemeral })));
       if (i.isButton() && kind === 'sleep') {
         const people = [...vc.members.values()].filter((m) => !m.user.bot && m.id !== i.user.id).slice(0, 25);
         if (!people.length) return void (await i.reply({ content: '今この通話には、ほかの方がいません。', flags: MessageFlags.Ephemeral }));
         const menu = new StringSelectMenuBuilder()
-          .setCustomId(vcHelpId('pick', channelId))
+          .setCustomId(vcHelpId('pick', channelId, ownerId))
           .setPlaceholder('寝落ちしている人をえらぶ')
           .addOptions(people.map((m) => ({ label: m.displayName.slice(0, 100) || '（名前なし）', value: m.id })));
         return void (await i.reply({ content: '💤 寝落ちしている人をえらんでください。衛士に知らせます。', components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu)], flags: MessageFlags.Ephemeral }));
@@ -74,10 +85,11 @@ export class VcHelpApp {
       if (i.isStringSelectMenu() && kind === 'pick') {
         const target = i.values[0];
         if (!target || !vc.members.has(target)) return void (await i.update({ content: 'その方はもう通話にいません。', components: [] }));
-        return void (await i.update({ content: await this.notify(i.guild, vc, 'sleep', i.user.id, { targetId: target }), components: [] }));
+        await i.deferUpdate();
+        return void (await i.editReply({ content: await this.notify(i.guild, vc, 'sleep', i.user.id, { targetId: target }), components: [] }));
       }
       if (i.isButton() && kind === 'call') {
-        const modal = new ModalBuilder().setCustomId(vcHelpId('modal', channelId)).setTitle('運営を呼ぶ').addComponents(
+        const modal = new ModalBuilder().setCustomId(vcHelpId('modal', channelId, ownerId)).setTitle('運営を呼ぶ').addComponents(
           new ActionRowBuilder<TextInputBuilder>().addComponents(
             new TextInputBuilder().setCustomId('reason').setLabel('ようす（書かなくてもよいです）').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(300),
           ),
@@ -86,7 +98,8 @@ export class VcHelpApp {
       }
       if (i.isModalSubmit() && kind === 'modal') {
         const reason = i.fields.getTextInputValue('reason').trim().replace(/@/g, '＠');
-        return void (await i.reply({ content: await this.notify(i.guild, vc, 'call', i.user.id, { reason }), flags: MessageFlags.Ephemeral }));
+        await i.deferReply({ flags: MessageFlags.Ephemeral });
+        return void (await i.editReply({ content: await this.notify(i.guild, vc, 'call', i.user.id, { reason }) }));
       }
     } catch (err) {
       logger.warn({ err }, 'vc help failed');

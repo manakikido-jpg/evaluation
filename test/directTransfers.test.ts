@@ -227,3 +227,28 @@ it('確定後の返信に失敗しても、完了した結果を案内し直し�
   expect((await walletOf(db, B)).balance).toBe(1000);
   expect((await confirmTransfer(db, cfg, request, from, to)).repeated).toBe(true);
 });
+
+it('個人パネルの送金は相手選択→金額入力→50％の確認。確定するまでは引かない', async () => {
+  const CH = '950000000000000001';
+  const guild = { members: { fetch: async ({ user }: { user: string }) => ({ id: user, user: { bot: false }, roles: { cache: new Map((user === A ? from.roleIds : to.roleIds).map(r => [r, {}])) } }) } };
+  const base = { inCachedGuild: () => true, guildId: cfg.guildId, guild, user: { id: A }, isRepliable: () => true,
+    isChatInputCommand: () => false, isButton: () => false, isUserSelectMenu: () => false, isModalSubmit: () => false,
+    reply: vi.fn(), showModal: vi.fn(), deferReply: vi.fn(), editReply: vi.fn() };
+  const app = new SokinApp(db, () => cfg);
+  const open = { ...base, isButton: () => true, customId: `control:send:${CH}:${A}`, member: { voice: { channel: { id: CH, name: '縁側' } } } };
+  await app.onInteraction(open as unknown as Interaction);
+  expect(open.reply).toHaveBeenCalledWith(expect.objectContaining({ flags: 64, components: expect.any(Array) }));
+  const select = { ...base, isUserSelectMenu: () => true, customId: `sokin:recipient:${A}`, values: [B] };
+  await app.onInteraction(select as unknown as Interaction);
+  expect(select.showModal).toHaveBeenCalled();
+  expect(select.showModal.mock.calls[0]![0].data.custom_id).toBe(`sokin:draft:${A}:${B}`);
+  const submit = { ...base, id: request, isModalSubmit: () => true, customId: `sokin:draft:${A}:${B}`, fields: { getTextInputValue: (id: string) => id === 'amount' ? '１，０００' : 'お礼' } };
+  await app.onInteraction(submit as unknown as Interaction);
+  expect(submit.editReply).toHaveBeenCalledWith(expect.objectContaining({ embeds: [expect.objectContaining({ description: expect.stringContaining('1,500 銭') })] }));
+  expect((await walletOf(db, A)).balance).toBe(10000);
+  expect((await ownedTransfer(db, request, A))?.status).toBe('pending');
+  const wrong = { ...submit, id: second, customId: `sokin:draft:${C}:${B}`, reply: vi.fn() };
+  await app.onInteraction(wrong as unknown as Interaction);
+  expect(wrong.reply).toHaveBeenCalledWith(expect.objectContaining({ content: expect.stringContaining('開き直して') }));
+  expect(await ownedTransfer(db, second, A)).toBeUndefined();
+});

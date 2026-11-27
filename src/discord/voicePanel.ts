@@ -1,3 +1,6 @@
+import { isEngawaName } from '../services/voiceUsage.js';
+import { controlId } from './controlPanel.js';
+import { shuinId } from './ids.js';
 import type { Guild, Message, VoiceBasedChannel, VoiceState } from 'discord.js';
 import type { GuildConfig } from '../config.js';
 import { logger } from '../lib/logger.js';
@@ -90,8 +93,10 @@ export class VoicePanelApp {
       for (const m of recent?.values() ?? []) if (isPanel(m as never)) await m.delete().catch(() => undefined);
       return;
     }
-    if (last && isPanel(last as never)) return;
-    await channel.send({ ...vcPanel(channel.id, help, inn, profile), allowedMentions: { parse: [] } });
+    const control = isEngawaName(channel.name ?? '');
+    const expected = control ? controlId('open', channel.id) : shuinId('vc', channel.id);
+    if (last && isPanel(last as never) && (!profile || last.components.some(r => 'components' in r && r.components.some(c => 'customId' in c && c.customId === expected)))) return;
+    await channel.send({ ...vcPanel(channel.id, help, inn, profile, control), allowedMentions: { parse: [] } });
     // 前に出したものは消す
     for (const m of recent?.values() ?? []) if (isPanel(m as never)) await m.delete().catch(() => undefined);
   }
