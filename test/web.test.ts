@@ -5178,3 +5178,24 @@ it('🕶 運営のサブアカウントを宮司が登録すると、その人�
   expect(await login(USER)).toBe('');
   expect((await send({ on: 'no' })).headers.get('location')).toBe(`/members/${USER}?msg=alt_removed`);
 });
+
+describe('氏子のリスト見直し',()=>{
+ const form=async(session:string,path:string,data:Record<string,string>)=>{
+  const {findSession}=await import('../src/web/sessions.js');const s=await findSession(db,session,clock);
+  return app.request(path,{method:'POST',headers:{cookie:`shamusho_session=${session}`,'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({_csrf:s!.csrfToken,...data})});
+ };
+
+ it('宮司のみ対象を確認し、チェック後に待ち行列へ入れる。確認では役職を変えない',async()=>{
+  roles.set(USER,[ROLE.ujiko]);await recordJoin(db,{id:USER,username:'fixture',displayName:'確認用の氏子',avatarUrl:null,isBot:false,joinedAt:clock,roleIds:[ROLE.ujiko]});
+  const g=await login(GUJI),s=await login(STAFF),base='/evaluation/ujiko-demotion';
+  expect((await get(base,s)).status).toBe(403);const before=actions.length;
+  const r=await form(g,base+'/preview',{ids:`${USER}\n<@${USER}>`,reason:'氏子の見直し'});expect(r.status).toBe(303);const path=r.headers.get('location')!;expect(path).toContain(base+'/');
+  const html=await(await get(path,g)).text();expect(html).toContain('確認用の氏子');expect(html).toContain('確認した1人');expect(actions).toHaveLength(before);
+  expect((await form(g,path+'/apply',{})).status).toBe(400);expect((await form(g,path+'/apply',{confirm:'yes'})).status).toBe(303);
+  expect(await(await get(path,g)).text()).toContain('実行待ち');expect(actions).toHaveLength(before);
+ });
+ it('名前だけのリストと、CSRFなしの実行を拒否する',async()=>{
+  const g=await login(GUJI),base='/evaluation/ujiko-demotion';expect((await form(g,base+'/preview',{ids:'名前だけ',reason:'見直し'})).status).toBe(400);
+  const noCsrf=await app.request(base+'/preview',{method:'POST',headers:{cookie:`shamusho_session=${g}`,'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({ids:USER,reason:'見直し'})});expect(noCsrf.status).toBe(403);
+ });
+});

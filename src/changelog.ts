@@ -30,6 +30,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {id:'2026-11-27-ujiko-list-demotion',date:'2026-11-27',kind:'new',where:['社務所Web','Discord'],title:'氏子をリストで参拝者へ戻し、自動昇格を保留する',items:['宮司が評価ページからIDリストを確認し、現在の最上位が氏子の人だけを参拝者へ変更できます。上位役職・運営・BOT・退会者は除外します。','ご縁・絵馬・銭・ほかのロールは残し、運営が解除するまで自動昇格を保留します。失敗した人だけ再試行できます。'],announcement:{priority:'none',audience:'宮司・運営',steps:['社務所Webの評価→氏子をリストで参拝者へ戻す','ユーザーIDと理由を入力し、対象を確認して実行','結果を確認し、必要なときに保留を解除'],postText:'',imagePrompt:'不要（運営の管理操作）'}},
   {
     id: '2026-11-27-yakubarai-role-only',
     date: '2026-11-27',

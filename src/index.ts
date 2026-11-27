@@ -330,6 +330,7 @@ async function main(): Promise<void> {
       void galleryRewardsApp.tick().catch(err => logger.warn({ err }, 'gallery settlement failed'));
       void messageArchive.tick().catch((err) => logger.warn({ err }, 'message archive prune failed'));
       // ✨ 特別ご縁を振られた人の昇格（社務所Web から振ったもの）
+      void app.checkUjikoDemotions(guild).catch(err=>logger.warn({err},'ujiko demotion runner failed'));
       void app.checkSpecialGoen(guild).catch((err) => logger.warn({ err }, 'special goen check failed'));
       void tempVoice.cleanup();
       void voiceGroups.checkAll().catch((err) => logger.warn({ err }, 'voice groups check failed'));

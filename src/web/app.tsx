@@ -1,3 +1,4 @@
+import { mountUjikoDemotion } from './ujikoDemotion.js';
 import { operationOf as supportOperationOf, ticketContext as supportTicketContext } from '../services/ticketOperations.js';
 import { mountTicketOperations } from './ticketOperations.js';
 import type { DocumentTranscriber } from '../services/documents/audio.js';
@@ -5717,6 +5718,8 @@ export function createWebApp(deps: WebDeps) {
 
   /** 役職に選べるロール（@everyone・BOT などの自動のロールは除く） */
   const rankRoles = async () => (await loadRoles())?.filter((r) => r.id !== cfg.guildId && !r.managed);
+
+  mountUjikoDemotion(app,{db,cfg:()=>cfg,api,discord:deps.discord,now});
 
   app.get('/ranks', async (c) => {
     const [roles, { counts }, reset] = await Promise.all([rankRoles(), roleMemberCounts(db), resetState(db)]);
