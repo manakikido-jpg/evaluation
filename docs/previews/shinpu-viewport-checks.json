@@ -1,0 +1,1311 @@
+{
+  "date": "2026-11-27",
+  "environment": "local Chromium; fictional members and CPU; no production data",
+  "layout": {
+    "reports": [
+      {
+        "size": [
+          390,
+          844
+        ],
+        "doc": [
+          390,
+          844
+        ],
+        "arena": {
+          "top": 86.5,
+          "bottom": 106.5,
+          "height": 20,
+          "width": 160.734375,
+          "scroll": 20
+        },
+        "dock": {
+          "top": 763,
+          "bottom": 841,
+          "height": 78,
+          "width": 378,
+          "scroll": 76
+        },
+        "hand": {
+          "top": 475.4375,
+          "bottom": 752,
+          "height": 276.5625,
+          "width": 360,
+          "scroll": 277
+        },
+        "card": {
+          "top": 791,
+          "bottom": 835,
+          "height": 44,
+          "width": 233.96875,
+          "scroll": 40
+        },
+        "self": {
+          "top": 388.4375,
+          "bottom": 427.4375,
+          "height": 39,
+          "width": 360,
+          "scroll": 37
+        },
+        "players": {
+          "top": 0,
+          "bottom": 0,
+          "height": 0,
+          "width": 0,
+          "scroll": 0
+        }
+      },
+      {
+        "size": [
+          360,
+          640
+        ],
+        "doc": [
+          360,
+          640
+        ],
+        "arena": {
+          "top": 86.5,
+          "bottom": 106.5,
+          "height": 20,
+          "width": 160.734375,
+          "scroll": 20
+        },
+        "dock": {
+          "top": 559,
+          "bottom": 637,
+          "height": 78,
+          "width": 348,
+          "scroll": 76
+        },
+        "hand": {
+          "top": 384.765625,
+          "bottom": 548,
+          "height": 163.234375,
+          "width": 330,
+          "scroll": 163
+        },
+        "card": {
+          "top": 587,
+          "bottom": 631,
+          "height": 44,
+          "width": 203.96875,
+          "scroll": 40
+        },
+        "self": {
+          "top": 297.765625,
+          "bottom": 336.765625,
+          "height": 39,
+          "width": 330,
+          "scroll": 37
+        },
+        "players": {
+          "top": 0,
+          "bottom": 0,
+          "height": 0,
+          "width": 0,
+          "scroll": 0
+        }
+      },
+      {
+        "size": [
+          320,
+          568
+        ],
+        "doc": [
+          320,
+          568
+        ],
+        "arena": {
+          "top": 109.5,
+          "bottom": 129.5,
+          "height": 20,
+          "width": 160.734375,
+          "scroll": 20
+        },
+        "dock": {
+          "top": 487,
+          "bottom": 565,
+          "height": 78,
+          "width": 308,
+          "scroll": 76
+        },
+        "hand": {
+          "top": 365.546875,
+          "bottom": 476,
+          "height": 110.453125,
+          "width": 290,
+          "scroll": 110
+        },
+        "card": {
+          "top": 515,
+          "bottom": 559,
+          "height": 44,
+          "width": 163.96875,
+          "scroll": 40
+        },
+        "self": {
+          "top": 278.546875,
+          "bottom": 317.546875,
+          "height": 39,
+          "width": 290,
+          "scroll": 37
+        },
+        "players": {
+          "top": 0,
+          "bottom": 0,
+          "height": 0,
+          "width": 0,
+          "scroll": 0
+        }
+      },
+      {
+        "size": [
+          430,
+          932
+        ],
+        "doc": [
+          430,
+          932
+        ],
+        "arena": {
+          "top": 86.5,
+          "bottom": 106.5,
+          "height": 20,
+          "width": 160.734375,
+          "scroll": 20
+        },
+        "dock": {
+          "top": 851,
+          "bottom": 929,
+          "height": 78,
+          "width": 418,
+          "scroll": 76
+        },
+        "hand": {
+          "top": 514.546875,
+          "bottom": 840,
+          "height": 325.453125,
+          "width": 400,
+          "scroll": 325
+        },
+        "card": {
+          "top": 879,
+          "bottom": 923,
+          "height": 44,
+          "width": 273.96875,
+          "scroll": 40
+        },
+        "self": {
+          "top": 427.546875,
+          "bottom": 466.546875,
+          "height": 39,
+          "width": 400,
+          "scroll": 37
+        },
+        "players": {
+          "top": 0,
+          "bottom": 0,
+          "height": 0,
+          "width": 0,
+          "scroll": 0
+        }
+      },
+      {
+        "size": [
+          768,
+          1024
+        ],
+        "doc": [
+          768,
+          1024
+        ],
+        "arena": {
+          "top": 91.5,
+          "bottom": 117.5,
+          "height": 26,
+          "width": 206.640625,
+          "scroll": 26
+        },
+        "dock": {
+          "top": 938,
+          "bottom": 1020,
+          "height": 82,
+          "width": 744,
+          "scroll": 80
+        },
+        "hand": {
+          "top": 560.328125,
+          "bottom": 924,
+          "height": 363.671875,
+          "width": 726,
+          "scroll": 364
+        },
+        "card": {
+          "top": 967,
+          "bottom": 1013,
+          "height": 46,
+          "width": 533.96875,
+          "scroll": 42
+        },
+        "self": {
+          "top": 469.328125,
+          "bottom": 512.328125,
+          "height": 43,
+          "width": 726,
+          "scroll": 41
+        },
+        "players": {
+          "top": 0,
+          "bottom": 0,
+          "height": 0,
+          "width": 0,
+          "scroll": 0
+        }
+      },
+      {
+        "size": [
+          1440,
+          900
+        ],
+        "doc": [
+          1440,
+          900
+        ],
+        "arena": {
+          "top": 91.5,
+          "bottom": 117.5,
+          "height": 26,
+          "width": 206.640625,
+          "scroll": 26
+        },
+        "dock": {
+          "top": 814,
+          "bottom": 896,
+          "height": 82,
+          "width": 1376,
+          "scroll": 80
+        },
+        "hand": {
+          "top": 505.21875,
+          "bottom": 800,
+          "height": 294.78125,
+          "width": 1358,
+          "scroll": 295
+        },
+        "card": {
+          "top": 843,
+          "bottom": 889,
+          "height": 46,
+          "width": 1165.96875,
+          "scroll": 42
+        },
+        "self": {
+          "top": 414.21875,
+          "bottom": 457.21875,
+          "height": 43,
+          "width": 1358,
+          "scroll": 41
+        },
+        "players": {
+          "top": 0,
+          "bottom": 0,
+          "height": 0,
+          "width": 0,
+          "scroll": 0
+        }
+      },
+      {
+        "size": [
+          1366,
+          768
+        ],
+        "doc": [
+          1366,
+          768
+        ],
+        "arena": {
+          "top": 91.5,
+          "bottom": 117.5,
+          "height": 26,
+          "width": 206.640625,
+          "scroll": 26
+        },
+        "dock": {
+          "top": 682,
+          "bottom": 764,
+          "height": 82,
+          "width": 1342,
+          "scroll": 80
+        },
+        "hand": {
+          "top": 446.546875,
+          "bottom": 668,
+          "height": 221.453125,
+          "width": 1324,
+          "scroll": 221
+        },
+        "card": {
+          "top": 711,
+          "bottom": 757,
+          "height": 46,
+          "width": 1131.96875,
+          "scroll": 42
+        },
+        "self": {
+          "top": 355.546875,
+          "bottom": 398.546875,
+          "height": 43,
+          "width": 1324,
+          "scroll": 41
+        },
+        "players": {
+          "top": 0,
+          "bottom": 0,
+          "height": 0,
+          "width": 0,
+          "scroll": 0
+        }
+      },
+      {
+        "size": [
+          844,
+          390
+        ],
+        "doc": [
+          844,
+          390
+        ],
+        "arena": {
+          "top": 67.5,
+          "bottom": 93.5,
+          "height": 26,
+          "width": 206.640625,
+          "scroll": 26
+        },
+        "dock": {
+          "top": 304,
+          "bottom": 386,
+          "height": 82,
+          "width": 820,
+          "scroll": 80
+        },
+        "hand": {
+          "top": 138,
+          "bottom": 290,
+          "height": 152,
+          "width": 388,
+          "scroll": 152
+        },
+        "card": {
+          "top": 333,
+          "bottom": 379,
+          "height": 46,
+          "width": 609.96875,
+          "scroll": 42
+        },
+        "self": {
+          "top": 64,
+          "bottom": 94,
+          "height": 30,
+          "width": 388,
+          "scroll": 28
+        },
+        "players": {
+          "top": 0,
+          "bottom": 0,
+          "height": 0,
+          "width": 0,
+          "scroll": 0
+        }
+      }
+    ],
+    "normal": {
+      "fit": false,
+      "scroll": 1123
+    },
+    "persisted": true,
+    "errors": []
+  },
+  "states": {
+    "reports": [
+      {
+        "scenario": "attack",
+        "size": [
+          320,
+          568
+        ],
+        "doc": [
+          320,
+          568
+        ],
+        "dock": 565,
+        "dialog": false,
+        "hand": 100
+      },
+      {
+        "scenario": "attack",
+        "size": [
+          390,
+          844
+        ],
+        "doc": [
+          390,
+          844
+        ],
+        "dock": 841,
+        "dialog": false,
+        "hand": 277
+      },
+      {
+        "scenario": "attack",
+        "size": [
+          1440,
+          900
+        ],
+        "doc": [
+          1440,
+          900
+        ],
+        "dock": 896,
+        "dialog": false,
+        "hand": 295
+      },
+      {
+        "scenario": "attack",
+        "size": [
+          844,
+          390
+        ],
+        "doc": [
+          844,
+          390
+        ],
+        "dock": 386,
+        "dialog": false,
+        "hand": 152
+      },
+      {
+        "scenario": "defense",
+        "size": [
+          320,
+          568
+        ],
+        "doc": [
+          320,
+          568
+        ],
+        "dock": 565,
+        "dialog": false,
+        "hand": 100
+      },
+      {
+        "scenario": "defense",
+        "size": [
+          390,
+          844
+        ],
+        "doc": [
+          390,
+          844
+        ],
+        "dock": 841,
+        "dialog": false,
+        "hand": 277
+      },
+      {
+        "scenario": "defense",
+        "size": [
+          1440,
+          900
+        ],
+        "doc": [
+          1440,
+          900
+        ],
+        "dock": 896,
+        "dialog": false,
+        "hand": 295
+      },
+      {
+        "scenario": "defense",
+        "size": [
+          844,
+          390
+        ],
+        "doc": [
+          844,
+          390
+        ],
+        "dock": 386,
+        "dialog": false,
+        "hand": 152
+      },
+      {
+        "scenario": "choice",
+        "size": [
+          320,
+          568
+        ],
+        "doc": [
+          320,
+          568
+        ],
+        "dock": 565,
+        "dialog": true,
+        "hand": 110
+      },
+      {
+        "scenario": "choice",
+        "size": [
+          390,
+          844
+        ],
+        "doc": [
+          390,
+          844
+        ],
+        "dock": 841,
+        "dialog": true,
+        "hand": 277
+      },
+      {
+        "scenario": "choice",
+        "size": [
+          1440,
+          900
+        ],
+        "doc": [
+          1440,
+          900
+        ],
+        "dock": 896,
+        "dialog": true,
+        "hand": 295
+      },
+      {
+        "scenario": "choice",
+        "size": [
+          844,
+          390
+        ],
+        "doc": [
+          844,
+          390
+        ],
+        "dock": 386,
+        "dialog": true,
+        "hand": 152
+      },
+      {
+        "scenario": "resources",
+        "size": [
+          320,
+          568
+        ],
+        "doc": [
+          320,
+          568
+        ],
+        "dock": 565,
+        "dialog": false,
+        "hand": 73
+      },
+      {
+        "scenario": "resources",
+        "size": [
+          390,
+          844
+        ],
+        "doc": [
+          390,
+          844
+        ],
+        "dock": 841,
+        "dialog": false,
+        "hand": 239
+      },
+      {
+        "scenario": "resources",
+        "size": [
+          1440,
+          900
+        ],
+        "doc": [
+          1440,
+          900
+        ],
+        "dock": 896,
+        "dialog": false,
+        "hand": 266
+      },
+      {
+        "scenario": "resources",
+        "size": [
+          844,
+          390
+        ],
+        "doc": [
+          844,
+          390
+        ],
+        "dock": 386,
+        "dialog": false,
+        "hand": 100
+      },
+      {
+        "scenario": "offline",
+        "size": [
+          320,
+          568
+        ],
+        "doc": [
+          320,
+          568
+        ],
+        "dock": 565,
+        "dialog": false,
+        "hand": 158
+      },
+      {
+        "scenario": "offline",
+        "size": [
+          390,
+          844
+        ],
+        "doc": [
+          390,
+          844
+        ],
+        "dock": 841,
+        "dialog": false,
+        "hand": 232
+      },
+      {
+        "scenario": "offline",
+        "size": [
+          1440,
+          900
+        ],
+        "doc": [
+          1440,
+          900
+        ],
+        "dock": 896,
+        "dialog": false,
+        "hand": 266
+      },
+      {
+        "scenario": "offline",
+        "size": [
+          844,
+          390
+        ],
+        "doc": [
+          844,
+          390
+        ],
+        "dock": 386,
+        "dialog": false,
+        "hand": 101
+      },
+      {
+        "scenario": "result",
+        "size": [
+          320,
+          568
+        ],
+        "doc": [
+          320,
+          568
+        ],
+        "dock": 565,
+        "dialog": true,
+        "hand": 110
+      },
+      {
+        "scenario": "result",
+        "size": [
+          390,
+          844
+        ],
+        "doc": [
+          390,
+          844
+        ],
+        "dock": 841,
+        "dialog": true,
+        "hand": 277
+      },
+      {
+        "scenario": "result",
+        "size": [
+          1440,
+          900
+        ],
+        "doc": [
+          1440,
+          900
+        ],
+        "dock": 896,
+        "dialog": true,
+        "hand": 295
+      },
+      {
+        "scenario": "result",
+        "size": [
+          844,
+          390
+        ],
+        "doc": [
+          844,
+          390
+        ],
+        "dock": 386,
+        "dialog": true,
+        "hand": 152
+      }
+    ],
+    "errors": []
+  },
+  "controls": {
+    "handPages": true,
+    "selectionPreserved": true,
+    "targetPopup": true,
+    "cardPopup": true,
+    "optionsPopup": true,
+    "healingTarget": true,
+    "menu": true,
+    "choicePaging": true,
+    "choiceConfirm": true,
+    "sizes": [
+      {
+        "size": [
+          320,
+          568
+        ],
+        "doc": [
+          320,
+          568
+        ],
+        "hand": [
+          290,
+          290,
+          110,
+          110
+        ],
+        "arena": [
+          166,
+          166
+        ]
+      },
+      {
+        "size": [
+          390,
+          844
+        ],
+        "doc": [
+          390,
+          844
+        ],
+        "hand": [
+          360,
+          360,
+          277,
+          277
+        ],
+        "arena": [
+          298,
+          298
+        ]
+      },
+      {
+        "size": [
+          1440,
+          900
+        ],
+        "doc": [
+          1440,
+          900
+        ],
+        "hand": [
+          1358,
+          1358,
+          295,
+          295
+        ],
+        "arena": [
+          316,
+          316
+        ]
+      },
+      {
+        "size": [
+          844,
+          390
+        ],
+        "doc": [
+          844,
+          390
+        ],
+        "hand": [
+          388,
+          388,
+          152,
+          152
+        ],
+        "arena": [
+          236,
+          236
+        ]
+      }
+    ],
+    "errors": []
+  },
+  "twoPlayers": {
+    "stackedAttack": true,
+    "humanDefense": true,
+    "errors": []
+  },
+  "arenaContent": {
+    "reports": [
+      {
+        "scenario": "attack",
+        "size": [
+          320,
+          568
+        ],
+        "doc": [
+          320,
+          568
+        ],
+        "dock": 565,
+        "dialog": false,
+        "hand": 100,
+        "arena": [
+          158,
+          158
+        ]
+      },
+      {
+        "scenario": "attack",
+        "size": [
+          390,
+          844
+        ],
+        "doc": [
+          390,
+          844
+        ],
+        "dock": 841,
+        "dialog": false,
+        "hand": 277,
+        "arena": [
+          298,
+          298
+        ]
+      },
+      {
+        "scenario": "attack",
+        "size": [
+          1440,
+          900
+        ],
+        "doc": [
+          1440,
+          900
+        ],
+        "dock": 896,
+        "dialog": false,
+        "hand": 295,
+        "arena": [
+          316,
+          316
+        ]
+      },
+      {
+        "scenario": "attack",
+        "size": [
+          844,
+          390
+        ],
+        "doc": [
+          844,
+          390
+        ],
+        "dock": 386,
+        "dialog": false,
+        "hand": 152,
+        "arena": [
+          236,
+          236
+        ]
+      },
+      {
+        "scenario": "defense",
+        "size": [
+          320,
+          568
+        ],
+        "doc": [
+          320,
+          568
+        ],
+        "dock": 565,
+        "dialog": false,
+        "hand": 100,
+        "arena": [
+          158,
+          158
+        ]
+      },
+      {
+        "scenario": "defense",
+        "size": [
+          390,
+          844
+        ],
+        "doc": [
+          390,
+          844
+        ],
+        "dock": 841,
+        "dialog": false,
+        "hand": 277,
+        "arena": [
+          298,
+          298
+        ]
+      },
+      {
+        "scenario": "defense",
+        "size": [
+          1440,
+          900
+        ],
+        "doc": [
+          1440,
+          900
+        ],
+        "dock": 896,
+        "dialog": false,
+        "hand": 295,
+        "arena": [
+          316,
+          316
+        ]
+      },
+      {
+        "scenario": "defense",
+        "size": [
+          844,
+          390
+        ],
+        "doc": [
+          844,
+          390
+        ],
+        "dock": 386,
+        "dialog": false,
+        "hand": 152,
+        "arena": [
+          236,
+          236
+        ]
+      },
+      {
+        "scenario": "choice",
+        "size": [
+          320,
+          568
+        ],
+        "doc": [
+          320,
+          568
+        ],
+        "dock": 565,
+        "dialog": true,
+        "hand": 110,
+        "arena": [
+          166,
+          166
+        ]
+      },
+      {
+        "scenario": "choice",
+        "size": [
+          390,
+          844
+        ],
+        "doc": [
+          390,
+          844
+        ],
+        "dock": 841,
+        "dialog": true,
+        "hand": 277,
+        "arena": [
+          298,
+          298
+        ]
+      },
+      {
+        "scenario": "choice",
+        "size": [
+          1440,
+          900
+        ],
+        "doc": [
+          1440,
+          900
+        ],
+        "dock": 896,
+        "dialog": true,
+        "hand": 295,
+        "arena": [
+          316,
+          316
+        ]
+      },
+      {
+        "scenario": "choice",
+        "size": [
+          844,
+          390
+        ],
+        "doc": [
+          844,
+          390
+        ],
+        "dock": 386,
+        "dialog": true,
+        "hand": 152,
+        "arena": [
+          236,
+          236
+        ]
+      },
+      {
+        "scenario": "resources",
+        "size": [
+          320,
+          568
+        ],
+        "doc": [
+          320,
+          568
+        ],
+        "dock": 565,
+        "dialog": false,
+        "hand": 73,
+        "arena": [
+          148,
+          148
+        ]
+      },
+      {
+        "scenario": "resources",
+        "size": [
+          390,
+          844
+        ],
+        "doc": [
+          390,
+          844
+        ],
+        "dock": 841,
+        "dialog": false,
+        "hand": 239,
+        "arena": [
+          281,
+          281
+        ]
+      },
+      {
+        "scenario": "resources",
+        "size": [
+          1440,
+          900
+        ],
+        "doc": [
+          1440,
+          900
+        ],
+        "dock": 896,
+        "dialog": false,
+        "hand": 266,
+        "arena": [
+          302,
+          302
+        ]
+      },
+      {
+        "scenario": "resources",
+        "size": [
+          844,
+          390
+        ],
+        "doc": [
+          844,
+          390
+        ],
+        "dock": 386,
+        "dialog": false,
+        "hand": 100,
+        "arena": [
+          204,
+          204
+        ]
+      },
+      {
+        "scenario": "offline",
+        "size": [
+          320,
+          568
+        ],
+        "doc": [
+          320,
+          568
+        ],
+        "dock": 565,
+        "dialog": false,
+        "hand": 158,
+        "arena": [
+          0,
+          0
+        ]
+      },
+      {
+        "scenario": "offline",
+        "size": [
+          390,
+          844
+        ],
+        "doc": [
+          390,
+          844
+        ],
+        "dock": 841,
+        "dialog": false,
+        "hand": 232,
+        "arena": [
+          263,
+          263
+        ]
+      },
+      {
+        "scenario": "offline",
+        "size": [
+          1440,
+          900
+        ],
+        "doc": [
+          1440,
+          900
+        ],
+        "dock": 896,
+        "dialog": false,
+        "hand": 266,
+        "arena": [
+          294,
+          294
+        ]
+      },
+      {
+        "scenario": "offline",
+        "size": [
+          844,
+          390
+        ],
+        "doc": [
+          844,
+          390
+        ],
+        "dock": 386,
+        "dialog": false,
+        "hand": 101,
+        "arena": [
+          185,
+          185
+        ]
+      },
+      {
+        "scenario": "result",
+        "size": [
+          320,
+          568
+        ],
+        "doc": [
+          320,
+          568
+        ],
+        "dock": 565,
+        "dialog": true,
+        "hand": 110,
+        "arena": [
+          166,
+          166
+        ]
+      },
+      {
+        "scenario": "result",
+        "size": [
+          390,
+          844
+        ],
+        "doc": [
+          390,
+          844
+        ],
+        "dock": 841,
+        "dialog": true,
+        "hand": 277,
+        "arena": [
+          298,
+          298
+        ]
+      },
+      {
+        "scenario": "result",
+        "size": [
+          1440,
+          900
+        ],
+        "doc": [
+          1440,
+          900
+        ],
+        "dock": 896,
+        "dialog": true,
+        "hand": 295,
+        "arena": [
+          316,
+          316
+        ]
+      },
+      {
+        "scenario": "result",
+        "size": [
+          844,
+          390
+        ],
+        "doc": [
+          844,
+          390
+        ],
+        "dock": 386,
+        "dialog": true,
+        "hand": 152,
+        "arena": [
+          236,
+          236
+        ]
+      }
+    ],
+    "errors": []
+  },
+  "limits": [
+    "No real iPhone/Safari or Android device test",
+    "Choice confirmation browser check uses a test response; calculations checked in server tests"
+  ]
+}

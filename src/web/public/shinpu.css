@@ -1376,3 +1376,139 @@ body[data-effect-mode=short] .battle-fx{animation-duration:.25s}body[data-effect
 .match-history{padding:12px;border:1px solid #bea676;border-radius:10px;background:#fffaf0;color:#392d16;margin:12px 0}.match-history summary{cursor:pointer;min-height:44px}.match-history p{overflow-wrap:anywhere;line-height:1.7}
 
 .forecast-values{display:block;white-space:pre-line;line-height:1.7}
+
+/* 対戦の主画面はスクロールせず、選択・説明はポップアップで開く。 */
+.fit-only { display: none; }
+body.battle-fit:has(#game:not([hidden])) {
+  height: 100vh; height: 100dvh; overflow: hidden;
+  display: flex; flex-direction: column;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+.battle-fit > header { flex: 0 0 auto; padding: 4px 12px; gap: 8px; }
+.battle-fit .brand { font-size: 17px; gap: 6px; white-space: nowrap; }
+.battle-fit .crest { font-size: 23px; }
+.battle-fit header nav { width: auto; gap: 5px; flex-wrap: nowrap; }
+.battle-fit header nav button { min-height: 44px; padding: 6px 8px; font-size: 12px; }
+.battle-fit header .tag, .battle-fit > footer { display: none; }
+.battle-fit #game { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: 6px; width: min(100%,1400px); max-width: 1400px; margin: 0 auto; padding: 4px 12px; }
+.battle-fit #game[hidden] { display: none; }
+.battle-fit .intro { flex: 0 0 auto; margin: 0; min-height: 18px; }
+.battle-fit .intro > div { display: none; }
+.battle-fit .statuspill { font-size: 11px; padding: 0; }
+.battle-fit .board { flex: 1 1 0; min-height: 0; margin: 0; gap: 8px; grid-template-columns: minmax(0,1fr); grid-template-rows: minmax(120px,.8fr) minmax(180px,1fr) auto; grid-template-areas: 'arena' 'hand' 'command'; }
+.battle-fit .logbox { display: none; }
+.battle-fit .battle-arena { min-height: 0; padding: 8px 12px; overflow: hidden; display: flex; flex-direction: column; gap: 6px; }
+.battle-fit .battle-heading { flex: 0 0 auto; min-height: 24px; justify-content: space-between; }
+.battle-fit .battle-heading h1 { font-size: 18px; }
+.battle-fit .deadline { position: static; padding: 2px 6px; font-size: 13px; white-space: nowrap; }
+.battle-tools { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.battle-tools button { min-height: 44px; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.battle-fit .battle-tools { flex: 0 0 auto; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 5px; }
+.battle-fit .battle-tools button { padding: 4px 8px; font-size: 12px; }
+.battle-fit .selection-stage { flex: 1 1 0; min-height: 0; margin: 0; gap: 0; }
+.battle-fit .calculation { flex: 1 1 0; min-width: 0; max-width: 650px; padding: 5px 10px; }
+.battle-fit .calculation h2 { font-size: 14px; margin: 0 0 3px; }
+.battle-fit .selection-empty { margin: 3px 0; font-size: 12px; line-height: 1.4; white-space: normal; }
+.battle-fit .target-preview, .battle-fit .summon-effect { display: none; }
+.battle-fit .metric { padding: 1px 0; font-size: 12px; }
+.battle-fit .metric strong { font-size: 22px; }
+.battle-fit .defense-forecast { padding: 4px 6px; margin: 3px 0; font-size: 12px; }
+.battle-fit .defense-forecast small { display: none; }
+.battle-fit .handarea { display: flex; flex-direction: column; min-height: 0; padding: 5px 8px; }
+.battle-fit .self-resources { flex: 0 0 auto; grid-template-columns: repeat(3,minmax(0,1fr)); margin: 0 0 4px; padding: 4px; gap: 6px; }
+.battle-fit .self-name, .battle-fit .resource-policy { display: none; }
+.battle-fit .self-resource { padding: 2px 5px; gap: 4px; flex-wrap: nowrap; }
+.battle-fit .self-resource span { font-size: 11px; }
+.battle-fit .self-resource strong { font-size: 20px; }
+.battle-fit .self-resource strong.large-value { font-size: 11px; }
+.battle-fit .self-resource:has(.large-value) { display: block; }
+.battle-fit .self-resource:has(.large-value) span { display: block; }
+.battle-fit .handheading { display: flex; align-items: center; justify-content: space-between; flex: 0 0 auto; min-height: 44px; margin: 0; gap: 5px; }
+.battle-fit .handheading > span:first-child { font-size: 13px; }
+.battle-fit .hand-pager { display: flex; align-items: center; gap: 7px; }
+.hand-pager button, .popup-pager button { min-width: 44px; min-height: 44px; padding: 4px 10px; font-size: 22px; }
+.hand-pager span, .popup-pager span { min-width: 30px; text-align: center; font-size: 12px; }
+.battle-fit .hand { flex: 1 1 0; min-height: 0; margin: 0; padding: 6px 4px 4px; gap: 10px; align-items: stretch; justify-content: center; overflow: hidden; }
+.battle-fit .hand-card { flex: 1 1 0; width: 0; height: 100%; max-width: 190px; display: flex; flex-direction: column; gap: 5px; }
+.battle-fit .hand-card .card { flex: 1 1 0; min-height: 0; height: 0; display: flex; box-shadow: none; }
+.battle-fit .hand-card .card-art { height: 100%; width: 100%; object-fit: contain; background: transparent; border-radius: 4px; }
+.battle-fit .hand-card .card-detail-button { flex: 0 0 44px; min-height: 44px; padding: 3px; font-size: 11px; white-space: nowrap; }
+.battle-fit .hand-card .card-reason { display: none; }
+.battle-fit .hand-card .card.selected { transform: translateY(-2px); outline-offset: 1px; }
+.battle-fit .command-dock { grid-area: command; position: relative; inset: auto; padding: 6px 10px; border: 1px solid #ba9362; border-radius: 8px; }
+.battle-fit .action-context { font-size: 12px; margin: 0 0 4px; max-height: 3em; overflow: hidden; }
+.battle-fit .command-dock #hint { display: none; }
+.battle-fit .battle-result { flex: 0 0 auto; margin: 0; padding: 4px 8px; max-height: 36px; overflow: hidden; font-size: 11px; gap: 2px 8px; }
+.battle-fit .connection-banner { flex: 0 0 auto; padding: 5px 10px; gap: 5px; font-size: 12px; }
+.battle-fit .connection-banner span { flex-basis: 180px; }
+.battle-fit .toast:not(:empty) { bottom: 20%; max-height: 30dvh; overflow: auto; }
+.popup-actions { display: grid; gap: 10px; grid-template-columns: repeat(2,minmax(0,1fr)); }
+.popup-actions button { min-height: 48px; }
+.popup-pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 10px 0; }
+#selection-popup .selected-cards { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); max-width: none; padding: 5px; gap: 10px; overflow: visible; }
+#selection-popup .selected-cards[hidden] { display: none; }
+#selection-popup .selected-cards .card { width: 100%; max-width: none; min-width: 0; }
+#selection-popup .card-zoom { min-height: 44px; }
+#selection-popup .selection-effect { font-size: 12px; }
+#choice-popup .choice-cards { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); overflow: visible; padding: 5px; }
+#choice-popup .choice-card { padding: 5px; font-size: 12px; }
+#choice-confirm { width: 100%; min-height: 44px; }
+#target-picker .players, #target-picker .players.six { grid-template-columns: minmax(0,1fr); gap: 9px; }
+#target-picker .player { min-height: 54px; padding: 6px 10px; gap: 8px; }
+#target-picker .player .portrait { display: none; }
+#target-picker .player-info { min-width: 0; width: 100%; }
+#target-picker .name { margin: 0 0 3px; font-size: 13px; }
+#target-picker .resource-line { display: inline-flex; margin: 0 10px 0 0; font-size: 10px; }
+#target-picker .resource-line strong { font-size: 14px; overflow-wrap: anywhere; }
+#target-picker .resource-line strong.large-value { font-size: 11px; }
+#target-picker .resource-bar { display: none; }
+#target-picker .player .small { display: inline; font-size: 11px; overflow-wrap: anywhere; }
+#target-picker .player-status { display: none; }
+#card-options { max-width: 100%; }
+#card-options label { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+#card-options select { min-height: 44px; }
+@media (max-width: 600px) {
+  .battle-fit > header { padding: 3px 6px; gap: 4px; flex-wrap: wrap; }
+  .battle-fit .brand { font-size: 13px; }
+  .battle-fit .crest { font-size: 18px; }
+  .battle-fit header nav { margin-left: auto; gap: 4px; }
+  .battle-fit header nav > a, .battle-fit header nav > [data-dialog="rules"] { display: none; }
+  .battle-fit header nav button { padding: 4px 6px; font-size: 11px; }
+  .battle-fit #game { padding: 3px 6px; gap: 4px; }
+  .battle-fit .board { gap: 5px; grid-template-rows: minmax(110px,.8fr) minmax(170px,1fr) auto; }
+  .battle-fit .battle-arena { padding: 5px 6px; gap: 4px; }
+  .battle-fit .battle-heading h1 { font-size: 14px; }
+  .battle-fit .handheading > span:first-child { font-size: 12px; }
+  .battle-fit .self-resource strong { font-size: 17px; }
+  .battle-fit .self-resource strong.large-value { font-size: 11px; }
+  .battle-fit .command-dock { padding: 5px 6px; }
+  .battle-fit .command-dock .actions { gap: 5px; }
+  .battle-fit .command-dock .actions > button { padding: 5px 8px; min-height: 44px; font-size: 12px; }
+  .battle-fit .command-dock #main-action { flex-basis: 100px; }
+}
+@media (min-width: 601px) and (max-height: 650px) {
+  .battle-fit .intro { display: none; }
+  .battle-fit .board { grid-template-columns: minmax(0,1fr) minmax(0,1fr); grid-template-rows: minmax(0,1fr) auto; grid-template-areas: 'arena hand' 'command command'; }
+  .battle-fit .handheading { min-height: 44px; }
+  .battle-fit .self-resources { padding: 2px; margin-bottom: 0; }
+  .battle-fit .self-resource strong { font-size: 14px; }
+  .battle-fit .self-resource strong.large-value { font-size: 10px; }
+}
+
+.defense-brief { margin: 4px 0 0; font-size: 12px; font-weight: bold; }
+@media (max-width: 600px) and (max-height: 700px) {
+  .battle-fit:has(#connection-banner:not([hidden])) .battle-arena { display: none; }
+  .battle-fit:has(#connection-banner:not([hidden])) .board { grid-template-rows: minmax(0,1fr) auto; grid-template-areas: 'hand' 'command'; }
+}
+
+#target-picker, #selection-popup, #options-popup, #choice-popup, #forecast-popup, #action-menu {
+  max-height: calc(100dvh - 24px);
+}
+/* 防御中は見込みを短く示し、数式・説明の重複で操作面を押し出さない。 */
+.battle-fit .calculation h2 { font-size: 13px; line-height: 1.3; }
+.battle-fit .summary { font-size: 12px; line-height: 1.3; }
+.battle-fit .selection-empty { font-size: 11px; line-height: 1.3; }
+.battle-fit .defense-brief { line-height: 1.3; }
+.battle-fit:has(#forecast-open:not([hidden])) #summary,
+.battle-fit:has(#forecast-open:not([hidden])) #message,
+.battle-fit:has(#choice-open:not([hidden])) #summary { display: none; }
