@@ -67,6 +67,16 @@ export const FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
   ema_revoked: { text: '🎐 絵馬を取り消しました（一言も飾られなくなり、票の数からも外れます。役職はそのままです）。#記録 に残しました。', kind: 'ok' },
   ema_not_found: { text: 'その絵馬は、もう取り消されているか、見つかりません。', kind: 'warn' },
   ema_forbidden: { text: '絵馬の取り消しは宮司のみできます。', kind: 'warn' },
+  moto_done: { text: '🍂 元氏子にしました（本人に DM・#記録 に残しました）。', kind: 'ok' },
+  moto_back: { text: '🍃 氏子に戻しました（#記録 に残しました）。', kind: 'ok' },
+  moto_role_failed: { text: '⚠️ 状態は変えましたが、Discord のロールを変更できませんでした。BOT のロールの位置と権限を確かめて、手で直してください。', kind: 'warn' },
+  moto_confirm: { text: '切り替えるときは、確かめのチェックを入れてください。', kind: 'warn' },
+  moto_forbidden: { text: '元氏子への切り替えは宮司のみできます。', kind: 'warn' },
+  moto_not_started: { text: '新制度がまだ始まっていません（③④を押してから使えます）。', kind: 'warn' },
+  moto_no_role: { text: '元氏子のロールが未設定です。評価ページでロール ID を入れてください。', kind: 'warn' },
+  moto_not_ujiko: { text: 'この方は、いま氏子ではありません。', kind: 'warn' },
+  moto_not_moto: { text: 'この方は、いま元氏子ではありません。', kind: 'warn' },
+  moto_not_member: { text: 'この方は、もうサーバーにいません。', kind: 'warn' },
 };
 
 export function Flash(props: { code?: string }) {
