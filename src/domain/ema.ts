@@ -4,25 +4,29 @@
  */
 
 /**
- * 絵馬の「票」の種類。
- * - ujiko（氏子の票）  : 参拝者→氏子。30日で失効。
+ * 絵馬の「票」の種類（2026-11-27 本人の決定で sanpai を足し、失効は sanpai だけ）。
+ * - ujiko（氏子の票）  : 氏子以上 → 参拝者・氏子。失効なし。
+ * - sanpai（参拝者の票）: 参拝者 → 氏子。30日で失効（氏子は絵馬をもらい続ける）。
  * - sewayaku（世話役の票）: 前の決まりの氏子→世話役の票（2026-11-26 から氏子→世話役は選挙になり、もう贈らない。残っている記録の表示用）。
- * - sodai（総代の票）  : 世話役→総代。失効なし。
+ * - sodai（総代の票）  : だれでも → 世話役（世話役→総代）。失効なし。
  */
-export type EmaTier = 'ujiko' | 'sewayaku' | 'sodai';
+export type EmaTier = 'ujiko' | 'sanpai' | 'sewayaku' | 'sodai';
 
 /** 票の種類の呼び名（記録・案内に使う） */
 export const EMA_TIER_LABEL: Record<EmaTier, string> = {
   ujiko: '氏子の票',
+  sanpai: '参拝者の票',
   sewayaku: '世話役の票',
   sodai: '総代の票',
 };
 
-/** 絵馬を贈るのに必要な「いっしょにいた」条件（どの票でも同じ） */
-export const EMA_DAYS_TOGETHER = 3; // 違う日◯日以上
-export const EMA_MINUTES_TOGETHER = 180; // 合計◯分以上
+/** 絵馬を贈るのに必要な「いっしょにいた」条件（どの票でも同じ）：縁側で1日◯分以上いっしょにいた日が◯日以上（本人の決定 2026-11-27） */
+export const EMA_DAYS_TOGETHER = 3; // ◯日以上
+export const EMA_MINUTES_PER_DAY = 30; // その日に◯分以上
 
-/** 氏子の票は created_at から◯日で失効（世話役・総代の票は失効なし） */
+/** 参拝者が絵馬を贈るときの定型文（自由に書いてもよい。本人の決定 2026-11-27） */
+export const EMA_TEMPLATES: readonly string[] = ['話し手', '聞き手', '回し手', 'ムードメーカー'];
+/** 参拝者の票は created_at から◯日で失効（ほかの票は失効なし） */
 export const EMA_EXPIRE_DAYS = 30;
 
 /**
@@ -50,8 +54,8 @@ export const SEWAYAKU_CANDIDATE_MONTHS = 3;
 export const SEWAYAKU_RETRY_MINUTES = 2400;
 export const SEWAYAKU_MIN_VOTERS = 5;
 
-/** 世話役→総代に必要な「総代の票」の枚数（たたき台） */
-export const EMA_SODAI_PROMOTE = 3;
+/** 世話役→総代に必要な「総代の票」の枚数（本人の決定 2026-11-27：絵馬200） */
+export const EMA_SODAI_PROMOTE = 200;
 
 /**
  * 1回の見回りでこの人数を超えて昇格するときは「いっぺんに上がった」とみなし、
@@ -69,7 +73,14 @@ export function emaFreshSince(now: Date): Date {
 
 /** その tier の票が失効するか（氏子の票だけ 30 日で失効する） */
 export function emaTierExpires(tier: EmaTier): boolean {
-  return tier === 'ujiko';
+  return tier === 'sanpai';
+}
+
+/** その役職の人のカード・維持で数える票の種類（参拝者=氏子の票／氏子=氏子の票＋参拝者の票／世話役=総代の票） */
+export function emaTiersShown(rankKey: string | undefined): EmaTier[] {
+  if (rankKey === 'ujiko') return ['ujiko', 'sanpai'];
+  if (rankKey === 'sewayaku') return ['sodai'];
+  return ['ujiko'];
 }
 
 /**
@@ -136,10 +147,10 @@ export function emaStepFrom(key: string | undefined, th: EmaThresholdCounts = EM
 
 /**
  * 贈る人の格（weight）と相手の役職 key から、贈れる絵馬の種類を決める。贈れないなら null。
- * - 参拝者へ：氏子以上 → 氏子の票
- * - 氏子へ  ：氏子以上 → 氏子の票（維持用。氏子→世話役は選挙なので、世話役の票は贈らない）
- * - 世話役へ：総代以上（運営を含む）→ 総代の票
- * - 総代以上・役職なしへは贈れない
+ * - 参拝者へ：氏子以上 → 氏子の票（参拝者どうしは贈れない）
+ * - 氏子へ  ：氏子以上 → 氏子の票／参拝者 → 参拝者の票（30日で失効）
+ * - 世話役へ：参拝者以上だれでも → 総代の票（本人の決定 2026-11-27）
+ * - 総代以上・役職なしへは贈れない。役職のない人（参拝者より前）は贈れない
  * weight が未定義（その役職が設定にない）なら、その段は贈れない扱い。
  */
 export function emaTierFor(opts: {
@@ -148,12 +159,13 @@ export function emaTierFor(opts: {
   ujikoWeight?: number;
   sewayakuWeight?: number;
   sodaiWeight?: number;
+  sanpaishaWeight?: number;
 }): EmaTier | null {
   const { giverWeight, receiverKey } = opts;
   const atLeast = (w?: number) => w !== undefined && giverWeight >= w;
   if (receiverKey === 'sanpaisha') return atLeast(opts.ujikoWeight) ? 'ujiko' : null;
-  if (receiverKey === 'ujiko') return atLeast(opts.ujikoWeight) ? 'ujiko' : null;
-  if (receiverKey === 'sewayaku') return atLeast(opts.sodaiWeight) ? 'sodai' : null;
+  if (receiverKey === 'ujiko') return atLeast(opts.ujikoWeight) ? 'ujiko' : atLeast(opts.sanpaishaWeight) ? 'sanpai' : null;
+  if (receiverKey === 'sewayaku') return atLeast(opts.sanpaishaWeight) ? 'sodai' : null;
   return null;
 }
 

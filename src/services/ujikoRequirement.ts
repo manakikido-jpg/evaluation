@@ -13,7 +13,7 @@ import { staffAlts } from './staffAlts.js';
  *   「氏子以上」の人数 × ujikoPercent%（切り上げ・最低 ujikoMin）。
  * - 一人ひとりの必要数は「お参り期間が始まった週」の数で固定（週の人数は、はじめて数えたときに settings に残す）。
  * - 数えるのは、お参り期間中にもらった氏子の票（取り消しを除く）＋招待の補い
- *   （招待した人が参拝者になったら 1 つ・inviteSubstituteMax まで。お参り期間中に参拝者になった招待だけ）。
+ *   （招待した人が通話に4時間いたら 1 つ・inviteSubstituteMax まで。お参り期間中に4時間に届いた招待だけ）。
  * - お参り期間がない参拝者（お参り期間の仕組みより前からいる人など）は、直近 14 日と今週の数で数える。
  */
 
@@ -82,7 +82,7 @@ export type UjikoProgress = {
   required: number;
   /** お参り期間中にもらった氏子の票 */
   votes: number;
-  /** お参り期間中に参拝者になった招待の数（補いに使うのは inviteUsed まで） */
+  /** お参り期間中に通話4時間に届いた招待の数（補いに使うのは inviteUsed まで） */
   invites: number;
   inviteUsed: number;
   /** 数えた合計（votes + inviteUsed） */
@@ -106,7 +106,8 @@ export async function ujikoProgress(db: Db, cfg: GuildConfig, memberId: string, 
   const { week, active, required } = await ujikoWeekRequirement(db, cfg, jstWeekStart(inOmairi ? o!.startedAt : now));
   const [[v], [i]] = await Promise.all([
     db.select({ n: count() }).from(ema).where(and(eq(ema.receiverId, memberId), eq(ema.tier, 'ujiko'), isNull(ema.revokedAt), gte(ema.createdAt, since), lte(ema.createdAt, until))),
-    db.select({ n: count() }).from(invites).where(and(eq(invites.inviterId, memberId), isNotNull(invites.rewardedAt), gte(invites.rewardedAt, since), lte(invites.rewardedAt, until))),
+    // 招待の補い：招待された人が通話に4時間いて「1人」と数えた招待（2026-11-27〜）
+    db.select({ n: count() }).from(invites).where(and(eq(invites.inviterId, memberId), isNotNull(invites.qualifiedAt), gte(invites.qualifiedAt, since), lte(invites.qualifiedAt, until))),
   ]);
   const votes = Number(v?.n ?? 0);
   const inviteCount = Number(i?.n ?? 0);

@@ -118,3 +118,15 @@ it('控除フォームは不正な日付/分数/参拝者以外/評価閲覧権�
  const limited=await createSession(db,user,{level:'shinshoku',pages:['members']},now);expect((await app.request('/evaluation/corrections?member='+A,{headers:headers(limited)})).status).toBe(403);
  for(const q of ['member=bad','member='+A+'&page=0'])expect((await app.request('/evaluation/corrections?'+q,{headers:headers()})).status).toBe(400);
 });
+
+it('宮司には新制度の進み具合（③④⑤の ON/OFF）と、段ごとに分けた昇格の数の欄を出す', async () => {
+  const html = await (await app.request('/evaluation', { headers: headers() })).text();
+  expect(html).toContain('🌸 新制度の進み具合');
+  expect(html).toContain('href="#ns-ema"');
+  expect(html).toContain('④ ご縁のリセット');
+  expect(html).toContain('まだ');
+  expect(html).toContain('🍃 氏子 → 🎋 世話役（選挙）');
+  expect(html).toContain('昇格の数を保存');
+  // 古い説明（宿は準備中）が残っていない
+  expect(html).not.toContain('準備中です');
+});

@@ -63,11 +63,11 @@ it('氏子は絵馬では世話役に上がらない（氏子→世話役は毎�
   expect(await emaPromotable(db, cfg, now)).toEqual([]);
 });
 
-it('世話役は総代の票3枚で昇格候補に（2枚では出さない）', async () => {
-  await seedEma(SW, 3, false, 'sodai'); // 候補
-  await seedEma(SW2, 2, false, 'sodai'); // 足りない
+it('世話役は総代の票200枚で昇格候補に（既定の数。3枚では出さない）', async () => {
+  await seedEma(SW, 3, false, 'sodai'); // 既定(200)では足りない
   await seedEma(SW2, 5, false, 'sewayaku'); // 世話役の票は総代昇格に関係ない
-  expect(await emaPromotable(db, cfg, now)).toEqual([SW]);
+  expect(await emaPromotable(db, cfg, now)).toEqual([]);
+  expect(await emaPromotable(db, withThresholds({ sodaiPromote: 3 }), now)).toEqual([SW]);
 });
 
 it('承認ずみサブアカウントは昇格候補にしない', async () => {
@@ -84,7 +84,7 @@ it('維持の注意：有効な氏子の票3枚未満の氏子を、少ない順
 });
 
 it('枚数の設定は宮司が変えられる（総代の票2枚で候補・維持0枚で注意なし）', async () => {
-  await seedEma(SW2, 2, false, 'sodai'); // 既定(3)では足りないが…
+  await seedEma(SW2, 2, false, 'sodai'); // 既定(200)では足りないが…
   expect(await emaPromotable(db, cfg, now)).toEqual([]);
   expect(await emaPromotable(db, withThresholds({ sodaiPromote: 2 }), now)).toEqual([SW2]); // 2に下げると候補
   // UJ2 は氏子で氏子の票0枚。維持0なら注意なし

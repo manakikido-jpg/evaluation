@@ -4,7 +4,7 @@ import type { GuildConfig } from '../src/config.js';
 import type { Db } from '../src/db/client.js';
 import { activityDaily, auditLogs, invites, members } from '../src/db/schema.js';
 import { walletOf } from '../src/services/economy.js';
-import { countUnknownInviters, STAFF_NO_INVITER, UNKNOWN_INVITER, markUnknownInviters, assignUnknownInviter, reconcileInviteRewards, rewardInviteRanks, inviteRewardRows, inviteActiveTick, inviteCountOf, inviterOf, recordInvite, rewardInviter } from '../src/services/invites.js';
+import { countUnknownInviters, STAFF_NO_INVITER, UNKNOWN_INVITER, markUnknownInviters, assignUnknownInviter, reconcileInviteRewards, rewardInviteRanks, inviteRewardRows, inviteActiveTick, inviteCountOf, inviterOf, qualifyInvites, recordInvite, rewardInviter } from '../src/services/invites.js';
 import { recordJoin } from '../src/services/members.js';
 import { setEmaPromotion } from '../src/services/emaPromotion.js';
 import { resetAllShuin } from '../src/services/shuin.js';
@@ -89,11 +89,48 @@ describe('🤝 新制度⑥：評価期間の延長（結び補填はなし）',
     await startOmairi(db, INVITER, 14, T0);
     await recordInvite(db, NEW, INVITER);
     await rewardInviter(ctx(), NEW, T0);
-    expect(await specialGoenOf(db, INVITER)).toBe(0); // 結び補填はなし
+    expect(await specialGoenOf(db, INVITER)).toBe(0); // ご縁は4時間に届いてから
     expect(ext(await getOmairi(db, INVITER))).toBe(15); // 14 + 1
     expect((await getOmairi(db, INVITER))?.inviteExtDays).toBe(1);
-    const p = await ujikoProgress(db, cfg, INVITER, new Date(T0.getTime() + 60_000));
+    // 参拝者になっただけでは、絵馬の補いに数えない（通話4時間で「1人」）
+    expect(await ujikoProgress(db, cfg, INVITER, new Date(T0.getTime() + 60_000))).toMatchObject({ invites: 0, inviteUsed: 0 });
+    await db.update(invites).set({ createdAt: T0 }).where(eq(invites.memberId, NEW));
+    await db.insert(activityDaily).values({ memberId: NEW, date: '2026-09-27', vcMinutes: 240 });
+    const T1 = new Date(T0.getTime() + 60_000);
+    expect(await qualifyInvites(db, cfg, T1)).toEqual([{ memberId: NEW, inviterId: INVITER, goen: 2 }]);
+    expect(await specialGoenOf(db, INVITER)).toBe(2); // 参拝者の招待主：5人目までは+2
+    expect(await qualifyInvites(db, cfg, T1)).toEqual([]); // 1人につき1回だけ
+    const p = await ujikoProgress(db, cfg, INVITER, new Date(T0.getTime() + 120_000));
     expect(p).toMatchObject({ inOmairi: true, votes: 0, invites: 1, inviteUsed: 1, total: 1 });
+  });
+
+  it('招待のご縁：通話4時間で1人。+2は参拝者5人目・氏子10人目まで、あとは+1。新制度の前（④の前）はご縁を渡さない', async () => {
+    await db.update(members).set({ roleIds: [ROLE.ujiko] }).where(eq(members.id, INVITER));
+    const people = Array.from({ length: 12 }, (_, i) => String(871000000000000000n + BigInt(i)));
+    for (const id of people) {
+      await recordJoin(db, { id, username: id, displayName: id, avatarUrl: null, roleIds: [ROLE.sanpaisha], isBot: false, joinedAt: T0 });
+      await db.insert(invites).values({ memberId: id, inviterId: INVITER, createdAt: T0 });
+      await db.insert(activityDaily).values({ memberId: id, date: '2026-09-27', vcMinutes: 300 });
+    }
+    // ③④の前：「1人」とは数えるが、ご縁は渡さない
+    const before = await qualifyInvites(db, cfg, T0);
+    expect(before).toHaveLength(12);
+    expect(before.every((x) => x.goen === undefined)).toBe(true);
+    expect(await specialGoenOf(db, INVITER)).toBe(0);
+    // ③④のあと：新しい招待（氏子の招待主）は 10 人目まで +2、11 人目から +1
+    await setEmaPromotion(db, true, 'guji');
+    await resetAllShuin(db, 'guji', T0);
+    const more = Array.from({ length: 12 }, (_, i) => String(872000000000000000n + BigInt(i)));
+    for (const id of more) {
+      await recordJoin(db, { id, username: id, displayName: id, avatarUrl: null, roleIds: [ROLE.sanpaisha], isBot: false, joinedAt: T0 });
+      await db.insert(invites).values({ memberId: id, inviterId: INVITER, createdAt: T0 });
+      await db.insert(activityDaily).values({ memberId: id, date: '2026-09-27', vcMinutes: 239 });
+    }
+    expect(await qualifyInvites(db, cfg, T0)).toEqual([]); // 239分ではまだ
+    await db.update(activityDaily).set({ vcMinutes: 240 }).where(eq(activityDaily.date, '2026-09-27'));
+    const after = await qualifyInvites(db, cfg, T0);
+    expect(after.map((x) => x.goen)).toEqual([2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1]);
+    expect(await specialGoenOf(db, INVITER)).toBe(22);
   });
 });
 

@@ -17,7 +17,8 @@ export function parseShuinId(customId: string): { action: ShuinAction; userId: s
 }
 
 /** 🎐 絵馬（評価の票）のボタン・モーダルの customId。形式: ema:<kind>:<相手のユーザー ID>（vote は世話役の投票） */
-export type EmaIdKind = 'give' | 'modal' | 'vote' | 'card';
+export type EmaIdKind = 'give' | 'modal' | 'vote' | 'card' | 'pick' | 'edit' | 'undo' | 'to';
+const EMA_KINDS: readonly string[] = ['give', 'modal', 'vote', 'card', 'pick', 'edit', 'undo', 'to'];
 const EMA_PREFIX = 'ema';
 
 /** プロフィールの「絵馬を贈る」ボタン（押すと一言のモーダルが出る） */
@@ -36,10 +37,26 @@ export function sewayakuVoteId(userId: string): string {
 export function emaCardId(userId: string): string {
   return `${EMA_PREFIX}:card:${userId}`;
 }
+/** 参拝者が定型文を選ぶメニュー */
+export function emaPickId(userId: string): string {
+  return `${EMA_PREFIX}:pick:${userId}`;
+}
+/** 自分の /絵馬 の「贈れる人」から選ぶメニュー（userId は開いた本人） */
+export function emaToId(userId: string): string {
+  return `${EMA_PREFIX}:to:${userId}`;
+}
+/** 贈った絵馬を書き直す */
+export function emaEditId(userId: string): string {
+  return `${EMA_PREFIX}:edit:${userId}`;
+}
+/** 贈った絵馬を取り消す */
+export function emaUndoId(userId: string): string {
+  return `${EMA_PREFIX}:undo:${userId}`;
+}
 export function parseEmaId(customId: string): { kind: EmaIdKind; userId: string } | undefined {
   const [prefix, kind, userId] = customId.split(':');
-  if (prefix !== EMA_PREFIX || (kind !== 'give' && kind !== 'modal' && kind !== 'vote' && kind !== 'card') || !userId || !/^\d{17,20}$/.test(userId)) return undefined;
-  return { kind, userId };
+  if (prefix !== EMA_PREFIX || !kind || !EMA_KINDS.includes(kind) || !userId || !/^\d{17,20}$/.test(userId)) return undefined;
+  return { kind: kind as EmaIdKind, userId };
 }
 
 /** コマンド名 */

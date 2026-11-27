@@ -582,9 +582,9 @@ describe('ShuinApp：絵馬を贈る（新制度②）', () => {
     add(SA, ROLE.sanpaisha);
   }
   async function seedTogether(days: number, minutesEach = 60) {
-    const { voicePairs } = await import('../src/db/schema.js');
+    const { engawaPairs } = await import('../src/db/schema.js');
     const [a, b] = GU < SA ? [GU, SA] : [SA, GU];
-    for (let d = 0; d < days; d++) await db.insert(voicePairs).values({ memberA: a, memberB: b, date: `2026-11-0${d + 1}`, minutes: minutesEach });
+    for (let d = 0; d < days; d++) await db.insert(engawaPairs).values({ memberA: a, memberB: b, date: `2026-11-0${d + 1}`, minutes: minutesEach });
   }
 
   it('氏子は条件を満たした参拝者に絵馬を贈れる（ボタン→モーダル→贈る）', async () => {
@@ -598,13 +598,83 @@ describe('ShuinApp：絵馬を贈る（新制度②）', () => {
 
     const submit = interaction('modal', giver, { customId: emaModalId(SA), fields: { getTextInputValue: () => 'いっしょに過ごせてうれしかったです' } });
     await app.onInteraction(submit.i as never);
-    expect(submit.replies[0]?.content).toContain('絵馬（氏子の票）を');
+    expect(submit.replies[0]?.content).toContain('絵馬を贈りました'); expect(submit.replies[0]?.content).toContain('氏子の票');
     const { validEmaCountOf, emaMessagesOf } = await import('../src/services/ema.js');
     expect(await validEmaCountOf(db, SA)).toBe(1);
     expect((await emaMessagesOf(db, SA))[0]?.message).toBe('いっしょに過ごせてうれしかったです');
   });
 
-  it('参拝者は絵馬を贈れない（モーダルを出さずに理由を出す）', async () => {
+  it('/絵馬 で、贈れる相手を確かめられる（自分＝いま贈れる人・あと少しの人と選ぶメニュー／ほかの人＝あなたとの縁側 ○/3日）', async () => {
+    await (await import('../src/services/emaPromotion.js')).setEmaPromotion(db, true, 'guji');
+    await seedMembers();
+    await seedTogether(2, 30); // まだ2日
+    const viewer = members.get(GU)!;
+    const ema = async (target: string) => {
+      const show = interaction('slash', viewer, { commandName: 'ema', options: { getUser: () => members.get(target)!.user, getBoolean: () => null } });
+      await app.onInteraction(show.i as never);
+      return JSON.stringify(show.replies.at(-1));
+    };
+    let mine = await ema(GU);
+    expect(mine).toContain('いま絵馬を贈れる人（0人）');
+    expect(mine).toContain('あと少し');
+    expect(mine).toContain('参拝者さん（2日）');
+    let theirs = await ema(SA);
+    expect(theirs).toContain('あなたとの縁側');
+    expect(theirs).toContain('2 / 3 日');
+    // 3日目（30分以上）→ 贈れる
+    const { engawaPairs } = await import('../src/db/schema.js');
+    const [a, b] = GU < SA ? [GU, SA] : [SA, GU];
+    await db.insert(engawaPairs).values({ memberA: a, memberB: b, date: '2026-11-09', minutes: 45 });
+    mine = await ema(GU);
+    expect(mine).toContain('いま絵馬を贈れる人（1人）');
+    expect(mine).toContain(`ema:to:${GU}`);
+    theirs = await ema(SA);
+    expect(theirs).toContain('3 / 3 日');
+    expect(theirs).toContain('絵馬を贈れます');
+    // メニューから選ぶと、ひとことを入れる画面（氏子なのでモーダル）
+    const pick = interaction('stringSelect', viewer, { customId: `ema:to:${GU}`, values: [SA] });
+    await app.onInteraction(pick.i as never);
+    expect(pick.shownModals[0]?.customId).toBe(`ema:modal:${SA}`);
+  });
+
+  it('参拝者は氏子へ定型文で贈れる（参拝者の票）。もう贈った相手には「書き直す・取り消す」が出て、本人が取り消せる', async () => {
+    await (await import('../src/services/emaPromotion.js')).setEmaPromotion(db, true, 'guji');
+    const { recordJoin } = await import('../src/services/members.js');
+    // GU を参拝者（贈る人）・SA を氏子（相手）にする
+    await recordJoin(db, { id: GU, username: 'p', displayName: '参拝者さん', avatarUrl: null, roleIds: [ROLE.sanpaisha], isBot: false, joinedAt: new Date() });
+    await recordJoin(db, { id: SA, username: 'u', displayName: '氏子さん', avatarUrl: null, roleIds: [ROLE.ujiko], isBot: false, joinedAt: new Date() });
+    add(GU, ROLE.sanpaisha);
+    add(SA, ROLE.ujiko);
+    await seedTogether(3, 30);
+    const giver = members.get(GU)!;
+    const press = interaction('button', giver, { customId: emaGiveId(SA) });
+    await app.onInteraction(press.i as never);
+    expect(press.shownModals).toHaveLength(0);
+    expect(JSON.stringify(press.replies[0])).toContain(`ema:pick:${SA}`);
+    expect(JSON.stringify(press.replies[0])).toContain('ムードメーカー');
+    const pick = interaction('stringSelect', giver, { customId: `ema:pick:${SA}`, values: ['聞き手'], deferUpdate: async () => undefined });
+    await app.onInteraction(pick.i as never);
+    expect(pick.replies.at(-1)?.content).toContain('絵馬を贈りました');
+    expect(pick.replies.at(-1)?.content).toContain('参拝者の票');
+    const { ema } = await import('../src/db/schema.js');
+    expect((await db.select().from(ema))[0]).toMatchObject({ giverId: GU, receiverId: SA, tier: 'sanpai', message: '聞き手' });
+    // もう一度押す → 今のひとことと「書き直す・取り消す」
+    const again = interaction('button', giver, { customId: emaGiveId(SA) });
+    await app.onInteraction(again.i as never);
+    expect(again.replies[0]?.content).toContain('聞き手');
+    expect(JSON.stringify(again.replies[0])).toContain(`ema:undo:${SA}`);
+    // 書き直す → また定型文のメニュー
+    const edit = interaction('button', giver, { customId: `ema:edit:${SA}` });
+    await app.onInteraction(edit.i as never);
+    expect(JSON.stringify(edit.replies[0])).toContain(`ema:pick:${SA}`);
+    // 取り消す
+    const undo = interaction('button', giver, { customId: `ema:undo:${SA}`, deferUpdate: async () => undefined });
+    await app.onInteraction(undo.i as never);
+    expect(undo.replies.at(-1)?.content).toContain('取り消しました');
+    expect((await db.select().from(ema))[0]?.revokedAt).not.toBeNull();
+  });
+
+  it('参拝者どうしでは絵馬を贈れない（モーダルを出さずに理由を出す）', async () => {
     await (await import('../src/services/emaPromotion.js')).setEmaPromotion(db, true, 'guji'); // 絵馬は③が ON のときだけ
     await seedMembers();
     await seedTogether(3);
@@ -615,7 +685,7 @@ describe('ShuinApp：絵馬を贈る（新制度②）', () => {
     const press = interaction('button', giver, { customId: emaGiveId(SA) });
     await app.onInteraction(press.i as never);
     expect(press.shownModals).toHaveLength(0);
-    expect(press.replies[0]?.content).toContain('氏子以上');
+    expect(press.replies[0]?.content).toContain('参拝者どうし');
   });
 
   it('いっしょの時間が足りないと贈れない（モーダルを出さずに理由を出す）', async () => {
@@ -626,7 +696,7 @@ describe('ShuinApp：絵馬を贈る（新制度②）', () => {
     const press = interaction('button', giver, { customId: emaGiveId(SA) });
     await app.onInteraction(press.i as never);
     expect(press.shownModals).toHaveLength(0);
-    expect(press.replies[0]?.content).toContain('足りません');
+    expect(press.replies[0]?.content).toContain('まだ贈れません');
   });
 
   it('絵馬は③の前は見せない（ボタン・欄・押しても始まっていない）。③のあとは /絵馬 に「頂いた絵馬」が出る', async () => {
@@ -737,7 +807,7 @@ describe('ShuinApp：絵馬を贈る（新制度②）', () => {
     // 固めた人に入っていない人は投票できない
     const p3 = vote(SA);
     await app.onInteraction(p3.i as never);
-    expect(p3.replies.at(-1)?.content).toContain('この選挙で投票できるのは');
+    expect(p3.replies.at(-1)?.content).toContain('この選挙では投票できません');
     // 締め：投票できる人5人のうち4票（80%）
     const voters = ['400000000000000081', '400000000000000082', '400000000000000083', '400000000000000084', '400000000000000085'];
     await db.update(sewayakuElections).set({ voterIds: voters, endsAt: new Date(real.getTime() - 60_000) }).where(eq(sewayakuElections.id, e!.id));
@@ -780,7 +850,7 @@ describe('ShuinApp：絵馬を贈る（新制度②）', () => {
     expect(profile).toContain('さまのプロフィール');
     expect(profile).toContain('絵馬 **1** 枚');
     expect(profile).toContain('⬆️ 次の役職');
-    expect(profile).toContain('期間中にもらった絵馬：0 枚');
+    expect(profile).toContain('もらった絵馬 0 枚');
     expect(profile).toContain(`shuin:goen:${SA}`);
     expect(profile).toContain(`ema:card:${SA}`);
     expect(profile).not.toContain('頂いた絵馬');
@@ -790,7 +860,8 @@ describe('ShuinApp：絵馬を贈る（新制度②）', () => {
     expect(goen).not.toContain('頂いた絵馬');
     const ema = await open('ema');
     expect(ema).toContain('さまの絵馬');
-    expect(ema).toContain('頂いた絵馬（氏子の票）');
+    expect(ema).toContain('頂いた絵馬 **');
+    expect(ema).toContain('（氏子の票）');
     expect(ema).toContain('すてきな時間でした');
     expect(ema).toContain('⬆️ 絵馬で次の役職へ');
     expect(ema).not.toContain('結んでくれた人');
@@ -907,7 +978,7 @@ describe('🌸 新制度ローンチの通し稽古（③→④→⑤→元に�
     try {
       // ── 準備（ローンチ前の本番に近い状態） ──
       const SA = ['400000000000000081', '400000000000000082', '400000000000000083', '400000000000000084']; // 参拝者・氏子の票5枚
-      const UJ = '400000000000000085'; // 世話役・総代の票3枚（氏子→世話役は毎月の投票なので、絵馬では世話役→総代を確かめる）
+      const UJ = '400000000000000085'; // 世話役・総代の票200枚（氏子→世話役は毎月の投票なので、絵馬では世話役→総代を確かめる）
       const SB = '400000000000000086'; // 参拝者・絵馬なし（まだ上がらない。必要数は縁側にいた氏子以上がいない週なので最低の1枚）
       const K = '400000000000000087'; // 氏子・旧制度のご縁300（特典の一斉払いの事故が起きやすい人）
       const join = async (id: string, role: string) => {
@@ -917,7 +988,7 @@ describe('🌸 新制度ローンチの通し稽古（③→④→⑤→元に�
       const votes = (receiverId: string, n: number, tier: 'ujiko' | 'sodai', base: bigint) =>
         db.insert(ema).values(Array.from({ length: n }, (_, i) => ({ giverId: String(base + BigInt(i)), receiverId, tier, message: '', createdAt: new Date(), revokedAt: null })));
       for (const [k, id] of SA.entries()) { await join(id, ROLE.sanpaisha); await votes(id, 5, 'ujiko', 4780000000000000000n + BigInt(k * 10)); }
-      await join(UJ, ROLE.sewayaku); await votes(UJ, 3, 'sodai', 4790000000000000000n);
+      await join(UJ, ROLE.sewayaku); await votes(UJ, 200, 'sodai', 4790000000000000000n);
       await join(SB, ROLE.sanpaisha);
       await join(K, ROLE.ujiko);
       await db.insert(shuin).values({ giverId: '401000000000000099', receiverId: K, weight: 300, giverRank: 'guji' });
@@ -971,7 +1042,7 @@ describe('🌸 新制度ローンチの通し稽古（③→④→⑤→元に�
       await setEmaPromotion(db, true, G);
       await tick();
       for (const id of SA) expect([...members.get(id)!.roles.cache.keys()]).toContain(ROLE.ujiko); // 氏子の票5枚 → 氏子
-      expect([...members.get(UJ)!.roles.cache.keys()]).toContain(ROLE.sodai); // 総代の票3枚 → 総代
+      expect([...members.get(UJ)!.roles.cache.keys()]).toContain(ROLE.sodai); // 総代の票200枚 → 総代
       expect([...members.get(SB)!.roles.cache.keys()]).not.toContain(ROLE.ujiko); // 絵馬なしはまだ
       const keiji = sent.filter((s) => s.channelId === cfg.channels.keiji);
       expect(keiji.filter((s) => s.embeds?.length)).toHaveLength(5); // 1人ずつのカード
@@ -996,8 +1067,8 @@ describe('🌸 新制度ローンチの通し稽古（③→④→⑤→元に�
       // 結び：氏子は重み1・同じ相手には1回きり
       const info = (id: string, role: string) => ({ id, isBot: false, roleIds: [role] });
       // 結べるのは、通話でいっしょになったことのある人だけ
-      const { voicePairs } = await import('../src/db/schema.js');
-      await db.insert(voicePairs).values({ memberA: SA[0]! < SB ? SA[0]! : SB, memberB: SA[0]! < SB ? SB : SA[0]!, date: '2026-11-20', minutes: 10 });
+      const { engawaPairs } = await import('../src/db/schema.js');
+      await db.insert(engawaPairs).values({ memberA: SA[0]! < SB ? SA[0]! : SB, memberB: SA[0]! < SB ? SB : SA[0]!, date: '2026-11-20', minutes: 10 });
       expect(await giveFlow(db, cfg, info(SA[0]!, ROLE.ujiko), info(SB, ROLE.sanpaisha))).toMatchObject({ kind: 'given', weight: 1 });
       expect(await giveFlow(db, cfg, info(SA[0]!, ROLE.sewayaku), info(SB, ROLE.sanpaisha))).toMatchObject({ kind: 'already' });
       // 新しく結んでたまったご縁で、節目特典が出る（ご縁25 → 500銭）

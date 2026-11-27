@@ -1,0 +1,1 @@
+ALTER TABLE "invites" ADD COLUMN "qualified_at" timestamp with time zone;

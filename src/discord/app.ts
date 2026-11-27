@@ -39,7 +39,7 @@ import { introOf, introUrl } from '../services/intros.js';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { currentAutoRank, decidePromotion, highestRank, voiceCapPercentOf, voicePercentOf, type Promotion } from '../domain/ranks.js';
-import { emaStepFrom, EMA_PROMOTION_BURST, EMA_TIER_LABEL } from '../domain/ema.js';
+import { emaStepFrom, emaTiersShown, EMA_PROMOTION_BURST, EMA_TEMPLATES, EMA_TIER_LABEL } from '../domain/ema.js';
 import { w, isMusubiMode } from '../domain/terms.js';
 import { collectEmaKeepWarnings, emaPromotable, emaPromotionEnabled, emaStepProgress } from '../services/emaPromotion.js';
 import { ujikoProgress } from '../services/ujikoRequirement.js';
@@ -58,11 +58,15 @@ import { activeCoreTime, coreTimeBonus } from '../services/coreTime.js';
 import { setOmairiStatus } from '../services/applications.js';
 import { ActivityTracker, getMember, leaveNotice, namesOf, recordJoin, recordLeave, recordPromotion, syncAllMembers, upsertMember, type MemberSnapshot } from '../services/members.js';
 import { giversOf, goenOf, goshuinchoOf, metCollection, newSystemStartedAt, receivedCountOf, stampedBy } from '../services/shuin.js';
-import { checkGiveEma, giveEma, emaMessagesOf, validEmaCountOf } from '../services/ema.js';
+import { checkGiveEma, giveEma, emaMessagesOf, emaPartners, myEmaTo, revokeEma, togetherStats, validEmaCountOf } from '../services/ema.js';
 import { takeUncheckedSpecialGoen } from '../services/specialGoen.js';
 import { COMMAND, parseEmaId, parseShuinId } from './ids.js';
 import {
   emaGiveReply,
+  emaAlreadyReply,
+  emaPickReply,
+  emaUndoReply,
+  EMA_FREE,
   emaModal,
   giveLog,
   giveReply,
@@ -387,8 +391,15 @@ export class ShuinApp {
       } else if (interaction.isButton() && interaction.customId.startsWith('ema:')) {
         const parsed = parseEmaId(interaction.customId);
         if (parsed?.kind === 'give') return await this.emaGive(interaction, parsed.userId);
+        if (parsed?.kind === 'edit') return await this.emaGive(interaction, parsed.userId, true);
+        if (parsed?.kind === 'undo') return await this.emaUndo(interaction, parsed.userId);
         if (parsed?.kind === 'vote') return await this.sewayakuVote(interaction, parsed.userId);
         if (parsed?.kind === 'card') return await this.card(interaction, parsed.userId, false, 'ema');
+      } else if (interaction.isStringSelectMenu() && interaction.customId.startsWith('ema:')) {
+        const parsed = parseEmaId(interaction.customId);
+        if (parsed?.kind === 'pick') return await this.emaPick(interaction, parsed.userId);
+        // 自分の /絵馬 の「贈れる人」から選んだ（開いた本人だけ）
+        if (parsed?.kind === 'to' && parsed.userId === interaction.user.id && interaction.values[0]) return await this.emaGive(interaction, interaction.values[0]);
       } else if (interaction.isModalSubmit() && interaction.customId.startsWith('ema:')) {
         const parsed = parseEmaId(interaction.customId);
         if (parsed?.kind === 'modal') return await this.emaSubmit(interaction, parsed.userId);
@@ -511,8 +522,11 @@ export class ShuinApp {
     await interaction.reply({ ...vcList(people, others.length), flags: MessageFlags.Ephemeral, allowedMentions: NO_MENTIONS });
   }
 
-  /** 🎐 「絵馬を贈る」ボタン: 氏子以上・条件を満たしていれば一言のモーダルを出す。だめなら理由を出す */
-  private async emaGive(interaction: ButtonInteraction<'cached'>, receiverId: string): Promise<void> {
+  /**
+   * 🎐 「絵馬を贈る」ボタン：条件を満たしていれば、ひとことを入れる（氏子以上はモーダル・参拝者は定型文のメニュー）。
+   * もう贈っている相手なら、今のひとことと「書き直す・取り消す」を出す（edit＝書き直すを押したとき）。
+   */
+  private async emaGive(interaction: ButtonInteraction<'cached'> | StringSelectMenuInteraction<'cached'>, receiverId: string, edit = false): Promise<void> {
     // 🎐 絵馬は③（絵馬での昇格）が ON になるまで使わない（前に出したボタンが残っていても）
     if (!(await emaPromotionEnabled(this.db))) return void (await interaction.reply({ content: '🎐 絵馬は、新制度が始まってからです。', flags: MessageFlags.Ephemeral, allowedMentions: NO_MENTIONS }));
     const check = await checkGiveEma(this.db, this.cfg, interaction.user.id, receiverId);
@@ -520,18 +534,51 @@ export class ShuinApp {
       await interaction.reply({ ...emaGiveReply(receiverId, check), flags: MessageFlags.Ephemeral, allowedMentions: NO_MENTIONS });
       return;
     }
+    if (!edit) {
+      const mine = await myEmaTo(this.db, interaction.user.id, receiverId);
+      if (mine) return void (await interaction.reply({ ...emaAlreadyReply(receiverId, mine.message), flags: MessageFlags.Ephemeral, allowedMentions: NO_MENTIONS }));
+    }
+    // 参拝者は定型文から選ぶ（「自分で書く」でモーダル）
+    if (highestRank(this.cfg.ranks, interaction.member.roles.cache.keys())?.key === 'sanpaisha') {
+      return void (await interaction.reply({ ...emaPickReply(receiverId), flags: MessageFlags.Ephemeral, allowedMentions: NO_MENTIONS }));
+    }
     const receiver = await this.fetchMember(interaction, receiverId);
     await interaction.showModal(emaModal(receiverId, receiver?.displayName ?? 'その方'));
+  }
+
+  /** 🎐 参拝者が定型文を選んだ：そのまま贈る。「自分で書く」ならモーダル */
+  private async emaPick(interaction: StringSelectMenuInteraction<'cached'>, receiverId: string): Promise<void> {
+    const value = interaction.values[0] ?? '';
+    if (value === EMA_FREE) {
+      const receiver = await this.fetchMember(interaction, receiverId);
+      return void (await interaction.showModal(emaModal(receiverId, receiver?.displayName ?? 'その方')));
+    }
+    if (!EMA_TEMPLATES.includes(value)) return;
+    await interaction.deferUpdate();
+    await this.emaSend(interaction, receiverId, value);
+  }
+
+  /** 🎐 贈った絵馬を本人が取り消す */
+  private async emaUndo(interaction: ButtonInteraction<'cached'>, receiverId: string): Promise<void> {
+    await interaction.deferUpdate();
+    const mine = await myEmaTo(this.db, interaction.user.id, receiverId);
+    const ok = mine ? await this.lock.run(receiverId, () => revokeEma(this.db, interaction.user.id, receiverId, new Date(), mine.tier)) : false;
+    if (ok && mine) await this.log(`↩️ 絵馬の取り消し <@${interaction.user.id}> → <@${receiverId}>（${EMA_TIER_LABEL[mine.tier]}・本人）`);
+    await interaction.editReply({ ...emaUndoReply(receiverId, ok), components: [], allowedMentions: NO_MENTIONS });
   }
 
   /** 🎐 絵馬の一言のモーダルを受けて贈る（匿名・1 人 1 枚・贈り直し可） */
   private async emaSubmit(interaction: ModalSubmitInteraction<'cached'>, receiverId: string): Promise<void> {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    if (!(await emaPromotionEnabled(this.db))) return void (await interaction.editReply({ content: '🎐 絵馬は、新制度が始まってからです。', allowedMentions: NO_MENTIONS }));
-    const message = interaction.fields.getTextInputValue('message');
+    await this.emaSend(interaction, receiverId, interaction.fields.getTextInputValue('message'));
+  }
+
+  /** 🎐 絵馬を贈って返事をする（モーダル・定型文のどちらからも） */
+  private async emaSend(interaction: ModalSubmitInteraction<'cached'> | StringSelectMenuInteraction<'cached'>, receiverId: string, message: string): Promise<void> {
+    if (!(await emaPromotionEnabled(this.db))) return void (await interaction.editReply({ content: '🎐 絵馬は、新制度が始まってからです。', components: [], allowedMentions: NO_MENTIONS }));
     const result = await this.lock.run(receiverId, () => giveEma(this.db, this.cfg, interaction.user.id, receiverId, message));
     if (result.ok) await this.log(`🎐 絵馬 <@${interaction.user.id}> → <@${receiverId}>（${EMA_TIER_LABEL[result.tier]}・${result.created ? '新規' : '贈り直し'}・票 ${result.count}）`);
-    await interaction.editReply({ ...emaGiveReply(receiverId, result), allowedMentions: NO_MENTIONS });
+    await interaction.editReply({ components: [], ...emaGiveReply(receiverId, result), allowedMentions: NO_MENTIONS });
     // 🎐 絵馬での昇格が ON なら、必要枚数に届いた相手をすぐ昇格させる（次の見回りを待たない）。
     // emaPromote の中で、相手の今の役職に応じた票の種類と必要枚数を確かめる。
     if (result.ok && (await emaPromotionEnabled(this.db))) {
@@ -639,9 +686,9 @@ export class ShuinApp {
     // 結びは④（新制度のご縁の時代）が始まってから（前に出したボタンが残っていても）
     if (!isMusubiMode()) return void (await interaction.editReply({ content: '🧵 結びは、新制度が始まってからです。', components: [] }));
     const { total, met, unmet } = await metCollection(this.db, viewerId);
-    if (!total) return void (await interaction.editReply({ content: '🧵 まだ通話でいっしょになった方がいません。通話でいっしょに過ごした方が、ここに出ます。', components: [] }));
+    if (!total) return void (await interaction.editReply({ content: '🧵 まだ縁側でいっしょになった方がいません。縁側でいっしょに過ごした方が、ここに出ます。', components: [] }));
     if (!unmet.length) {
-      await interaction.editReply({ content: `🧵 通話でいっしょになったみなさんと結びました（${met} / ${total} 人・コンプリート！）。`, components: [] });
+      await interaction.editReply({ content: `🧵 縁側でいっしょになったみなさんと結びました（${met} / ${total} 人・コンプリート！）。`, components: [] });
       return;
     }
     const menu = new StringSelectMenuBuilder()
@@ -649,7 +696,7 @@ export class ShuinApp {
       .setPlaceholder('結ぶ相手をえらぶ')
       .addOptions(unmet.map((x) => ({ label: x.name.slice(0, 100) || x.id, value: x.id })));
     await interaction.editReply({
-      content: `🧵 通話でいっしょになったのに、まだ結んでいない人（いま ${met} / ${total} 人）。最近きた順に ${unmet.length} 人出しています。えらぶと結べます。`,
+      content: `🧵 縁側でいっしょになったのに、まだ結んでいない人（いま ${met} / ${total} 人）。最近きた順に ${unmet.length} 人出しています。えらぶと結べます。`,
       components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu)],
     });
   }
@@ -668,7 +715,8 @@ export class ShuinApp {
     const showCoins = interaction.user.id === ownerId && !isPublic;
     // 🎐 絵馬は、その人の「次の段」の票を数える（参拝者=氏子の票／氏子=氏子の票（維持）／世話役=総代の票）
     const ownerStep = emaStepFrom(highestRank(this.cfg.ranks, owner.roles.cache.keys())?.key, this.cfg.emaThresholds);
-    const emaTier = ownerStep?.tier ?? 'ujiko';
+    // 氏子は「氏子の票＋参拝者の票（30日）」の合計（2026-11-27）
+    const emaTier = emaTiersShown(highestRank(this.cfg.ranks, owner.roles.cache.keys())?.key);
     const [data, wallet, tickets, emaCount, emaMessages, emaMode] = await Promise.all([
       goshuinchoOf(this.db, ownerId),
       showCoins ? walletOf(this.db, ownerId) : undefined,
@@ -703,6 +751,17 @@ export class ShuinApp {
     const ticketText = tickets ? allTicketsLine(tickets, await customHoldingsOf(this.db, ownerId)) : undefined;
     // 🧵 結びのコレクションは自分のプロフィールだけ
     const collection = interaction.user.id === ownerId ? await metCollection(this.db, ownerId) : undefined;
+    // 🎐 /絵馬：ほかの人なら「あなたとの縁側」、自分なら「いま贈れる人・あと少しの人」
+    let emaPair: { days: number; given: boolean; canGive: boolean } | undefined;
+    let emaPartnerList: Awaited<ReturnType<typeof emaPartners>> | undefined;
+    if (mode === 'ema' && emaMode) {
+      const viewerId = interaction.user.id;
+      if (viewerId === ownerId) emaPartnerList = await emaPartners(this.db, this.cfg, viewerId);
+      else {
+        const [t, mine, chk] = await Promise.all([togetherStats(this.db, viewerId, ownerId), myEmaTo(this.db, viewerId, ownerId), checkGiveEma(this.db, this.cfg, viewerId, ownerId)]);
+        emaPair = { days: t.days, given: Boolean(mine), canGive: chk.ok };
+      }
+    }
     const e = this.cfg.economy;
     await this.reply(
       interaction,
@@ -718,8 +777,9 @@ export class ShuinApp {
         wallet ? { emoji: e.currencyEmoji, name: e.currencyName, balance: wallet.balance } : undefined,
         { ...(await this.profileOf(owner, interaction.user.id === ownerId)), ...(ticketText ? { tickets: ticketText } : {}) },
         {
-          count: emaCount, messages: emaMessages, promoteMode: emaMode, th: this.cfg.emaThresholds, tierLabel: EMA_TIER_LABEL[emaTier],
+          count: emaCount, messages: emaMessages, promoteMode: emaMode, th: this.cfg.emaThresholds, tierLabel: emaTier.map((t) => EMA_TIER_LABEL[t]).join('＋'),
           ...(emaStepInfo ? { step: emaStepInfo } : {}), ...(sewayakuInfo ? { sewayaku: sewayakuInfo } : {}), ...(ujiko ? { ujiko } : {}), ...(voter ? { voter } : {}),
+          ...(emaPair ? { pair: emaPair } : {}), ...(emaPartnerList ? { partners: emaPartnerList } : {}),
         },
         collection ? { total: collection.total, met: collection.met } : undefined,
         { mode, ...(perkNext ? { perkNext } : {}) },
@@ -833,7 +893,7 @@ export class ShuinApp {
         await this.client.users
           .fetch(w.id)
           .then((u) => u.send({
-            content: `🎐 絵馬（氏子の票）が今 **${w.count} 枚**になりました。氏子でい続けるには **${keep} 枚**あると安心です。また通話でいっしょになった方から絵馬をいただけます。（すぐに降格になるわけではありません）`,
+            content: `🎐 絵馬が今 **${w.count} 枚**になりました。氏子でい続けるには **${keep} 枚**あると安心です。また縁側でいっしょに過ごした方から絵馬をいただけます。（すぐに降格になるわけではありません）`,
             allowedMentions: { parse: [] as never[] },
           }))
           .catch(() => undefined);

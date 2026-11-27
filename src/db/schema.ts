@@ -1234,6 +1234,8 @@ export const invites = pgTable(
     legacyReward: boolean('legacy_reward').notNull().default(false),
     /** answer: 申請で選んだ / link: その人の招待リンクで入った */
     source: text('source').notNull().default('answer'),
+    /** 招待された人が通話に合計4時間いて「1人」と数えた時刻（ご縁と絵馬の補いに使う。2026-11-27〜） */
+    qualifiedAt: timestamp('qualified_at', { withTimezone: true }),
   },
   (t) => [index('invites_inviter_idx').on(t.inviterId)],
 );

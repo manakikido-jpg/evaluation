@@ -79,7 +79,7 @@ import { sweepMatches } from './services/casino/versus.js';
 import { interviewTick, loadInterview } from './services/interview.js';
 import { checkAlerts, weeklyTick } from './services/economyWatch.js';
 import { onboardingTick } from './services/onboarding.js';
-import { inviteActiveTick } from './services/invites.js';
+import { inviteActiveTick, qualifyInvites } from './services/invites.js';
 import { RecruitApp } from './discord/recruit.js';
 import { ShopApp } from './discord/shop.js';
 import { BoostApp } from './discord/boost.js';
@@ -418,6 +418,8 @@ async function main(): Promise<void> {
       void onboardingTick({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'onboarding tick failed'));
       // 招待: 招待された人が浮上した日ごとに、招待した人へボーナス
       void inviteActiveTick(db, cfg()).catch((err) => logger.warn({ err }, 'invite active tick failed'));
+      // 招待: 招待された人が通話に4時間いたら「1人」と数え、新制度なら招待主へご縁（+1/+2）
+      void qualifyInvites(db, cfg()).catch((err) => logger.warn({ err }, 'invite qualify failed'));
       // 呼び鈴のボタン（設定で足したチャンネルにも）
       bellSticky.checkAll();
       omikuji.checkPanel();

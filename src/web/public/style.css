@@ -1602,3 +1602,9 @@ html[data-hints="off"] .page-hint { display: none; }
 .cast-register .cast-extra > .fields { margin-top: 12px; }
 /* ファイル名が長くても、スマホの画像選択欄を画面内へ収める。 */
 main input[type=file] { min-width: 0; max-width: 100%; width: 100%; }
+
+/* 🌸 新制度の進み具合（評価ページ） */
+.ns-steps { margin: 8px 0; padding-left: 1.4em; display: grid; gap: 8px; }
+.ns-steps li small { display: block; color: var(--muted); font-size: .85rem; }
+.ns-summary { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 8px 0 0; }
+.ema-thresholds-form fieldset { display: grid; gap: 8px; }
