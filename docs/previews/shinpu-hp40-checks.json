@@ -1,0 +1,344 @@
+{
+  "checks": [
+    {
+      "scenario": "normal",
+      "size": [
+        320,
+        568
+      ],
+      "doc": [
+        320,
+        568
+      ],
+      "count": 5,
+      "stripVisible": true,
+      "calculationVisible": true,
+      "valuesFit": true,
+      "targetHpVisible": true
+    },
+    {
+      "scenario": "normal",
+      "size": [
+        360,
+        640
+      ],
+      "doc": [
+        360,
+        640
+      ],
+      "count": 5,
+      "stripVisible": true,
+      "calculationVisible": true,
+      "valuesFit": true,
+      "targetHpVisible": true
+    },
+    {
+      "scenario": "normal",
+      "size": [
+        390,
+        844
+      ],
+      "doc": [
+        390,
+        844
+      ],
+      "count": 5,
+      "stripVisible": true,
+      "calculationVisible": true,
+      "valuesFit": true,
+      "targetHpVisible": true
+    },
+    {
+      "scenario": "normal",
+      "size": [
+        430,
+        932
+      ],
+      "doc": [
+        430,
+        932
+      ],
+      "count": 5,
+      "stripVisible": true,
+      "calculationVisible": true,
+      "valuesFit": true,
+      "targetHpVisible": true
+    },
+    {
+      "scenario": "normal",
+      "size": [
+        768,
+        1024
+      ],
+      "doc": [
+        768,
+        1024
+      ],
+      "count": 5,
+      "stripVisible": true,
+      "calculationVisible": true,
+      "valuesFit": true,
+      "targetHpVisible": true
+    },
+    {
+      "scenario": "normal",
+      "size": [
+        1440,
+        900
+      ],
+      "doc": [
+        1440,
+        900
+      ],
+      "count": 5,
+      "stripVisible": true,
+      "calculationVisible": true,
+      "valuesFit": true,
+      "targetHpVisible": true
+    },
+    {
+      "scenario": "normal",
+      "size": [
+        844,
+        390
+      ],
+      "doc": [
+        844,
+        390
+      ],
+      "count": 5,
+      "stripVisible": true,
+      "calculationVisible": true,
+      "valuesFit": true,
+      "targetHpVisible": true
+    },
+    {
+      "scenario": "varied",
+      "size": [
+        320,
+        568
+      ],
+      "doc": [
+        320,
+        568
+      ],
+      "count": 5,
+      "stripVisible": true,
+      "calculationVisible": true,
+      "valuesFit": true,
+      "targetHpVisible": true
+    },
+    {
+      "scenario": "varied",
+      "size": [
+        360,
+        640
+      ],
+      "doc": [
+        360,
+        640
+      ],
+      "count": 5,
+      "stripVisible": true,
+      "calculationVisible": true,
+      "valuesFit": true,
+      "targetHpVisible": true
+    },
+    {
+      "scenario": "varied",
+      "size": [
+        390,
+        844
+      ],
+      "doc": [
+        390,
+        844
+      ],
+      "count": 5,
+      "stripVisible": true,
+      "calculationVisible": true,
+      "valuesFit": true,
+      "targetHpVisible": true
+    },
+    {
+      "scenario": "varied",
+      "size": [
+        430,
+        932
+      ],
+      "doc": [
+        430,
+        932
+      ],
+      "count": 5,
+      "stripVisible": true,
+      "calculationVisible": true,
+      "valuesFit": true,
+      "targetHpVisible": true
+    },
+    {
+      "scenario": "varied",
+      "size": [
+        768,
+        1024
+      ],
+      "doc": [
+        768,
+        1024
+      ],
+      "count": 5,
+      "stripVisible": true,
+      "calculationVisible": true,
+      "valuesFit": true,
+      "targetHpVisible": true
+    },
+    {
+      "scenario": "varied",
+      "size": [
+        1440,
+        900
+      ],
+      "doc": [
+        1440,
+        900
+      ],
+      "count": 5,
+      "stripVisible": true,
+      "calculationVisible": true,
+      "valuesFit": true,
+      "targetHpVisible": true
+    },
+    {
+      "scenario": "varied",
+      "size": [
+        844,
+        390
+      ],
+      "doc": [
+        844,
+        390
+      ],
+      "count": 5,
+      "stripVisible": true,
+      "calculationVisible": true,
+      "valuesFit": true,
+      "targetHpVisible": true
+    },
+    {
+      "scenario": "large",
+      "size": [
+        320,
+        568
+      ],
+      "doc": [
+        320,
+        568
+      ],
+      "count": 5,
+      "stripVisible": true,
+      "calculationVisible": true,
+      "valuesFit": true,
+      "targetHpVisible": true
+    },
+    {
+      "scenario": "large",
+      "size": [
+        360,
+        640
+      ],
+      "doc": [
+        360,
+        640
+      ],
+      "count": 5,
+      "stripVisible": true,
+      "calculationVisible": true,
+      "valuesFit": true,
+      "targetHpVisible": true
+    },
+    {
+      "scenario": "large",
+      "size": [
+        390,
+        844
+      ],
+      "doc": [
+        390,
+        844
+      ],
+      "count": 5,
+      "stripVisible": true,
+      "calculationVisible": true,
+      "valuesFit": true,
+      "targetHpVisible": true
+    },
+    {
+      "scenario": "large",
+      "size": [
+        430,
+        932
+      ],
+      "doc": [
+        430,
+        932
+      ],
+      "count": 5,
+      "stripVisible": true,
+      "calculationVisible": true,
+      "valuesFit": true,
+      "targetHpVisible": true
+    },
+    {
+      "scenario": "large",
+      "size": [
+        768,
+        1024
+      ],
+      "doc": [
+        768,
+        1024
+      ],
+      "count": 5,
+      "stripVisible": true,
+      "calculationVisible": true,
+      "valuesFit": true,
+      "targetHpVisible": true
+    },
+    {
+      "scenario": "large",
+      "size": [
+        1440,
+        900
+      ],
+      "doc": [
+        1440,
+        900
+      ],
+      "count": 5,
+      "stripVisible": true,
+      "calculationVisible": true,
+      "valuesFit": true,
+      "targetHpVisible": true
+    },
+    {
+      "scenario": "large",
+      "size": [
+        844,
+        390
+      ],
+      "doc": [
+        844,
+        390
+      ],
+      "count": 5,
+      "stripVisible": true,
+      "calculationVisible": true,
+      "valuesFit": true,
+      "targetHpVisible": true
+    }
+  ],
+  "selection": true,
+  "keyboardFocus": true,
+  "detailsHp": 25,
+  "errors": []
+}

@@ -207,6 +207,7 @@ function render() {
   $('players').style.setProperty('--opponent-count', String(Math.min(3, state.players.length - 1)));
   $('players').style.setProperty('--fit-opponent-count', String(state.players.length - 1));
   renderSelfResources(me);
+  renderOpponentHealth();
   state.players
     .map((p, i) => ({ p, i }))
     .filter(({i}) => i !== myIndex)
@@ -228,7 +229,7 @@ function render() {
       const info = el('div', 'player-info');
       info.append(el('div', 'name', p.name));
       for (const [title, value, max, cls] of [
-        ['HP', p.hp, 60, 'hp'],
+        ['HP', p.hp, Number(document.body.dataset.initialHp) || 40, 'hp'],
         ['MP', p.mp, 12, 'mp'],
       ]) {
         const line = el('div', 'resource-line ' + cls);
@@ -277,15 +278,16 @@ function render() {
   $('selection-open').disabled = !preview.length;
   $('selection-open').hidden = humanChoice();
   $('target-open').hidden = humanDefense();
-  $('target-open').textContent = target >= 0 ? `相手：${state.players[target].name}` : '相手の確認';
-  $('target-open').title = target >= 0 ? state.players[target].name : '';
+  if (target >= 0) $('target-open').replaceChildren(el('span','target-name',`相手：${state.players[target].name}`),el('strong','target-hp',`HP ${compactHp(state.players[target].hp)}`));
+  else $('target-open').textContent = '相手の確認';
+  $('target-open').title = target >= 0 ? `${state.players[target].name} · HP ${state.players[target].hp.toLocaleString('ja-JP')}` : '';
   $('selected-cards').replaceChildren(...preview.slice(previewPage * 3, previewPage * 3 + 3).map((c) => card(c, false)));
   const canPreview = humanAction() && a.length && a.every((c) => c.type === 'attack');
   const targetIndex = state.phase === 'defense' ? state.pending.to : target;
   $('target-preview').replaceChildren();
   if (state.phase !== 'over' && targetIndex >= 0 && (canPreview || state.phase === 'defense')) {
     const t = state.players[targetIndex];
-    $('target-preview').append(el('span', 'target-arrow', '➜'), avatar(targetIndex), el('strong', '', t.name));
+    $('target-preview').append(el('span', 'target-arrow', '➜'), avatar(targetIndex), el('strong', '', `${t.name} · HP ${t.hp.toLocaleString('ja-JP')}`));
   }
   $('selected-cards').hidden = !preview.length;
   $('target-preview').hidden = !$('target-preview').childElementCount;
@@ -707,6 +709,26 @@ function renderPlayerDetails() {
   }));
 }
 
+function compactHp(value) {
+  return value >= 10000 ? value.toLocaleString('ja-JP', {notation:'compact',maximumFractionDigits:1}) : value.toLocaleString('ja-JP');
+}
+// 相手のHPはポップアップを開かなくても常に確認できる。上限ではなく現在値を表示する。
+function renderOpponentHealth() {
+  const panel = $('opponent-health'), initial = Number(document.body.dataset.initialHp) || 40;
+  const opponents = state.players.map((p,i)=>({p,i})).filter(x=>x.i!==myIndex);
+  panel.style.setProperty('--health-count', String(opponents.length));
+  panel.replaceChildren(...opponents.map(({p,i})=>{
+    const chip=el('button','opponent-hp'+(target===i?' selected':'')+(p.hp===0?' defeated':p.hp<=initial/4?' low':''));
+    chip.type='button';chip.disabled=!humanAction()||p.hp<=0;chip.dataset.playerIndex=String(i);
+    chip.setAttribute('aria-pressed',String(target===i));
+    chip.setAttribute('aria-label',`${p.name}、HP ${p.hp.toLocaleString('ja-JP')}、${p.hp>0?'攻撃対象に選ぶ':'退場'}`);
+    chip.title=`${p.name} · HP ${p.hp.toLocaleString('ja-JP')}${p.hp===0?' · 退場':''}`;
+    const value=el('strong',p.hp>=100?'compact':'',compactHp(p.hp));
+    chip.append(el('span','opponent-name',p.name),el('span','opponent-hp-label','HP'),value);
+    chip.addEventListener('click',()=>{target=i;render();panel.querySelector(`[data-player-index="${i}"]`)?.focus({preventScroll:true});});
+    return chip;
+  }));
+}
 function resourceNumber(value) {
   const text = value.toLocaleString('ja-JP');
   return el('strong', text.length > 8 ? 'large-value' : '', text);

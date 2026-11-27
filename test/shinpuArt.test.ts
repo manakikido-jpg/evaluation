@@ -28,9 +28,14 @@ it('画像の対応表と選択プレビューをCSPに対応したHTMLに出す
   const page = await ShinpuTestPage({ csrf: 'test-csrf', name: 'ais' });
   const text = String(page);
   for (const card of cards) expect(text).toContain(`shinpu-card-${card.id}.webp?v=`);
+  expect(text).toContain('data-initial-hp="40"');
+  expect(text).toContain('初期HP40・MP12・霊銭20');
+  expect(text).toContain('HP40以上');
   expect(text).toContain('id="selected-cards"');
   expect(text).toContain('id="clear-selection"');
   expect(text).toContain('id="deadline"');
+  expect(text).toContain('id="opponent-health"');
+  expect(text).toContain('aria-label="対戦相手のHP"');
   expect(text).not.toMatch(/<script>\s*\S|onclick=|style=/);
 });
 

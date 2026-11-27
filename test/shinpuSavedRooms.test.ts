@@ -12,8 +12,11 @@ async function start(){let v=await rooms.create(A,2);v=await rooms.join(v.roomId
 async function snapshot(id:string){return (await db.select().from(shinpuSavedRooms).where(eq(shinpuSavedRooms.id,id)))[0]!.snapshot;}
 async function over(id:string){const s=await snapshot(id);s.state!.phase='over';s.state!.winner=0;s.state!.players[1]!.hp=0;s.state!.stats=[{damageDealt:60,damageTaken:5,blocked:7},{damageDealt:5,damageTaken:60,blocked:3}];s.state!.lastHit={from:0,to:1,cards:['決め手の札'],damage:8};await db.update(shinpuSavedRooms).set({snapshot:s}).where(eq(shinpuSavedRooms.id,id));return rooms.view(id,A.id);}
 it('再起動後も手札・山札・席・更新番号を復元し、他人の手札は返さない',async()=>{
- const v=await start(),saved=await snapshot(v.roomId),restart=new SavedShinpuRooms(db,'guild',()=>clock);
- const restored=await restart.view(v.roomId,A.id);expect(restored.revision).toBe(v.revision);expect(restored.state!.players[0]!.hand).toEqual(v.state!.players[0]!.hand);expect(restored.state!.players[1]!.hand).toEqual([]);expect((await snapshot(v.roomId)).state!.deck).toEqual(saved.state!.deck);expect(saved.state).not.toHaveProperty('rng');expect((await restart.list(A.id))[0]!.mine).toBe(true);
+ const v=await start(),saved=await snapshot(v.roomId);
+ // 変更前から進行中だった対戦のHPは、復元時に40へ置き換えない。
+ saved.state!.players[0]!.hp=60;await db.update(shinpuSavedRooms).set({snapshot:saved}).where(eq(shinpuSavedRooms.id,v.roomId));
+ const restart=new SavedShinpuRooms(db,'guild',()=>clock);
+ const restored=await restart.view(v.roomId,A.id);expect(restored.state!.players[0]!.hp).toBe(60);expect(restored.revision).toBe(v.revision);expect(restored.state!.players[0]!.hand).toEqual(v.state!.players[0]!.hand);expect(restored.state!.players[1]!.hand).toEqual([]);expect((await snapshot(v.roomId)).state!.deck).toEqual(saved.state!.deck);expect(saved.state).not.toHaveProperty('rng');expect((await restart.list(A.id))[0]!.mine).toBe(true);
 });
 it('2つのWebから同時操作しても同じ更新番号の両替は1回',async()=>{
  const v=await start(),other=new SavedShinpuRooms(db,'guild',()=>clock),move={revision:v.revision,action:'exchange',ids:[],target:'mp'};
@@ -50,7 +53,7 @@ it('結果は攻撃・反射の解決値を集計し、回復でダメージを�
 });
 it('全員の同意で1回だけ同じ席から再戦し、前の結果を残す',async()=>{
  const v=await start(),ended=await over(v.roomId);expect(ended.summary!.players[0]!.damageDealt).toBe(60);expect(ended.summary).not.toHaveProperty('hand');let ready=await rooms.rematch(v.roomId,A.id,ended.revision);expect(ready.state!.phase).toBe('over');expect(ready.rematchReady).toEqual([true,false]);await expect(rooms.rematch(v.roomId,A.id,ended.revision)).rejects.toThrow('更新');
- const other=new SavedShinpuRooms(db,'guild',()=>clock);const results=await Promise.allSettled([rooms.rematch(v.roomId,B.id,ready.revision),other.rematch(v.roomId,B.id,ready.revision)]);expect(results.filter(r=>r.status==='fulfilled')).toHaveLength(1);ready=await rooms.view(v.roomId,A.id);expect(ready.round).toBe(2);expect(ready.state!.phase).toBe('action');expect(ready.state!.players.map(p=>p.hp)).toEqual([60,60]);expect(ready.previousSummary!.lastHit!.cards).toEqual(['決め手の札']);expect(ready.rematchReady).toEqual([false,false]);expect(ready.seats.map(p=>p.name)).toEqual([A.name,B.name]);
+ const other=new SavedShinpuRooms(db,'guild',()=>clock);const results=await Promise.allSettled([rooms.rematch(v.roomId,B.id,ready.revision),other.rematch(v.roomId,B.id,ready.revision)]);expect(results.filter(r=>r.status==='fulfilled')).toHaveLength(1);ready=await rooms.view(v.roomId,A.id);expect(ready.round).toBe(2);expect(ready.state!.phase).toBe('action');expect(ready.state!.players.map(p=>p.hp)).toEqual([40,40]);expect(ready.previousSummary!.lastHit!.cards).toEqual(['決め手の札']);expect(ready.rematchReady).toEqual([false,false]);expect(ready.seats.map(p=>p.name)).toEqual([A.name,B.name]);
 });
 it('同意しなかった人が退出すると、同意済みの人とCPUで再戦する',async()=>{
  const v=await start(),ended=await over(v.roomId);await rooms.rematch(v.roomId,A.id,ended.revision);await rooms.leave(v.roomId,B.id);const next=await rooms.view(v.roomId,A.id);expect(next.round).toBe(2);expect(next.seats[1]!.cpu).toBe(true);expect(next.previousSummary!.players[1]!.name).toBe(B.name);

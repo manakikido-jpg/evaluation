@@ -17,6 +17,7 @@ it('運営の人間同士で開始し、空席だけCPUにする', () => {
   expect(joined.myIndex).toBe(1);
   const started = rooms.start(r.roomId, a.id, joined.revision);
   expect(started.seats.map((p) => p.cpu)).toEqual([false, false, true, true]);
+  expect(started.state!.players.map(p => p.hp)).toEqual([40, 40, 40, 40]);
   expect(started.state!.players[0]!.hand).toHaveLength(7);
   expect(started.state!.players[1]!.hand).toEqual([]);
   expect(rooms.view(r.roomId, b.id).state!.players[1]!.hand).toHaveLength(7);
@@ -36,7 +37,7 @@ it('人間の攻撃は対象者が返答するまで進めず、他人は操作�
   expect(rooms.view(r.roomId, a.id).state!.phase).toBe('defense');
   expect(() => rooms.move(r.roomId, a.id, { revision: r.revision, action: 'defend', ids: [] })).toThrow('あなたの番');
   const v = rooms.move(r.roomId, b.id, { revision: r.revision, action: 'defend', ids: [] });
-  expect(v.state!.players[1]!.hp).toBe(55);
+  expect(v.state!.players[1]!.hp).toBe(35);
 });
 it('同じリビジョンを再送しても二重に両替しない', () => {
   let r = rooms.create(a, 2);
@@ -65,7 +66,7 @@ it('人間の防御は2分で防御なしとして進む', () => {
   clock += 120001;
   const v = rooms.view(r.roomId, a.id);
   expect(v.state!.phase).toBe('action');
-  expect(v.state!.players[1]!.hp).toBe(55);
+  expect(v.state!.players[1]!.hp).toBe(35);
 });
 it('退出した人の席はCPUが引き継ぎ、全員退出で部屋を消す', () => {
   let r = rooms.create(a, 2);

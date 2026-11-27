@@ -31,6 +31,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-11-28-shinpu-initial-hp-40', date: '2026-11-28', kind: 'improve', where: ['Discord', '社務所Web'],
+    title: '神符合戦の初期HPを40にし、相手のHPを見やすく',
+    items: ['新しく始める対戦と再戦は、全員HP40で開始します。', '相手全員の現在HPを主画面に常時表示し、相手を選ぶ一覧でも大きな数値とバーで確認できます。', 'HPバーと満タン判定、遊び方も初期HP40に合わせます。MP12・霊銭20、HP/MP/霊銭の上限なしは従来どおりです。'],
+    announcement: { priority: 'optional', audience: '神符合戦で遊ぶメンバー',
+      steps: ['/神符合戦から新しい対戦を始める', '自分とCPUを含む全員の開始HP40を確認する'],
+      postText: '神符合戦の初期HPを40に変更しました。新しい対戦と再戦から適用されます。MP12・霊銭20、上限なしのルールは同じです。',
+      imagePrompt: '不要。画像を添える場合は実際の対戦開始画面でHP40が分かるものを使う。', notes: '保存済みの対戦の現在HPを書き換える処理はない。',
+    },
+  },
+  {
     id: '2026-11-27-role-limits',
     date: '2026-11-27',
     kind: 'new',
