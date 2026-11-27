@@ -1,3 +1,4 @@
+import { controlAccess, controlPanel, parseControlId } from './controlPanel.js';
 import { eligibleVisitMembers, recordVisitMinute } from '../services/visitProfile.js';
 import { ReturnerRoles } from './returnerRoles.js';
 import { pingRoleIds } from '../services/notify.js';
@@ -40,7 +41,7 @@ import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { currentAutoRank, decidePromotion, highestRank, voiceCapPercentOf, voicePercentOf, type Promotion } from '../domain/ranks.js';
 import { emaStepFrom, emaTiersShown, EMA_PROMOTION_BURST, EMA_TEMPLATES, EMA_TIER_LABEL } from '../domain/ema.js';
-import { w, isMusubiMode } from '../domain/terms.js';
+import { w, isMusubiMode, isNewSystemVisible } from '../domain/terms.js';
 import { collectEmaKeepWarnings, emaPromotable, emaPromotionEnabled, emaStepProgress } from '../services/emaPromotion.js';
 import { ujikoProgress } from '../services/ujikoRequirement.js';
 import { candidateStatus, closeDueSewayakuElections, currentElectionOf, finishSewayakuElection, hasSewayakuVote, listSewayakuElections, openSewayakuElections, scheduleSewayakuElections, setSewayakuElectionMessage, toggleSewayakuVote, voterStatus } from '../services/sewayakuElection.js';
@@ -364,7 +365,18 @@ export class ShuinApp {
   async onInteraction(interaction: Interaction): Promise<void> {
     if (!interaction.inCachedGuild() || interaction.guildId !== this.cfg.guildId) return;
     try {
-      if (interaction.isUserContextMenuCommand()) {
+      if (interaction.isButton() && interaction.customId.startsWith('control:')) {
+        const p = parseControlId(interaction.customId);
+        if (!p || !['open', 'profile', 'musubi', 'ema'].includes(p.action)) return;
+        const blocked = controlAccess(interaction, p);
+        if (blocked) return void await interaction.reply({ content: blocked, flags: MessageFlags.Ephemeral });
+        if (p.action === 'open') return void await interaction.reply({ ...controlPanel(p.channelId, interaction.user.id), allowedMentions: NO_MENTIONS });
+        if ((p.action === 'ema' && !isNewSystemVisible()) || (p.action === 'musubi' && (!isNewSystemVisible() || !isMusubiMode()))) {
+          return void await interaction.reply({ content: '新制度はまだ始まっていません。パネルを開き直してください。', flags: MessageFlags.Ephemeral });
+        }
+        if (p.action === 'ema') return await this.card(interaction, interaction.user.id, false, 'ema');
+        return await this.vcList(interaction, p.channelId);
+      } else if (interaction.isUserContextMenuCommand()) {
         if (interaction.commandName === COMMAND.profileMenu || interaction.commandName === COMMAND.cardMenu) return await this.card(interaction, interaction.targetId, false);
         if (interaction.commandName === COMMAND.giveMenu) return await this.give(interaction, interaction.targetId);
       } else if (interaction.isChatInputCommand() && interaction.commandName === COMMAND.goshuin) {
@@ -509,6 +521,7 @@ export class ShuinApp {
 
   /** 通話のチャットのボタン: 今同じ通話にいる人を並べる（自分が入っている通話。いなければボタンの通話） */
   private async vcList(interaction: ButtonInteraction<'cached'>, channelId: string): Promise<void> {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const channel = interaction.member.voice.channel ?? interaction.guild.channels.cache.get(channelId);
     const others = channel?.isVoiceBased() ? [...channel.members.values()].filter((m) => !m.user.bot && m.id !== interaction.user.id) : [];
     const giverRank = highestRank(this.cfg.ranks, toInfo(interaction.member).roleIds);
@@ -519,7 +532,7 @@ export class ShuinApp {
       .map((m) => ({ id: m.id, name: m.displayName, stamped: stamped.has(m.id) }))
       // まだ押していない人を先に
       .sort((a, b) => Number(a.stamped) - Number(b.stamped));
-    await interaction.reply({ ...vcList(people, others.length), flags: MessageFlags.Ephemeral, allowedMentions: NO_MENTIONS });
+    await interaction.editReply({ ...vcList(people, others.length), allowedMentions: NO_MENTIONS });
   }
 
   /**

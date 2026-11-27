@@ -212,6 +212,28 @@ describe('ShuinApp', () => {
     expect(receiver.roles.add).not.toHaveBeenCalled();
   });
 
+  it('縁側の共有入口から本人だけのパネルを開く。本人・通話・公開設定を守る', async () => {
+    const { controlId } = await import('../src/discord/controlPanel.js');
+    const CH = '950000000000000001';
+    const viewer = add(G, ROLE.ujiko);
+    Object.assign(viewer, { voice: { channel: { id: CH, name: '縁側' } } });
+    const open = interaction('button', viewer, { customId: controlId('open', CH) });
+    await app.onInteraction(open.i as never);
+    expect(open.replies[0]?.flags).toBe(64 | 32768);
+    expect(JSON.stringify(open.replies)).toContain('プロフィール');
+    expect(JSON.stringify(open.replies)).not.toContain('control:ema:');
+    const wrong = interaction('button', viewer, { customId: controlId('profile', CH, R) });
+    await app.onInteraction(wrong.i as never);
+    expect(wrong.replies[0]?.content).toContain('本人');
+    const hidden = interaction('button', viewer, { customId: controlId('ema', CH, G) });
+    await app.onInteraction(hidden.i as never);
+    expect(hidden.replies[0]?.content).toContain('まだ始まっていません');
+    Object.assign(viewer, { voice: {} });
+    const left = interaction('button', viewer, { customId: controlId('open', CH) });
+    await app.onInteraction(left.i as never);
+    expect(left.replies[0]?.content).toContain('入ってから');
+  });
+
   it('通話の一覧は昇格後に開き直すとチェックが外れ、押し直すと戻る', async () => {
     const giver = add(G, ROLE.sanpaisha);
     const receiver = add(R, ROLE.sanpaisha);

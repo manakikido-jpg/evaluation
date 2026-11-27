@@ -101,6 +101,24 @@ describe('通話に入ったとき', () => {
     ({ channel, channelId, guild: { id: cfg.guildId, afkChannelId: null }, member: { user: { bot } } }) as never;
   const settle = () => new Promise((r) => setTimeout(r, 10));
 
+  it('縁側は個人パネルの入口。他の通話は今までのプロフィール入口を保つ', async () => {
+    const app = new VoicePanelApp(() => cfg);
+    const v = fakeVoice();
+    Object.assign(v.channel, { name: '🌸 大きな縁側', parentId: null });
+    app.onVoiceStateUpdate(state(null, null), state(v.channel, VC));
+    await settle();
+    expect(JSON.stringify(v.messages)).toContain(`control:open:${VC}`);
+    app.onVoiceStateUpdate(state(null, null), state(v.channel, VC));
+    await settle();
+    expect(v.messages).toHaveLength(1);
+    Object.assign(v.channel, { name: 'ふつうの通話' });
+    app.onVoiceStateUpdate(state(null, null), state(v.channel, VC));
+    await settle();
+    expect(v.messages).toHaveLength(1);
+    expect(JSON.stringify(v.messages)).toContain(`shuin:vc:${VC}`);
+    expect(JSON.stringify(v.messages)).not.toContain('control:open');
+  });
+
   it('入ったらカードを出す。いちばん下にあれば出さない。話が流れたら出し直して前のは消す', async () => {
     const app = new VoicePanelApp(() => cfg);
     const v = fakeVoice();

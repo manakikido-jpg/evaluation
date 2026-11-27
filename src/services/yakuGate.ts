@@ -22,6 +22,9 @@ export const YAKU_BLOCKED_COMMANDS: ReadonlySet<string> = new Set(['sokin', 'ich
 
 /** 厄のあいだ止めるボタン・メニュー（customId の頭）。お年玉は置くのも受け取るのも止める */
 export const YAKU_BLOCKED_PREFIXES: readonly string[] = [
+  'control:send:',
+  'control:musubi:',
+  'control:ema:',
   'sokin:',
   'koban:',
   'market:',
