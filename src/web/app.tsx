@@ -1,3 +1,4 @@
+import { aramitamaRoleId } from '../services/aramitama.js';
 import { operationOf as supportOperationOf, ticketContext as supportTicketContext } from '../services/ticketOperations.js';
 import { mountTicketOperations } from './ticketOperations.js';
 import type { DocumentTranscriber } from '../services/documents/audio.js';
@@ -3303,8 +3304,8 @@ export function createWebApp(deps: WebDeps) {
   // ───────── お参り期間 ─────────
 
   app.get('/omairi', async (c) => {
-    const [review, ongoing] = await Promise.all([omairiList(db, ['review']), omairiList(db, ['ongoing'])]);
-    return c.html(<OmairiPage session={c.get('session')} cfg={cfg} review={review} ongoing={ongoing} now={now()} flash={c.req.query('msg')} />);
+    const [review, ongoing, ara] = await Promise.all([omairiList(db, ['review']), omairiList(db, ['ongoing']), aramitamaRoleId(db)]);
+    return c.html(<OmairiPage session={c.get('session')} cfg={cfg} review={review} ongoing={ongoing} now={now()} flash={c.req.query('msg')} aramitama={Boolean(ara)} />);
   });
 
   app.post('/omairi/:memberId', async (c) => {
@@ -3312,7 +3313,7 @@ export function createWebApp(deps: WebDeps) {
     if (!validId(memberId)) return c.notFound();
     const body = await c.req.parseBody();
     const action = field(body, 'action');
-    if (action !== 'extend' && action !== 'promote' && action !== 'remove') return c.redirect('/omairi?msg=invalid');
+    if (action !== 'extend' && action !== 'promote' && action !== 'remove' && action !== 'aramitama') return c.redirect('/omairi?msg=invalid');
     // 退出（キック）は確認画面を通す
     if (action === 'remove' && body.confirm !== 'yes') {
       const target = await getMember(db, memberId);
@@ -3330,7 +3331,7 @@ export function createWebApp(deps: WebDeps) {
       );
     }
     const r = await decideOmairi(mod(), actorOf(c.get('session')), memberId, action as OmairiAction, now());
-    return c.redirect(`/omairi?msg=${r === 'ok' ? 'omairi_ok' : 'omairi_missing'}`);
+    return c.redirect(`/omairi?msg=${r === 'ok' ? 'omairi_ok' : r === 'no_role' ? 'omairi_no_role' : 'omairi_missing'}`);
   });
 
   // ───────── 相談 ─────────

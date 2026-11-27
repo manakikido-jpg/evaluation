@@ -1,3 +1,4 @@
+import { aramitamaRoleId } from '../services/aramitama.js';
 import { placeShuinButton, placeEmaGuide, placeRequestWindowTemplate } from '../services/notices.js';
 import {
   ActionRowBuilder,
@@ -149,6 +150,7 @@ export class AdmissionApp {
         if (ns === 'omairi' && action === 'remove' && arg) return await this.omairiConfirmRemove(interaction, arg);
         if (ns === 'omairi' && (action === 'extend' || action === 'promote') && arg) return await this.omairiDecide(interaction, arg, action);
         if (ns === 'omairi' && action === 'removeok' && arg) return await this.omairiDecide(interaction, arg, 'remove');
+        if (ns === 'omairi' && action === 'aramitama' && arg) return await this.omairiDecide(interaction, arg, 'aramitama');
       } else if (interaction.isUserSelectMenu()) {
         // 招待してくれた人を選んだ
         const [ns, action, arg] = interaction.customId.split(':');
@@ -700,6 +702,8 @@ export class AdmissionApp {
     const first = this.cfg.ranks.filter((x) => x.auto).sort((a, b) => a.requiredGoen - b.requiredGoen)[1];
     // 🎐 絵馬での昇格が ON のときは、判定の目安を「氏子の票の枚数」で出す（ご縁は昇格に使わないため）
     const emaOn = await emaPromotionEnabled(this.db);
+    // 🔥 新制度（③④のあと・荒魂のロールが設定ずみ）は「退出」の代わりに「荒魂にする」を出す
+    const aramitama = Boolean(await aramitamaRoleId(this.db));
     for (const memberId of r.review) {
       const [m, card, ep] = await Promise.all([getMember(this.db, memberId), goshuinchoOf(this.db, memberId), emaOn ? ujikoProgress(this.db, this.cfg, memberId, now) : Promise.resolve(undefined)]);
       const progress = ep
@@ -722,7 +726,7 @@ export class AdmissionApp {
             row(
               btn(`omairi:extend:${memberId}`, '延長する'),
               btn(`omairi:promote:${memberId}`, `${first?.name ?? '次の役職'}にする`, ButtonStyle.Success),
-              btn(`omairi:remove:${memberId}`, '退出にする', ButtonStyle.Danger),
+              aramitama ? btn(`omairi:aramitama:${memberId}`, '🔥 荒魂にする', ButtonStyle.Danger) : btn(`omairi:remove:${memberId}`, '退出にする', ButtonStyle.Danger),
             ),
           ],
           allowedMentions: NO_MENTIONS,
@@ -747,8 +751,9 @@ export class AdmissionApp {
     if (!actor) return void (await i.reply({ content: '神職・宮司のみ使えます。', ...EPHEMERAL }));
     await i.deferUpdate();
     const r = await decideOmairi(this.ctx, actor, memberId, action);
-    const label = { extend: '⏳ 延長しました', promote: '⬆️ 昇格させました', remove: '🚪 退出にしました' }[action];
-    const text = r === 'ok' ? `${label}（${mention(actor.id)}）` : r === 'denied' ? 'この方には操作できません。' : 'すでに判定済みです。';
+    const label = { extend: '⏳ 延長しました', promote: '⬆️ 昇格させました', remove: '🚪 退出にしました', aramitama: '🔥 荒魂にしました' }[action];
+    const text = r === 'ok' ? `${label}（${mention(actor.id)}）` : r === 'denied' ? 'この方には操作できません。' : r === 'no_role' ? '荒魂のロールが未設定です（社務所Web の評価ページで入れてください）。' : 'すでに判定済みです。';
+    if (r === 'no_role') return void (await i.followUp({ content: text, ...EPHEMERAL }));
     await i.editReply({ content: text, components: [], allowedMentions: NO_MENTIONS });
   }
 }

@@ -179,6 +179,7 @@ export function emaGiveReply(receiverId: string, result: GiveEmaResult): Reply {
     giver_not_sodai: '世話役の方へ絵馬（総代の票）を贈れるのは、総代か運営だけです。',
     giver_no_rank: '絵馬は、参拝者になってから贈れます。',
     sanpai_to_sanpai: '参拝者どうしでは、絵馬を贈れません。',
+    aramitama: '🔥 荒魂のあいだは、絵馬を贈れません・受け取れません。',
     receiver_rank: '絵馬を贈れる相手は、参拝者・氏子・世話役の方だけです。',
     not_together: [
       '🎐 まだ贈れません',
@@ -403,6 +404,8 @@ export function goshuinchoReply(
     pair?: { days: number; given: boolean; canGive: boolean };
     /** 🍃 氏子のキープ／🍂 元氏子の復帰 */
     keep?: KeepCard;
+    /** 🔥 荒魂：荒魂になってからの招待と、参拝者に戻るのに要る数 */
+    aramitama?: { invites: number; need: number };
     /** 自分の /絵馬：いま贈れる人・あと少しの人 */
     partners?: { ready: { id: string; name: string; days: number }[]; soon: { id: string; name: string; days: number }[] };
   },
@@ -501,6 +504,7 @@ export function goshuinchoReply(
   embed.addFields(introField);
   if (ema) {
     const nextLines = nextRankLines(ranks, ema);
+    if (ema.aramitama) embed.addFields({ name: '🔥 荒魂', value: `${check(ema.aramitama.invites >= ema.aramitama.need)} 招待 ${progressBar(ema.aramitama.invites, ema.aramitama.need)}　**${ema.aramitama.invites}** / ${ema.aramitama.need} 人\n-# そろうと参拝者に戻り、お参り期間を最初から始めます` });
     if (ema.keep?.kind === 'moto') embed.addFields({ name: '🍂 元氏子', value: keepLines(ema.keep).join('\n') });
     else if (nextLines.length) embed.addFields({ name: '⬆️ 次の役職', value: nextLines.join('\n').slice(0, 1024) });
     if (ema.keep?.kind === 'keep') embed.addFields({ name: '🍃 氏子のキープ', value: keepLines(ema.keep).join('\n') });

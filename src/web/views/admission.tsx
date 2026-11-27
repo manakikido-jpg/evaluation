@@ -17,7 +17,7 @@ const who = (names: Names, id: string | null) => (id ? (id === 'system' ? '自�
 const KIND_LABEL: Record<string, string> = { join: '入鯖', yoimairi: '🔞 宵参り' };
 const STATUS_LABEL: Record<string, string> = { pending: '待ち', approved: '承認', rejected: '却下' };
 const SOUDAN_STATUS: Record<string, string> = { open: '未対応', in_progress: '対応中', done: '完了' };
-const OMAIRI_STATUS: Record<string, string> = { ongoing: 'お参り期間中', review: '判定待ち', promoted: '完了（昇格）', removed: '退出' };
+const OMAIRI_STATUS: Record<string, string> = { ongoing: 'お参り期間中', review: '判定待ち', promoted: '完了（昇格）', removed: '退出', aramitama: '🔥 荒魂' };
 
 function Csrf(props: { session: AdminSession }) {
   return <input type="hidden" name="_csrf" value={props.session.csrfToken} />;
@@ -29,6 +29,7 @@ export const ADMISSION_FLASH: Record<string, { text: string; kind: 'ok' | 'warn'
   already_decided: { text: 'この申請はすでに判定済みです。', kind: 'warn' },
   not_adult: { text: '18 歳以上と申告していないため、宵参りを承認できません。', kind: 'warn' },
   omairi_ok: { text: 'お参り期間を判定しました。', kind: 'ok' },
+  omairi_no_role: { text: '荒魂のロールが未設定です。評価ページで入れてください。', kind: 'warn' },
   omairi_missing: { text: 'すでに判定済みか、お参り期間中ではありません。', kind: 'warn' },
   replied: { text: '返信を送りました。', kind: 'ok' },
   replied_nodm: { text: '返信を記録しましたが、DM が届きませんでした（DM を受け取らない設定の可能性）。', kind: 'warn' },
@@ -219,7 +220,7 @@ export function ApplicationsPage(props: {
 
 type OmairiRow = { o: Omairi; displayName: string | null; username: string | null; avatarUrl: string | null; roleIds: string[] | null; leftAt: Date | null };
 
-export function OmairiPage(props: { session: AdminSession; cfg: GuildConfig; review: OmairiRow[]; ongoing: OmairiRow[]; now: Date; flash?: string }) {
+export function OmairiPage(props: { session: AdminSession; cfg: GuildConfig; review: OmairiRow[]; ongoing: OmairiRow[]; now: Date; flash?: string; aramitama?: boolean }) {
   const Table = (p: { rows: OmairiRow[]; actions: boolean }) =>
     p.rows.length === 0 ? (
       <p class="empty">いません。</p>
@@ -262,6 +263,11 @@ export function OmairiPage(props: { session: AdminSession; cfg: GuildConfig; rev
                       <button type="submit" name="action" value="promote" class="ok">
                         昇格
                       </button>
+                      {props.aramitama && (
+                        <button type="submit" name="action" value="aramitama" class="danger">
+                          🔥 荒魂
+                        </button>
+                      )}
                       <button type="submit" name="action" value="remove" class="danger">
                         退出
                       </button>

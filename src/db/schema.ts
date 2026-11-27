@@ -543,7 +543,7 @@ export const omairi = pgTable('omairi', {
   extendedCount: integer('extended_count').notNull().default(0),
   /** 🤝 招待でのばした評価期間の合計（日。新制度⑥。上限まで。手動の延長とは別に数える） */
   inviteExtDays: integer('invite_ext_days').notNull().default(0),
-  /** ongoing / promoted / review / removed */
+  /** ongoing / promoted / review / removed / aramitama（🔥 荒魂。decidedAt が荒魂になった時刻） */
   status: text('status').notNull().default('ongoing'),
   decidedBy: text('decided_by'),
   decidedAt: timestamp('decided_at', { withTimezone: true }),

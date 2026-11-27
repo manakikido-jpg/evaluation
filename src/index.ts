@@ -516,6 +516,8 @@ async function main(): Promise<void> {
   client.on(Events.InteractionCreate, (i) => {
     // 👹 厄のあいだ止める操作（送金・市場・キャスト・カジノ・お年玉など）は、ここで止める
     if (yakuInteractionBlocked(cfg(), i)) return void replyYakuBlocked(i);
+    // 🔥 荒魂のあいだ止める操作（絵馬・結び・キャスト）
+    if (app.aramitama.blocked(cfg(), i)) return void app.aramitama.reply(i);
     void onTalkTopicInteraction(i, cfg().guildId);
     void recording.onInteraction(i);
     void maikura.onInteraction(i);

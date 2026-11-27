@@ -122,7 +122,7 @@ export async function extendOmairiByInvite(db: Db, memberId: string, perInvite: 
 export async function setOmairiStatus(
   db: Db,
   memberId: string,
-  status: 'promoted' | 'review' | 'removed',
+  status: 'promoted' | 'review' | 'removed' | 'aramitama',
   by?: string,
   onlyFrom: string[] = ['ongoing', 'review'],
 ): Promise<boolean> {

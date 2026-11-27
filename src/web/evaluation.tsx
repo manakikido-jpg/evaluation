@@ -160,7 +160,7 @@ export function mountEvaluation(app: Hono<Env>, db: Db, cfg: () => GuildConfig, 
       sewayakuMinVoters: (() => { const v = typeof body.sewayakuMinVoters === 'string' && /^\d{1,4}$/.test(body.sewayakuMinVoters) ? Number(body.sewayakuMinVoters) : NaN; return v; })(),
       sodaiPromote: (() => { const v = typeof body.sodaiPromote === 'string' && /^\d{1,4}$/.test(body.sodaiPromote) ? Number(body.sodaiPromote) : NaN; return v; })(),
       // 🍃 キープと元氏子（欄がないときは今の値のまま）
-      ...Object.fromEntries((['keepNeed', 'keepFromSanpai', 'keepInviteMax', 'keepDays', 'motoNeed', 'motoFromSanpai', 'motoInviteMax'] as const).map((k) => [k, body[k] === undefined ? cfg().emaThresholds[k] : num(k)])),
+      ...Object.fromEntries((['keepNeed', 'keepFromSanpai', 'keepInviteMax', 'keepDays', 'motoNeed', 'motoFromSanpai', 'motoInviteMax', 'aramitamaInvites'] as const).map((k) => [k, body[k] === undefined ? cfg().emaThresholds[k] : num(k)])),
     });
     if (!parsed.success) return c.redirect('/evaluation?th=invalid', 303);
     await saveOverrides(db, { ...(await loadOverrides(db)), emaThresholds: parsed.data }, session.userId);

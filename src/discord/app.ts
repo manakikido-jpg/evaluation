@@ -1,3 +1,5 @@
+import { aramitamaProgress, aramitamaRoleId, runAramitamaReturn } from '../services/aramitama.js';
+import { AramitamaGate } from './aramitamaGate.js';
 import { controlAccess, controlPanel, parseControlId } from './controlPanel.js';
 import { eligibleVisitMembers, recordVisitMinute } from '../services/visitProfile.js';
 import { ReturnerRoles } from './returnerRoles.js';
@@ -315,6 +317,7 @@ export class ShuinApp {
     await this.checkGoenPerks(guild, now).catch(err => logger.warn({ err }, 'goen perk check failed'));
     await this.checkEmaKeep(guild, now).catch(err => logger.warn({ err }, 'ema keep check failed'));
     await this.checkUjikoKeep(guild, now).catch(err => logger.warn({ err }, 'ujiko keep check failed'));
+    await this.checkAramitama(guild, now).catch(err => logger.warn({ err }, 'aramitama check failed'));
     await this.checkSewayakuElection(guild, now).catch(err => logger.warn({ err }, 'sewayaku election check failed'));
     await awardLongVoiceBonuses(this.db, this.cfg, now).catch(err => logger.warn({ err }, 'long voice bonus tick failed'));
     await notifyLongVoiceBonuses(this.db, this.cfg, { sendMessage: async (channelId, body) => {
@@ -760,6 +763,8 @@ export class ShuinApp {
     // 参拝者：お参り期間・毎週の数・招待の補いをくわしく／氏子・世話役・総代：世話役の選挙の投票権
     // 🍃 氏子のキープ／🍂 元氏子の復帰（③④のあと・状態の表にある人だけ）
     const keep = emaMode && (ownerKey === 'ujiko' || ownerKey === 'sanpaisha') ? await keepCardOf(this.db, this.cfg, ownerId) : undefined;
+    // 🔥 荒魂：参拝者に戻るまでの招待
+    const ara = emaMode && !ownerKey ? await aramitamaProgress(this.db, this.cfg, ownerId) : null;
     const ujiko = emaMode && ownerKey === 'sanpaisha' && keep?.kind !== 'moto' ? await ujikoProgress(this.db, this.cfg, ownerId) : undefined;
     const voter = emaMode && (ownerKey === 'ujiko' || ownerKey === 'sewayaku' || ownerKey === 'sodai') ? await voterStatus(this.db, this.cfg, ownerId) : undefined;
     // 次のご縁の節目（ご縁帳）
@@ -796,7 +801,7 @@ export class ShuinApp {
         {
           count: emaCount, messages: emaMessages, promoteMode: emaMode, th: this.cfg.emaThresholds, tierLabel: emaTier.map((t) => EMA_TIER_LABEL[t]).join('＋'),
           ...(emaStepInfo ? { step: emaStepInfo } : {}), ...(sewayakuInfo ? { sewayaku: sewayakuInfo } : {}), ...(ujiko ? { ujiko } : {}), ...(voter ? { voter } : {}),
-          ...(emaPair ? { pair: emaPair } : {}), ...(emaPartnerList ? { partners: emaPartnerList } : {}), ...(keep ? { keep } : {}),
+          ...(emaPair ? { pair: emaPair } : {}), ...(emaPartnerList ? { partners: emaPartnerList } : {}), ...(keep ? { keep } : {}), ...(ara ? { aramitama: { invites: ara.invites, need: ara.need } } : {}),
         },
         collection ? { total: collection.total, met: collection.met } : undefined,
         { mode, ...(perkNext ? { perkNext } : {}) },
@@ -895,6 +900,38 @@ export class ShuinApp {
   }
 
   private checkingEmaKeep = false;
+  /** 🔥 荒魂のあいだ止める操作の門（ロール ID は見回りで入れ直す） */
+  readonly aramitama = new AramitamaGate();
+  private lastAramitamaAt = 0;
+  private checkingAramitama = false;
+  /**
+   * 🔥 荒魂（10分ごと）。荒魂になってからの招待がそろった人を参拝者に戻し、お参り期間を最初から始める。
+   */
+  async checkAramitama(guild: Guild, now = new Date(), force = false): Promise<void> {
+    if (guild.id !== this.cfg.guildId || this.checkingAramitama) return;
+    if (!force && now.getTime() - this.lastAramitamaAt < 10 * 60_000) return;
+    this.lastAramitamaAt = now.getTime();
+    this.checkingAramitama = true;
+    try {
+      const roleId = await aramitamaRoleId(this.db);
+      this.aramitama.setRole(roleId);
+      if (!roleId) return;
+      const sanpaisha = this.cfg.ranks.find((r) => r.key === 'sanpaisha');
+      for (const id of await runAramitamaReturn(this.db, this.cfg, now)) {
+        const member = await guild.members.fetch({ user: id, force: true }).catch(() => undefined);
+        if (!member) continue;
+        try {
+          if (sanpaisha && !member.roles.cache.has(sanpaisha.roleId)) await member.roles.add(sanpaisha.roleId, '荒魂から参拝者に戻る（招待がそろった）');
+          if (member.roles.cache.has(roleId)) await member.roles.remove(roleId, '荒魂から参拝者に戻る（招待がそろった）');
+          await member.send({ content: `⛩ 招待がそろい、**参拝者** に戻りました。お参り期間（${this.cfg.omairi.days}日）を最初から始めます。`, allowedMentions: { parse: [] as never[] } }).catch(() => undefined);
+          await this.log(`⛩ 荒魂から参拝者に戻りました <@${id}>（招待 ${this.cfg.emaThresholds.aramitamaInvites} 人・お参り期間を最初から）`);
+        } catch (err) {
+          logger.error({ err, userId: id }, 'aramitama return role update failed');
+          await this.log(`⚠️ <@${id}> さまを荒魂から参拝者に戻すロールの変更ができませんでした。BOT のロールの位置と権限を確認して、手で直してください（お参り期間は始まっています）。`);
+        }
+      }
+    } finally { this.checkingAramitama = false; }
+  }
   private checkingUjikoKeep = false;
   private lastUjikoKeepAt = 0;
 

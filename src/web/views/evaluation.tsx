@@ -153,6 +153,9 @@ export function EvaluationPage({ session, data, filter, page, emaPromotion = fal
           <label>そのうち参拝者・元氏子から<input type="number" name="motoFromSanpai" min={0} max={999} value={emaThresholds.motoFromSanpai}/></label>
           <label>招待で補える数<input type="number" name="motoInviteMax" min={0} max={100} value={emaThresholds.motoInviteMax}/></label>
         </fieldset>
+        <fieldset><legend>🔥 荒魂 → ⛩ 参拝者（戻る）</legend>
+          <label>荒魂になってからの招待（人）<input type="number" name="aramitamaInvites" min={1} max={100} value={emaThresholds.aramitamaInvites}/></label>
+        </fieldset>
         <fieldset><legend>🍃 氏子 → 🎋 世話役（選挙）</legend>
           <label>投票できる人の何%を超えたら昇格<input type="number" name="sewayakuVotePercent" min={1} max={100} value={emaThresholds.sewayakuVotePercent}/></label>
           <label>投票できる人：直近30日の縁側の時間（時間・これを超える）<input type="number" name="sewayakuVoterHours" min={0} max={720} value={Math.round(emaThresholds.sewayakuVoterMinutes / 60)}/></label>

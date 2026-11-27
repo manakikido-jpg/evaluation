@@ -399,6 +399,8 @@ export const emaThresholdsSchema = z
     motoNeed: z.number().int().min(1).max(1000).default(15),
     motoFromSanpai: z.number().int().min(0).max(1000).default(10),
     motoInviteMax: z.number().int().min(0).max(100).default(5),
+    /** 🔥 荒魂が参拝者に戻るのに要る招待（荒魂になってから「1人」と数えた数） */
+    aramitamaInvites: z.number().int().min(1).max(100).default(3),
   });
 export type EmaThresholds = z.infer<typeof emaThresholdsSchema>;
 

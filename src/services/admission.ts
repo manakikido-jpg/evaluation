@@ -1,3 +1,4 @@
+import { aramitamaRoleId } from './aramitama.js';
 import { raidState } from './raid.js';
 import { w } from '../domain/terms.js';
 import { watchOf } from './securityWatch.js';
@@ -401,7 +402,7 @@ export async function omairiPromoted(ctx: ModCtx, memberId: string): Promise<voi
   await setOmairiStatus(ctx.db, memberId, 'promoted', 'system');
 }
 
-export type OmairiAction = 'extend' | 'promote' | 'remove';
+export type OmairiAction = 'extend' | 'promote' | 'remove' | 'aramitama';
 
 /** 神職によるお参り期間の判定 */
 export async function decideOmairi(
@@ -410,7 +411,7 @@ export async function decideOmairi(
   memberId: string,
   action: OmairiAction,
   now = new Date(),
-): Promise<'ok' | 'not_found' | 'denied'> {
+): Promise<'ok' | 'not_found' | 'denied' | 'no_role'> {
   const o = await getOmairi(ctx.db, memberId);
   if (!o || !['ongoing', 'review'].includes(o.status)) return 'not_found';
   if (await checkTarget(ctx, actor, memberId)) return 'denied';
@@ -424,6 +425,16 @@ export async function decideOmairi(
     const [first, second] = autoRanks(ctx.cfg.ranks);
     if (second) await safely('add second rank', () => ctx.discord.addRole(g, memberId, second.roleId, 'お参り期間の判定で昇格'));
     if (first) await safely('remove first rank', () => ctx.discord.removeRole(g, memberId, first.roleId, 'お参り期間の判定で昇格'));
+  } else if (action === 'aramitama') {
+    // 🔥 荒魂にする（新制度）。③④が済み、荒魂のロール ID が入っているときだけ
+    const roleId = await aramitamaRoleId(ctx.db);
+    if (!roleId) return 'no_role';
+    if (!(await setOmairiStatus(ctx.db, memberId, 'aramitama', actor.id))) return 'not_found';
+    const [first] = autoRanks(ctx.cfg.ranks);
+    await safely('add aramitama role', () => ctx.discord.addRole(g, memberId, roleId, 'お参り期間の判定で荒魂に'));
+    if (first) await safely('remove first rank', () => ctx.discord.removeRole(g, memberId, first.roleId, 'お参り期間の判定で荒魂に'));
+    const need = ctx.cfg.emaThresholds.aramitamaInvites;
+    await ctx.discord.sendDm(memberId, [SIGN, `お参り期間で氏子に届かなかったため、**荒魂** になりました。`, `これから ${need} 人を招待すると（招待した人が通話に合計4時間いたら1人）、参拝者に戻り、お参り期間を最初から始められます。`, '荒魂のあいだは、縁側と宿への参加・カジノ（1日500銭まで）が使えます。絵馬・結び・キャストは使えません。'].join('\n'));
   } else {
     if (!(await setOmairiStatus(ctx.db, memberId, 'removed', actor.id))) return 'not_found';
     await ctx.discord.sendDm(memberId, [SIGN, 'お参り期間が終わりました。申し訳ありませんが、今回は退出とさせていただきます。'].join('\n'));

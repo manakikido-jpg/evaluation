@@ -5,6 +5,7 @@ import { ema, engawaPairs, members, ujikoKeepState } from '../db/schema.js';
 import { highestRank } from '../domain/ranks.js';
 import { EMA_DAYS_TOGETHER, EMA_MESSAGE_MAX, EMA_MINUTES_PER_DAY, emaFreshSince, emaTierExpires, emaTierFor, type EmaTier } from '../domain/ema.js';
 import { staffAlts } from './staffAlts.js';
+import { newSystemRoles } from './ujikoKeep.js';
 
 /**
  * 🎐 絵馬（評価の票）。氏子以上が、条件を満たした相手に贈る。匿名・一言つき・30日で失効。
@@ -53,7 +54,7 @@ export async function emaMessagesOf(db: Db, receiverId: string, now = new Date()
     .orderBy(desc(ema.createdAt));
 }
 
-export type EmaDenyReason = 'self' | 'no_member' | 'bot' | 'left' | 'staff_alt' | 'giver_not_ujiko' | 'giver_not_sodai' | 'giver_no_rank' | 'sanpai_to_sanpai' | 'receiver_rank' | 'not_together';
+export type EmaDenyReason = 'self' | 'no_member' | 'bot' | 'left' | 'staff_alt' | 'giver_not_ujiko' | 'giver_not_sodai' | 'giver_no_rank' | 'sanpai_to_sanpai' | 'aramitama' | 'receiver_rank' | 'not_together';
 
 export type EmaCheck =
   | { ok: true; days: number; minutes: number; tier: EmaTier }
@@ -86,6 +87,10 @@ export async function checkGiveEma(
   if (receiver.leftAt) return { ok: false, reason: 'left' };
   const alts = new Set((await staffAlts(db)).map((a) => a.id));
   if (alts.has(giverId) || alts.has(receiverId)) return { ok: false, reason: 'staff_alt' };
+
+  // 🔥 荒魂は、絵馬を贈れない・受け取れない
+  const ara = (await newSystemRoles(db)).aramitama;
+  if (ara && (giver.roleIds.includes(ara) || receiver.roleIds.includes(ara))) return { ok: false, reason: 'aramitama' };
 
   const weightOf = (key: string) => cfg.ranks.find((r) => r.key === key)?.weight;
   const giverRank = highestRank(cfg.ranks, giver.roleIds);
