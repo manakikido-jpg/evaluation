@@ -1,3 +1,5 @@
+import { isMotoUjiko, newSystemRoles, setMotoByStaff } from '../services/ujikoKeep.js';
+import { newSystemActive } from '../services/perkGate.js';
 import { aramitamaRoleId } from '../services/aramitama.js';
 import { operationOf as supportOperationOf, ticketContext as supportTicketContext } from '../services/ticketOperations.js';
 import { mountTicketOperations } from './ticketOperations.js';
@@ -1142,6 +1144,10 @@ export function createWebApp(deps: WebDeps) {
     const [emaCount, emaMessages] = await Promise.all([validEmaCountOf(db, id, undefined, emaTier), emaMessagesOf(db, id, undefined, emaTier)]);
     // 🎐 宮司だけ：取り消し用に、受け取った絵馬を全部（贈った人の名前は出さない）
     const emaEntries = session.level === 'guji' ? await emaEntriesOf(db, id, now()) : undefined;
+    // 🍂 氏子 ⇄ 元氏子（宮司だけ・新制度が始まってから）
+    const motoPanel = session.level === 'guji' && (await newSystemActive(db))
+      ? { moto: await isMotoUjiko(db, id), ujiko: highestRank(cfg.ranks, member.roleIds)?.key === 'ujiko', roleSet: Boolean((await newSystemRoles(db)).motoUjiko) }
+      : undefined;
     const names = await namesOf(db, [
       ...goenRows.flatMap((r) => [r.grantedBy, r.revokedBy ?? '']),
       ...history.received.map((r) => r.other),
@@ -1162,6 +1168,7 @@ export function createWebApp(deps: WebDeps) {
         card={card}
         ema={{ count: emaCount, messages: emaMessages }}
         emaEntries={emaEntries}
+        motoPanel={motoPanel}
         history={history}
         events={events}
         audits={audits}
@@ -3137,6 +3144,42 @@ export function createWebApp(deps: WebDeps) {
     await audit(db, { actorId: by, targetId: id, action: 'ema.revoke', detail: { giverId, tier }, via: 'web' });
     if (cfg.channels.log) await deps.discord.sendMessage(cfg.channels.log, { content: `🎐 <@${id}> さんの絵馬（${EMA_TIER_LABEL[tier]}）を1枚取り消しました（操作: <@${by}>）。`, allowed_mentions: { parse: [] } }).catch((err: unknown) => logger.warn({ err }, 'ema revoke log failed'));
     return emaBack(c, id, 'ema_revoked');
+  });
+
+  // 🍂 氏子を元氏子にする／元氏子を氏子に戻す（宮司のみ・新制度）
+  app.post('/members/:id/moto-ujiko', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.notFound();
+    const to = (msg: string) => c.redirect(`/members/${id}?msg=${msg}#sec-moto`);
+    if (!gujiOnly(c)) return to('moto_forbidden');
+    const body = await c.req.parseBody();
+    const target = body.to === 'ujiko' ? 'ujiko' : body.to === 'moto' ? 'moto' : null;
+    if (!target || body.confirm !== 'yes') return to('moto_confirm');
+    const r = await setMotoByStaff(db, cfg, id, target, now());
+    if (r !== 'ok') return to(`moto_${r}`);
+    const by = c.get('session').userId;
+    const roles = await newSystemRoles(db);
+    const ujiko = cfg.ranks.find((x) => x.key === 'ujiko')?.roleId;
+    const sanpaisha = cfg.ranks.find((x) => x.key === 'sanpaisha')?.roleId;
+    const reason = target === 'moto' ? '運営が元氏子に変更' : '運営が元氏子から氏子に戻す';
+    let roleOk = true;
+    const step = async (fn: () => Promise<unknown>) => { try { await fn(); } catch { roleOk = false; } };
+    if (target === 'moto') {
+      if (sanpaisha) await step(() => deps.discord.addRole(cfg.guildId, id, sanpaisha, reason));
+      if (roles.motoUjiko) await step(() => deps.discord.addRole(cfg.guildId, id, roles.motoUjiko!, reason));
+      if (ujiko) await step(() => deps.discord.removeRole(cfg.guildId, id, ujiko, reason));
+    } else {
+      if (ujiko) await step(() => deps.discord.addRole(cfg.guildId, id, ujiko, reason));
+      if (roles.motoUjiko) await step(() => deps.discord.removeRole(cfg.guildId, id, roles.motoUjiko!, reason));
+      if (sanpaisha) await step(() => deps.discord.removeRole(cfg.guildId, id, sanpaisha, reason));
+    }
+    const th = cfg.emaThresholds;
+    await deps.discord.sendDm(id, target === 'moto'
+      ? `🍂 運営の判断で、**元氏子** になりました。絵馬を ${th.motoNeed}（うち ${th.motoFromSanpai} は参拝者から・招待で ${th.motoInviteMax} まで補える）集めると、氏子に戻れます。`
+      : '🍃 運営の判断で、**氏子** に戻りました。').catch(() => false);
+    await audit(db, { actorId: by, targetId: id, action: target === 'moto' ? 'ujiko.to_moto' : 'ujiko.from_moto', detail: { roleOk }, via: 'web' });
+    if (cfg.channels.log) await deps.discord.sendMessage(cfg.channels.log, { content: `${target === 'moto' ? '🍂 元氏子に' : '🍃 元氏子から氏子に'} <@${id}>（操作: <@${by}>）${roleOk ? '' : '\n⚠️ ロールを変更できませんでした。BOT のロールの位置と権限を確かめて、手で直してください。'}`, allowed_mentions: { parse: [] } }).catch(() => undefined);
+    return to(roleOk ? (target === 'moto' ? 'moto_done' : 'moto_back') : 'moto_role_failed');
   });
 
   // 🎴 勝負の御籤の品（見た目の品・お試し券）を渡す・取り上げる（宮司のみ）

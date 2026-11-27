@@ -324,6 +324,53 @@ describe('厄・BAN・キック・メモ（管理画面）', () => {
       body: new URLSearchParams(form).toString(),
     });
 
+  it('🍂 氏子 ⇄ 元氏子：宮司だけ・新制度とロール設定のあとだけ・ロールを付け替えて記録に残る', async () => {
+    const { members } = await import('../src/db/schema.js');
+    const { eq } = await import('drizzle-orm');
+    const { setEmaPromotion } = await import('../src/services/emaPromotion.js');
+    const { resetAllShuin } = await import('../src/services/shuin.js');
+    const { isMotoUjiko, setNewSystemRoles, keepCardOf } = await import('../src/services/ujikoKeep.js');
+    const MOTO = '700000000000007777';
+    await db.update(members).set({ roleIds: [ROLE.ujiko] }).where(eq(members.id, USER));
+    const s = await login(STAFF);
+    const g = await login(GUJI);
+    const send = async (cookie: string, form: Record<string, string>) => (await post(`/members/${USER}/moto-ujiko`, cookie, { _csrf: await csrfOf(cookie), ...form })).headers.get('location');
+    // 新制度の前は欄を出さない・送っても動かない
+    expect(await (await get(`/members/${USER}`, g)).text()).not.toContain('氏子 ⇄ 元氏子');
+    expect(await send(g, { to: 'moto', confirm: 'yes' })).toContain('msg=moto_not_started');
+    await setEmaPromotion(db, true, GUJI);
+    await resetAllShuin(db, GUJI, clock);
+    // ロールが未設定
+    expect(await (await get(`/members/${USER}`, g)).text()).toContain('元氏子のロールが未設定です');
+    expect(await send(g, { to: 'moto', confirm: 'yes' })).toContain('msg=moto_no_role');
+    await setNewSystemRoles(db, { motoUjiko: MOTO }, GUJI);
+    // 神職には出さない・送っても宮司だけ。確かめのチェックが要る
+    expect(await (await get(`/members/${USER}`, s)).text()).not.toContain('氏子 ⇄ 元氏子');
+    expect(await send(s, { to: 'moto', confirm: 'yes' })).toContain('msg=moto_forbidden');
+    expect(await send(g, { to: 'moto' })).toContain('msg=moto_confirm');
+    expect(await (await get(`/members/${USER}`, g)).text()).toContain('元氏子にする');
+    // 元氏子にする
+    actions.length = 0;
+    expect(await send(g, { to: 'moto', confirm: 'yes' })).toContain('msg=moto_done');
+    expect(actions).toEqual(expect.arrayContaining([`addRole ${USER} ${ROLE.sanpaisha}`, `addRole ${USER} ${MOTO}`, `removeRole ${USER} ${ROLE.ujiko}`]));
+    expect(await isMotoUjiko(db, USER)).toBe(true);
+    expect((await db.select().from(members).where(eq(members.id, USER)))[0]!.roleIds.sort()).toEqual([ROLE.sanpaisha, MOTO].sort());
+    expect(await keepCardOf(db, cfg, USER, clock)).toMatchObject({ kind: 'moto', p: { total: 0 } });
+    expect((await listAudit(db, { action: 'ujiko.to_moto' })).length).toBe(1);
+    // 10分ごとの見回りが来ても、元氏子のまま（かってに氏子へ戻さない）
+    const { runUjikoKeep } = await import('../src/services/ujikoKeep.js');
+    expect(await runUjikoKeep(db, cfg, new Date(clock.getTime() + 600_000))).toEqual([]);
+    expect(await isMotoUjiko(db, USER)).toBe(true);
+    // もう氏子ではない → もう一度はできない
+    expect(await send(g, { to: 'moto', confirm: 'yes' })).toContain('msg=moto_not_ujiko');
+    // 氏子に戻す
+    expect(await (await get(`/members/${USER}`, g)).text()).toContain('氏子に戻す');
+    expect(await send(g, { to: 'ujiko', confirm: 'yes' })).toContain('msg=moto_back');
+    expect(await isMotoUjiko(db, USER)).toBe(false);
+    expect((await db.select().from(members).where(eq(members.id, USER)))[0]!.roleIds).toEqual([ROLE.ujiko]);
+    expect(await send(g, { to: 'ujiko', confirm: 'yes' })).toContain('msg=moto_not_moto');
+  });
+
   it('🎐 絵馬の取り消し：宮司だけ・贈った人は出さない・取り消すと票から外れる・記録に残る', async () => {
     const { ema } = await import('../src/db/schema.js');
     const { validEmaCountOf } = await import('../src/services/ema.js');

@@ -198,3 +198,39 @@ export async function runUjikoKeep(db: Db, cfg: GuildConfig, now = new Date(), d
   }
   return out;
 }
+
+export type MotoChange = 'ok' | 'not_started' | 'no_role' | 'not_ujiko' | 'not_moto' | 'not_member';
+
+/**
+ * 🍂 運営が手で、氏子を元氏子にする／元氏子を氏子に戻す（社務所Web・宮司だけ）。
+ * 状態の表と、記録している役職（members.roleIds）を先に直す。Discord のロールの付け外しは呼ぶ側が行う。
+ * 元氏子にすると、絵馬は「元氏子になってから」を数え直す。氏子に戻すと、次の判定は keepDays 日後。
+ */
+export async function setMotoByStaff(db: Db, cfg: GuildConfig, memberId: string, to: 'moto' | 'ujiko', now = new Date()): Promise<MotoChange> {
+  if (!(await newSystemStartedAt(db))) return 'not_started';
+  const [on] = await db.select().from(settings).where(eq(settings.key, 'ema_promotion'));
+  if ((on?.value as { on?: boolean } | undefined)?.on !== true) return 'not_started';
+  const moto = (await newSystemRoles(db)).motoUjiko;
+  if (!moto) return 'no_role';
+  const ujiko = cfg.ranks.find((r) => r.key === 'ujiko')?.roleId;
+  const sanpaisha = cfg.ranks.find((r) => r.key === 'sanpaisha')?.roleId;
+  return db.transaction(async (tx) => {
+    const [m] = await tx.select({ roleIds: members.roleIds, leftAt: members.leftAt }).from(members).where(eq(members.id, memberId)).for('update');
+    if (!m || m.leftAt) return 'not_member' as const;
+    const [row] = await tx.select().from(ujikoKeepState).where(eq(ujikoKeepState.memberId, memberId));
+    const without = (ids: readonly string[], ...drop: (string | undefined)[]) => ids.filter((id) => !drop.includes(id));
+    const withAll = (ids: string[], ...add: (string | undefined)[]) => [...new Set([...ids, ...add.filter((x): x is string => Boolean(x))])];
+    if (to === 'moto') {
+      if (highestRank(cfg.ranks, m.roleIds)?.key !== 'ujiko') return 'not_ujiko' as const;
+      const value = { state: 'moto' as const, since: now, nextJudgeAt: null, warnedFor: null, heldFor: null, omamoriUsedLast: false, updatedAt: now };
+      await tx.insert(ujikoKeepState).values({ memberId, ...value }).onConflictDoUpdate({ target: ujikoKeepState.memberId, set: value });
+      await tx.update(members).set({ roleIds: withAll(without(m.roleIds, ujiko), sanpaisha, moto) }).where(eq(members.id, memberId));
+      return 'ok' as const;
+    }
+    if (row?.state !== 'moto') return 'not_moto' as const;
+    const value = { state: 'ujiko' as const, since: now, nextJudgeAt: new Date(now.getTime() + cfg.emaThresholds.keepDays * DAY), warnedFor: null, heldFor: null, omamoriUsedLast: false, updatedAt: now };
+    await tx.update(ujikoKeepState).set(value).where(eq(ujikoKeepState.memberId, memberId));
+    await tx.update(members).set({ roleIds: withAll(without(m.roleIds, sanpaisha, moto), ujiko) }).where(eq(members.id, memberId));
+    return 'ok' as const;
+  });
+}

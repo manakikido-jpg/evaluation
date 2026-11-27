@@ -31,6 +31,26 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-11-27-moto-ujiko-manual',
+    date: '2026-11-27',
+    kind: 'new',
+    where: ['社務所Web'],
+    title: '🍂 氏子を元氏子にする・氏子に戻すボタン（宮司だけ）',
+    items: [
+      'メンバーのページに「🍂 氏子 ⇄ 元氏子」ができました。氏子を元氏子にする、元氏子を氏子に戻す、を手でできます。',
+      '押すと、ロールを付け替えて本人に DM し、#記録 に残します。',
+      '新制度が始まり、評価ページに元氏子のロール ID が入っているときだけ使えます。',
+      'Discord で手でロールを付け替えるだけでは、BOT は元氏子として数えません。必ずこのボタンから行ってください。',
+    ],
+    announcement: {
+      priority: 'none',
+      audience: '運営（宮司）',
+      steps: ['社務所Web → メンバー → その人のページ', '「🍂 氏子 ⇄ 元氏子」で確かめのチェックを入れて押す'],
+      postText: 'なし（運営の道具です）',
+      imagePrompt: 'なし',
+    },
+  },
+  {
     id: '2026-11-27-role-limits',
     date: '2026-11-27',
     kind: 'new',

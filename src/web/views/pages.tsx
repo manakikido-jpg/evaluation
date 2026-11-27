@@ -540,6 +540,8 @@ export function MemberPage(props: {
   ema?: { count: number; messages: { message: string; createdAt: Date }[] };
   /** 🎐 宮司だけ：受け取った絵馬の一覧（取り消し用）。贈った人の名前は出さない */
   emaEntries?: { giverId: string; tier: 'ujiko' | 'sanpai' | 'sewayaku' | 'sodai'; message: string; createdAt: Date; valid: boolean }[];
+  /** 🍂 宮司だけ・新制度：氏子 ⇄ 元氏子の手動の切り替え */
+  motoPanel?: { moto: boolean; ujiko: boolean; roleSet: boolean };
   history: { received: ShuinRow[]; given: ShuinRow[] };
   events: MemberEvent[];
   audits: AuditLog[];
@@ -659,6 +661,31 @@ export function MemberPage(props: {
               </li>
             ))}
           </ul>
+        </section>
+      )}
+
+      {props.motoPanel && (props.motoPanel.moto || props.motoPanel.ujiko) && (
+        <section class="card" id="sec-moto">
+          <h2>🍂 氏子 ⇄ 元氏子（宮司だけ）</h2>
+          {!props.motoPanel.roleSet ? (
+            <p class="muted">元氏子のロールが未設定です。<a href="/evaluation#ns-roles">評価ページ</a>でロール ID を入れてください。</p>
+          ) : props.motoPanel.moto ? (
+            <form method="post" action={`/members/${m.id}/moto-ujiko`}>
+              <input type="hidden" name="_csrf" value={props.session.csrfToken} />
+              <input type="hidden" name="to" value="ujiko" />
+              <p>いまは <strong>元氏子</strong> です。氏子に戻すと、次のキープの判定は {cfg.emaThresholds.keepDays} 日後になります。</p>
+              <label><input type="checkbox" name="confirm" value="yes" required /> 氏子に戻してよい</label>{' '}
+              <button type="submit">🍃 氏子に戻す</button>
+            </form>
+          ) : (
+            <form method="post" action={`/members/${m.id}/moto-ujiko`}>
+              <input type="hidden" name="_csrf" value={props.session.csrfToken} />
+              <input type="hidden" name="to" value="moto" />
+              <p>いまは <strong>氏子</strong> です。元氏子にすると、氏子ロールを外して参拝者・元氏子ロールを付け、本人に DM します。絵馬は「元氏子になってから」を数え直します（ご縁はそのまま）。</p>
+              <label><input type="checkbox" name="confirm" value="yes" required /> 元氏子にしてよい</label>{' '}
+              <button type="submit" class="danger">🍂 元氏子にする</button>
+            </form>
+          )}
         </section>
       )}
 
