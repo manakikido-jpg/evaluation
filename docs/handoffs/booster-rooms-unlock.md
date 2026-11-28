@@ -1,5 +1,9 @@
 # 奉納中の宿の全開放（Codex → Claude）
 
+PR: https://github.com/manakikido-jpg/sakuranomiya/pull/187
+
+実装commit: `8a50adce`。本番は未反映。
+
 本人の依頼：サーバーブーストに関しては宿の機能全開放。
 
 ## 変更
