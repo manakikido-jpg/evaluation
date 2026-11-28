@@ -5,6 +5,7 @@ import { settings } from '../db/schema.js';
 import { highestRank } from '../domain/ranks.js';
 import { emaPromotionEnabled } from './emaPromotion.js';
 import { newSystemStartedAt } from './shuin.js';
+import { isBoosting } from './rooms.js';
 import { newSystemRoles } from './ujikoKeep.js';
 
 /**
@@ -33,14 +34,19 @@ export function meetsUjiko(cfg: GuildConfig, roleIds: Iterable<string>): boolean
   return rank !== undefined && rank.weight >= ujikoWeight;
 }
 
+/** 宿だけの利用条件。奉納中は階級にかかわらず利用できる（厄・部屋主・入室権限は呼び出し側で確認）。 */
+export async function canUseRoomFeatures(db: Db, cfg: GuildConfig, memberId: string, roleIds: Iterable<string>): Promise<boolean> {
+  return meetsUjiko(cfg, roleIds) || await isBoosting(db, memberId);
+}
+
 /** 新制度が始まっているか（③絵馬での昇格が ON・④ご縁のリセットずみ） */
 export async function newSystemActive(db: Db): Promise<boolean> {
   return Boolean(await newSystemStartedAt(db)) && (await emaPromotionEnabled(db));
 }
 
 /**
- * 🏨 宿・シクレを作れるのは氏子以上だけか。
- * 新制度が始まったら、いつも氏子以上だけ（参拝者・元氏子・荒魂は参加だけ）。その前は⑤のスイッチで決める。
+ * 🏨 宿・シクレの作成に、氏子以上または奉納中という条件を使うか。
+ * 新制度が始まったら、氏子以上か奉納中の人だけ。その前は⑤のスイッチで決める。
  */
 export async function roomsUjikoOnly(db: Db): Promise<boolean> {
   return (await perkUjikoEnabled(db)) || (await newSystemActive(db));

@@ -44,7 +44,7 @@ import {
   type RoomRow,
 } from '../services/rooms.js';
 import { OWNER_ALLOW } from './tempVoice.js';
-import { newSystemActive, roomsUjikoOnly, meetsUjiko } from '../services/perkGate.js';
+import { newSystemActive, roomsUjikoOnly, canUseRoomFeatures } from '../services/perkGate.js';
 import { isYakudoshi, YAKU_BLOCKED } from '../services/yakuGate.js';
 import { KeyedLock } from '../lib/lock.js';
 import { ROOM_MODES, roomKnockConfig, roomKnockState, type RoomMode } from '../services/roomKnock.js';
@@ -310,12 +310,12 @@ export class RoomApp {
       }
     }
     // 🎁 宿（部屋代のかかる部屋）を氏子からに（新制度⑤・既定OFF）。24時間の宿はパネル側で確かめる。
-    // 参拝者が通話入口・シクレで開こうとしたら、部屋代を取る前に部屋を消して知らせる。
+    // 奉納していない参拝者が通話入口・シクレで開こうとしたら、部屋代を取る前に部屋を消して知らせる。
     if (!opts.stay && (await roomsUjikoOnly(this.db))) {
       const opener = this.guild?.members.cache.get(ownerId) ?? (await this.guild?.members.fetch(ownerId).catch(() => undefined));
-      if (opener && !meetsUjiko(cfg, opener.roles.cache.keys())) {
+      if (opener && !(await canUseRoomFeatures(this.db, cfg, ownerId, opener.roles.cache.keys()))) {
         // 部屋はすぐ消すので、本人へ DM で知らせる（部屋のメッセージは消えてしまうため）
-        await opener.send('🏨 宿（部屋代のかかる部屋）は氏子以上の方からひらけます（新制度）。絵馬を集めて氏子になるとひらけます。').catch(() => undefined);
+        await opener.send('🏨 宿は氏子以上、またはサーバーブースト中の方がひらけます。').catch(() => undefined);
         await this.close(channelId);
         return;
       }
@@ -747,15 +747,21 @@ export class RoomApp {
   }
 
   private async invite(i: UserSelectMenuInteraction<'cached'>, row: RoomRow, ch: VoiceChannel, v: PanelView = {}): Promise<void> {
+    await i.deferUpdate();
+    const reject = (content: string) => i.editReply({ content, embeds: [], components: [], allowedMentions: { parse: [] } });
     let ids = i.values.filter((id) => id !== row.ownerId && !i.users.get(id)?.bot);
-    // 🤫 新制度：シクレに入れるのは氏子以上だけ（参拝者・元氏子・荒魂は招待できない）
+    // 🤫 新制度：招待される人自身が氏子以上・奉納中・運営のいずれか。
     if (row.kind === 'secret' && (await newSystemActive(this.db))) {
       const cfg = this.cfg();
-      const ok = ids.filter((id) => { const m = i.members.get(id); return !m || meetsUjiko(cfg, m.roles.cache.keys()) || Boolean(adminLevelOf(cfg, [...m.roles.cache.keys()])); });
-      if (ok.length < ids.length && !ok.length) return void (await i.reply({ content: '🤫 シクレに入れるのは、氏子以上の方だけです。', ...EPHEMERAL }));
+      const eligible = await Promise.all(ids.map(async (id) => {
+        const m = i.members.get(id) ?? await i.guild.members.fetch(id).catch(() => undefined);
+        return Boolean(m && (Boolean(adminLevelOf(cfg, [...m.roles.cache.keys()])) || await canUseRoomFeatures(this.db, cfg, id, m.roles.cache.keys())));
+      }));
+      const ok = ids.filter((_, index) => eligible[index]);
+      if (!ok.length) return void (await reject('🤫 シクレに入れるのは、氏子以上、サーバーブースト中、または運営の方です。'));
       ids = ok;
     }
-    if (!ids.length) return void (await i.reply({ content: '招待できる人がいません（自分・BOT は選べません）。', ...EPHEMERAL }));
+    if (!ids.length) return void (await reject('招待できる人がいません（自分・BOT は選べません）。'));
     const updated = await addInvites(this.db, ch.id, ids);
     if (!updated) return;
     await this.apply(ch, updated, updated.kind);

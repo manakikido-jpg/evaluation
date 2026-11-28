@@ -1,7 +1,7 @@
 import {roomAmountLabel,roomCoreTimeNote,roomRateAt} from '../services/roomPricing.js';
 import { ButtonStyle, ChannelType, DiscordAPIError, MessageFlags, OverwriteType, PermissionFlagsBits, type Guild, type GuildMember, type Interaction, type VoiceState } from 'discord.js';
 import { staffRoleIds } from '../services/meetings.js';
-import { roomsUjikoOnly, meetsUjiko } from '../services/perkGate.js';
+import { roomsUjikoOnly, canUseRoomFeatures } from '../services/perkGate.js';
 import { isYakudoshi, YAKU_BLOCKED } from '../services/yakuGate.js';
 import { STAFF_STAY_LIMIT } from '../services/tempVoice.js';
 import type { GuildConfig } from '../config.js';
@@ -127,8 +127,8 @@ export class TempVoiceApp {
   async openStay(hubId: string, userId: string, displayName: string, mode: 'day' | 'hourly' = 'day', parentId?: string, staff = false, roleIds: string[] = []) {
     if (!this.ctx) return { status: 'failed' as const };
     this.ctx.cfg = this.cfg();
-    // 🎁 宿を氏子からに（新制度⑤・既定OFF）。運営はそのまま。参拝者は部屋代を取る前に断る。
-    if (!staff && (await roomsUjikoOnly(this.db)) && !meetsUjiko(this.cfg(), roleIds)) return { status: 'rank_too_low' as const };
+    // 🎁 宿を氏子からに（新制度⑤・既定OFF）。運営・奉納中はそのまま。それ以外の参拝者は部屋代を取る前に断る。
+    if (!staff && (await roomsUjikoOnly(this.db)) && !(await canUseRoomFeatures(this.db, this.cfg(), userId, roleIds))) return { status: 'rank_too_low' as const };
     // 👹 厄のあいだは宿を開けない
     if (!staff && isYakudoshi(this.cfg(), roleIds)) return { status: 'yaku' as const };
     const r = await createStayRoom(this.ctx, { hubId, userId, displayName, mode, parentId, staff });
@@ -321,7 +321,7 @@ export function stayRoomPanel(cfg: GuildConfig): MessageBody {
       color: 0xc08a3e,
     }, {
       title: '⏱ 1時間ごとの宿',
-      description: `**${roomAmountLabel(cfg,cfg.rooms.stayHourlyPrice)}／1時間**\n1時間ごとに自動で払う宿です。払う時刻にだれもいなければ、宿は消えます。設定は変更可能です。\n-# 🏮 奉納（ブースト）している人は、24時間・1時間ごとの宿が無料です。`,
+      description: `**${roomAmountLabel(cfg,cfg.rooms.stayHourlyPrice)}／1時間**\n1時間ごとに自動で払う宿です。払う時刻にだれもいなければ、宿は消えます。設定は変更可能です。\n-# 🏮 奉納（ブースト）中は階級にかかわらず宿・シクレを利用でき、24時間・1時間ごとの宿は無料です。`,
       color: 0x5b8fb9,
     }, {
       title: '🤫 シクレ部屋',
@@ -371,7 +371,7 @@ export async function onStayRoomInteraction(app: TempVoiceApp, cfg: () => GuildC
   const staffRoles = staffRoleIds(current);
   const staff = i.member.roles.cache.some((r) => staffRoles.has(r.id));
   const r = await app.openStay(pick.channelId, i.user.id, i.member.displayName, hourly ? 'hourly' : 'day', picked.parentId, staff, [...i.member.roles.cache.keys()]);
-  if (r.status === 'rank_too_low') return void (await i.editReply('🏨 宿（部屋代のかかる部屋）は氏子以上の方からです（新制度）。絵馬を集めて氏子になるとひらけます。'));
+  if (r.status === 'rank_too_low') return void (await i.editReply('🏨 宿は氏子以上、またはサーバーブースト中の方がひらけます。'));
   if (r.status === 'yaku') return void (await i.editReply(YAKU_BLOCKED));
   if (r.status === 'insufficient') return void (await i.editReply(`${current.economy.currencyName}が足りません（${r.price.toLocaleString('ja-JP')} 枚必要）。`));
   if (r.status !== 'created' && r.status !== 'exists') return void (await i.editReply(r.status === 'busy' ? 'いま作っています。少し待ってください。' : `宿を作れませんでした。神職に知らせてください。${'reason' in r && r.reason ? `\n-# 理由: ${r.reason}` : ''}`));

@@ -31,6 +31,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-11-28-booster-rooms-unlock', date: '2026-11-28', kind: 'improve', where: ['Discord'],
+    title: '🏮 サーバーブースト中は宿の機能を全開放',
+    items: ['奉納中は階級にかかわらず、宿・シクレ・24時間と1時間ごとの宿を作れます。シクレの招待も受けられます。', '部屋主の設定操作や、これまでの無料・割引特典を利用できます。厄の制限とカテゴリの入室権限は変わりません。'],
+    announcement: {
+      priority: 'optional', audience: 'サーバーブースト中のメンバー',
+      steps: ['宿の入口または宿のパネルから部屋を作る', '部屋の設定から名前・招待などを変更する'],
+      postText: '🏮 奉納（サーバーブースト）中は、階級にかかわらず宿・シクレを利用できます。24時間・1時間ごとの宿は引き続き無料です。',
+      imagePrompt: '画像なし。宿の案内文に追記。',
+    },
+  },
+  {
     id: '2026-11-28-sanpai-casino-boost',
     date: '2026-11-28',
     kind: 'new',
