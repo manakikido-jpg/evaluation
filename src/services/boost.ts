@@ -90,6 +90,8 @@ export function boostDm(memberId: string, cfg: GuildConfig, r: ThankResult): str
   const e = cfg.economy;
   const room = cfg.rooms.boosterDiscountPercent;
   const perks = [
+    '・階級にかかわらず、宿・シクレを作れます（シクレの招待も受けられます）',
+    '・24時間・1時間ごとの宿は無料です',
     '・#授与所 の「🏮 奉納限定」の授与品（金色の色守り・奉納者の称号など）が受けられます',
     e.boostDiscountPercent > 0 ? `・授与品が **${e.boostDiscountPercent}% 引き**（免罪符・贈り物をのぞく）` : '',
     room >= 100 ? '・宿坊・宵宮の部屋代が無料' : room > 0 ? `・宿坊・宵宮の部屋代が **${room}% 引き**` : '',
